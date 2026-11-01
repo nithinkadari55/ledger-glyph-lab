@@ -6,6 +6,7 @@ use typst::layout::{
     ContainerKind, Frame, FrameItem, Point, Probe, Rect, RegionKind, Size, Transform,
 };
 use typst::syntax::Span;
+use typst::model::RefElem;
 use typst::visualize::ImageKind;
 use typst_layout::PagedDocument;
 
@@ -156,6 +157,8 @@ pub struct Element {
     pub name: &'static str,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<usize>,
     pub boxes: Vec<PageBox>,
@@ -446,6 +449,9 @@ impl Walker {
                 self.geometry.elements.push(Element {
                     name: content.elem().name(),
                     label: content.label().map(|label| label.resolve().to_string()),
+                    target: content
+                        .to_packed::<RefElem>()
+                        .map(|r| r.target.resolve().to_string()),
                     parent: self.open.last().copied(),
                     boxes: Vec::new(),
                     span: content.span(),

@@ -36,6 +36,7 @@ pub fn run(
     out.extend(crate::resources::run(world, geometry));
     out.extend(crate::typography::run(world, geometry));
     out.extend(crate::spacing::run(world, geometry));
+    out.extend(crate::structure::run(world, geometry));
     out
 }
 
