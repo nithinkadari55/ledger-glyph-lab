@@ -38,9 +38,11 @@ pub fn line(engine: &Engine, frame: &mut Frame, mut probe: LineProbe) {
     probe.span = frame
         .items()
         .find_map(|(_, item)| match item {
-            FrameItem::Text(text) => {
-                text.glyphs.iter().map(|glyph| glyph.span.0).find(|span| !span.is_detached())
-            }
+            FrameItem::Text(text) => text
+                .glyphs
+                .iter()
+                .map(|glyph| glyph.span.0)
+                .find(|span| !span.is_detached()),
             _ => None,
         })
         .unwrap_or_else(Span::detached);

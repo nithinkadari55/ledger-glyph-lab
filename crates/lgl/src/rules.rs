@@ -97,9 +97,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             region: region_of(geometry, container.page, &container.bbox),
             span: container.span,
             elem: Some(container.kind.to_string()),
-            label: container
-                .elem
-                .and_then(|e| geometry.elements[e].label.clone()),
+            label: container.elem.and_then(|e| geometry.elements[e].label.clone()),
         };
         if let Some(classified) = classify(geometry, &subject, None) {
             flagged_containers.insert(index);
@@ -165,14 +163,11 @@ fn classify(
 ) -> Option<Classified> {
     let page = &geometry.pages[subject.page];
     let page_excess = subject.bbox.excess(&page.bounds());
-    let container = subject
-        .container
-        .map(|c| &geometry.containers[c])
-        .filter(|c| !c.clip);
+    let container =
+        subject.container.map(|c| &geometry.containers[c]).filter(|c| !c.clip);
     let container_excess = container.map(|c| subject.bbox.excess(&c.bbox));
-    let region_excess = subject
-        .region
-        .map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
+    let region_excess =
+        subject.region.map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
 
     let exceeds_container = container_excess.is_some_and(|e| e.0 > subject.tolerance);
     let exceeds_page = page_excess.0 > TOLERANCE_PT;
@@ -236,76 +231,75 @@ fn to_diagnostic(
 ) -> Diagnostic {
     let page = finding.page + 1;
     let amount = round1(finding.amount);
-    let (severity, message, hint, span, elem) =
-        match (finding.rule, anchor) {
-            (LINE_OVERFLOW, Anchor::Line(line)) => {
-                let line = &geometry.lines[line];
-                (
-                    Severity::Error,
-                    format!(
-                        "line is {amount}pt wider than the {:.1}pt available on page {page}",
-                        line.available
-                    ),
-                    "allow a break inside the long word or URL (enable hyphenation, \
-                     insert #sym.zws or a soft hyphen), or reduce the content's width",
-                    line.span,
-                    finding.elem,
-                )
-            }
-            (CONTAINER_OVERFLOW, Anchor::Container(container)) => {
-                let container = &geometry.containers[container];
-                let kind = container.kind;
-                (
-                    Severity::Error,
-                    format!(
-                        "content extends {amount}pt beyond the {} edge of its {kind} \
-                         ({:.1}pt x {:.1}pt) on page {page}",
-                        finding.side,
-                        container.bbox.width(),
-                        container.bbox.height()
-                    ),
-                    match finding.side {
-                        "left" | "right" => {
-                            "give the container more width (auto, fr or %), let the \
-                             content wrap, or enable clip if cutting it off is intended"
-                        }
-                        _ => {
-                            "give the container more height (auto), reduce the content, \
-                             or enable clip if cutting it off is intended"
-                        }
-                    },
-                    if finding.span.is_detached() { container.span } else { finding.span },
-                    Some(kind.to_string()),
-                )
-            }
-            (PAGE_OVERFLOW, _) => (
+    let (severity, message, hint, span, elem) = match (finding.rule, anchor) {
+        (LINE_OVERFLOW, Anchor::Line(line)) => {
+            let line = &geometry.lines[line];
+            (
                 Severity::Error,
                 format!(
-                    "content extends {amount}pt beyond the {} edge of page {page}",
-                    finding.side
+                    "line is {amount}pt wider than the {:.1}pt available on page {page}",
+                    line.available
+                ),
+                "allow a break inside the long word or URL (enable hyphenation, \
+                     insert #sym.zws or a soft hyphen), or reduce the content's width",
+                line.span,
+                finding.elem,
+            )
+        }
+        (CONTAINER_OVERFLOW, Anchor::Container(container)) => {
+            let container = &geometry.containers[container];
+            let kind = container.kind;
+            (
+                Severity::Error,
+                format!(
+                    "content extends {amount}pt beyond the {} edge of its {kind} \
+                         ({:.1}pt x {:.1}pt) on page {page}",
+                    finding.side,
+                    container.bbox.width(),
+                    container.bbox.height()
                 ),
                 match finding.side {
                     "left" | "right" => {
-                        "reduce the width: use relative (%) or fractional (fr) sizes, or \
-                         let the content wrap"
+                        "give the container more width (auto, fr or %), let the \
+                             content wrap, or enable clip if cutting it off is intended"
                     }
-                    _ => "let the content break across pages, or reduce its height",
+                    _ => {
+                        "give the container more height (auto), reduce the content, \
+                             or enable clip if cutting it off is intended"
+                    }
                 },
-                finding.span,
-                finding.elem,
+                if finding.span.is_detached() { container.span } else { finding.span },
+                Some(kind.to_string()),
+            )
+        }
+        (PAGE_OVERFLOW, _) => (
+            Severity::Error,
+            format!(
+                "content extends {amount}pt beyond the {} edge of page {page}",
+                finding.side
             ),
-            _ => (
-                Severity::Error,
-                format!(
-                    "content extends {amount}pt into the {} margin of page {page}",
-                    finding.side
-                ),
-                "keep the content within the text area: reduce its size or use \
+            match finding.side {
+                "left" | "right" => {
+                    "reduce the width: use relative (%) or fractional (fr) sizes, or \
+                         let the content wrap"
+                }
+                _ => "let the content break across pages, or reduce its height",
+            },
+            finding.span,
+            finding.elem,
+        ),
+        _ => (
+            Severity::Error,
+            format!(
+                "content extends {amount}pt into the {} margin of page {page}",
+                finding.side
+            ),
+            "keep the content within the text area: reduce its size or use \
                  relative (%) or fractional (fr) sizes",
-                finding.span,
-                finding.elem,
-            ),
-        };
+            finding.span,
+            finding.elem,
+        ),
+    };
 
     let mut out = Diagnostic::new(finding.rule, severity, message);
     out.loc = diag::resolve_span(world, span);

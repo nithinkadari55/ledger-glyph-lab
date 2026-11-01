@@ -148,7 +148,9 @@ impl Item<'_, '_> {
                     && frame.items().all(|(_, item)| {
                         matches!(
                             item,
-                            FrameItem::Link(_, _) | FrameItem::Tag(_) | FrameItem::Probe(_)
+                            FrameItem::Link(_, _)
+                                | FrameItem::Tag(_)
+                                | FrameItem::Probe(_)
                         )
                     })
             }
