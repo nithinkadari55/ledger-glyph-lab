@@ -92,11 +92,7 @@ fn pitch(lines: &[&Line]) -> Option<f64> {
 fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for (page, groups) in columns(geometry) {
-        if geometry
-            .regions
-            .iter()
-            .any(|r| r.page == page && r.kind == "page-body" && r.last_in_run)
-        {
+        if page + 1 == geometry.pages.len() {
             continue;
         }
         let mut side_by_side: Vec<&Vec<&Line>> = groups
