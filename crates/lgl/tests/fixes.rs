@@ -15,10 +15,17 @@ fn scratch(name: &str) -> PathBuf {
 fn rules_after_repair(name: &str) -> (Vec<String>, usize, String) {
     let text = std::fs::read_to_string(corpus(name)).unwrap();
     let out = scratch(name);
-    let options = WorldOptions { creation_timestamp: Some(0), ..WorldOptions::default() };
+    let options = WorldOptions {
+        creation_timestamp: Some(0),
+        ..WorldOptions::default()
+    };
     let (applied, _) = lgl::repair(&text, &out, &options, 5).unwrap();
     let world = LabWorld::new(&out, &options).unwrap();
-    let rules = lgl::check(&world, false).diagnostics.into_iter().map(|d| d.rule).collect();
+    let rules = lgl::check(&world, false)
+        .diagnostics
+        .into_iter()
+        .map(|d| d.rule)
+        .collect();
     (rules, applied, std::fs::read_to_string(&out).unwrap())
 }
 

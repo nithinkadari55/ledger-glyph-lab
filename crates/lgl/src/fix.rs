@@ -135,7 +135,7 @@ fn named_arg(call: &LinkedNode, name: &str) -> Option<NamedArg> {
     let named = args.children().find(|child| {
         ast::Named::from_untyped(child).is_some_and(|n| n.name().get() == name)
     })?;
-    let value = named.children().last()?;
+    let value = named.children().next_back()?;
     Some(NamedArg { value: value.range() })
 }
 
@@ -155,7 +155,12 @@ fn set_named(
     if source.text()[start..].starts_with('(') {
         let inner = &source.text()[start + 1..args.range().end];
         let separator = if inner.trim_start().starts_with(')') { "" } else { ", " };
-        edit_range(world, source, start + 1..start + 1, &format!("{name}: {value}{separator}"))
+        edit_range(
+            world,
+            source,
+            start + 1..start + 1,
+            &format!("{name}: {value}{separator}"),
+        )
     } else {
         edit_range(world, source, start..start, &format!("({name}: {value})"))
     }

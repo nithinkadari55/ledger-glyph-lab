@@ -112,8 +112,8 @@ fn fix(args: FixArgs) -> Result<bool, String> {
     if input.parent() != out.parent() {
         return Err("--out must be in the same directory as the input".into());
     }
-    let text =
-        std::fs::read_to_string(input).map_err(|err| format!("{}: {err}", input.display()))?;
+    let text = std::fs::read_to_string(input)
+        .map_err(|err| format!("{}: {err}", input.display()))?;
 
     let options = WorldOptions {
         root: args.check.root.clone(),
@@ -124,7 +124,10 @@ fn fix(args: FixArgs) -> Result<bool, String> {
     };
 
     let (applied_total, rounds) = lgl::repair(&text, out, &options, args.max_rounds)?;
-    eprintln!("lgl: applied {applied_total} edit(s) in {rounds} round(s) to {}", out.display());
+    eprintln!(
+        "lgl: applied {applied_total} edit(s) in {rounds} round(s) to {}",
+        out.display()
+    );
 
     check(CheckArgs { input: out.clone(), ..args.check })
 }
