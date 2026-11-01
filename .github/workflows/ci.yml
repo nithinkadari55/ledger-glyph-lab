@@ -84,3 +84,22 @@ jobs:
           workspaces: vendor/typst
       - run: cargo test --locked --workspace --no-run
       - run: cargo test --locked --workspace --no-fail-fast
+
+  windows:
+    name: Windows build and test
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0 # 1.98.0
+      - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+      - name: Test
+        run: cargo test --locked --workspace --no-fail-fast
+      - name: Build release binary
+        run: cargo build --locked --release -p lgl
+      - name: Upload binary
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: lgl-windows
+          path: target/release/lgl.exe
+          retention-days: 14
