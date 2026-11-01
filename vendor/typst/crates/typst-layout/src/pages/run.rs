@@ -272,8 +272,12 @@ fn layout_page_run_impl(
 /// are enabled.
 fn mark_marginal(mut frame: Frame, probes: bool, kind: RegionKind) -> Frame {
     if probes && !frame.is_empty() {
-        let probe =
-            RegionProbe { kind, size: frame.size(), last_in_run: false, grid: None };
+        let probe = RegionProbe {
+            kind,
+            size: frame.size(),
+            last_in_run: false,
+            grid: None,
+        };
         frame.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
         frame.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
     }

@@ -14,7 +14,10 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     for line in &geometry.lines {
         let Some(region) = line.region.map(|r| &geometry.regions[r]) else { continue };
         let Some(pitch) = region.grid else { continue };
-        if region.kind != "page-body" || line.container.is_some() || !is_running_text(geometry, line) {
+        if region.kind != "page-body"
+            || line.container.is_some()
+            || !is_running_text(geometry, line)
+        {
             continue;
         }
         let offset = (line.bbox.y0 + line.baseline - region.bbox.y0).rem_euclid(pitch);

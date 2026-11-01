@@ -1,6 +1,6 @@
 // expect-none
 #set page(paper: "a5", margin: 2cm, baseline-grid: 14pt)
-#set par(justify: true)
+#set par(justify: false)
 #set heading(numbering: "1.")
 
 = Introduction
