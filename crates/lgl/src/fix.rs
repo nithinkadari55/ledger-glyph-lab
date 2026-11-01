@@ -1,0 +1,203 @@
+use std::ops::Range;
+
+use serde::Serialize;
+use typst::World;
+use typst::syntax::ast::{self, AstNode};
+use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
+
+use crate::diag::{Diagnostic, SourceLoc};
+use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
+use crate::spacing::SPACING;
+use crate::whitespace::PAGE_UNDERFILL;
+use crate::world::LabWorld;
+
+/// A machine-applicable change to the source.
+#[derive(Debug, Clone, Serialize)]
+pub struct Fix {
+    pub description: String,
+    pub edits: Vec<Edit>,
+}
+
+/// Replaces a range of a source file.
+#[derive(Debug, Clone, Serialize)]
+pub struct Edit {
+    pub loc: SourceLoc,
+    pub replacement: String,
+    #[serde(skip)]
+    pub range: Range<usize>,
+}
+
+/// Attaches fixes to the diagnostics for which a safe, mechanical change is
+/// known.
+pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
+    for diagnostic in diagnostics {
+        let Some(anchor) = diagnostic.anchor.filter(|s| !s.is_detached()) else {
+            continue;
+        };
+        let Some(source) = anchor.id().and_then(|id| world.source(id).ok()) else {
+            continue;
+        };
+        let side = diagnostic.side;
+        diagnostic.fix = match diagnostic.rule.as_str() {
+            CONTAINER_OVERFLOW | PAGE_OVERFLOW | MARGIN_INTRUSION => {
+                overflow_fix(world, &source, anchor, side)
+            }
+            PAGE_UNDERFILL => underfill_fix(world, &source, anchor),
+            SPACING => spacing_fix(world, &source, anchor),
+            _ => None,
+        };
+    }
+}
+
+fn overflow_fix(
+    world: &LabWorld,
+    source: &Source,
+    anchor: Span,
+    side: Option<&str>,
+) -> Option<Fix> {
+    let call = call_at(source, anchor, &["block", "box", "rect", "image"])?;
+    match side? {
+        "left" | "right" => {
+            let named = named_arg(&call, "width")?;
+            Some(Fix {
+                description: "limit the width to the available space".into(),
+                edits: vec![edit_range(world, source, named.value, "100%")?],
+            })
+        }
+        _ => {
+            let named = named_arg(&call, "height")?;
+            Some(Fix {
+                description: "let the height follow the content".into(),
+                edits: vec![edit_range(world, source, named.value, "auto")?],
+            })
+        }
+    }
+}
+
+fn underfill_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    if let Some(call) = call_at(source, anchor, &["figure"]) {
+        return Some(Fix {
+            description: "let the figure float to where it fits".into(),
+            edits: vec![set_named(world, source, &call, "placement", "auto")?],
+        });
+    }
+    let call = call_at(source, anchor, &["block"])?;
+    if named_arg(&call, "height").is_some() {
+        return None;
+    }
+    Some(Fix {
+        description: "allow the block to break across pages".into(),
+        edits: vec![set_named(world, source, &call, "breakable", "true")?],
+    })
+}
+
+/// Removes a manual vertical spacing call right before the anchored content.
+fn spacing_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let node = LinkedNode::new(source.root()).find(anchor)?;
+    let previous = node.prev_sibling()?;
+    let call = ast::FuncCall::from_untyped(&previous)?;
+    let ast::Expr::Ident(callee) = call.callee() else { return None };
+    if callee.get() != "v" {
+        return None;
+    }
+    let mut start = previous.range().start;
+    if let Some(hash) = previous.prev_sibling_with_trivia()
+        && hash.kind() == SyntaxKind::Hash
+    {
+        start = hash.range().start;
+    }
+    let mut end = previous.range().end;
+    if let Some(after) = previous.next_sibling_with_trivia()
+        && after.kind().is_trivia()
+    {
+        end = after.range().end;
+    }
+    Some(Fix {
+        description: "remove the manual vertical space".into(),
+        edits: vec![edit_range(world, source, start..end, "")?],
+    })
+}
+
+/// The call of one of the given functions at the span.
+fn call_at<'a>(source: &'a Source, span: Span, names: &[&str]) -> Option<LinkedNode<'a>> {
+    let node = LinkedNode::new(source.root()).find(span)?;
+    let call = ast::FuncCall::from_untyped(&node)?;
+    let ast::Expr::Ident(callee) = call.callee() else { return None };
+    names.contains(&callee.get().as_str()).then_some(node)
+}
+
+struct NamedArg {
+    value: Range<usize>,
+}
+
+fn named_arg(call: &LinkedNode, name: &str) -> Option<NamedArg> {
+    let args = call.children().find(|child| child.kind() == SyntaxKind::Args)?;
+    let named = args.children().find(|child| {
+        ast::Named::from_untyped(child).is_some_and(|n| n.name().get() == name)
+    })?;
+    let value = named.children().last()?;
+    Some(NamedArg { value: value.range() })
+}
+
+/// Sets a named argument, replacing its value or inserting it.
+fn set_named(
+    world: &LabWorld,
+    source: &Source,
+    call: &LinkedNode,
+    name: &str,
+    value: &str,
+) -> Option<Edit> {
+    if let Some(existing) = named_arg(call, name) {
+        return edit_range(world, source, existing.value, value);
+    }
+    let args = call.children().find(|child| child.kind() == SyntaxKind::Args)?;
+    let start = args.range().start;
+    if source.text()[start..].starts_with('(') {
+        let inner = &source.text()[start + 1..args.range().end];
+        let separator = if inner.trim_start().starts_with(')') { "" } else { ", " };
+        edit_range(world, source, start + 1..start + 1, &format!("{name}: {value}{separator}"))
+    } else {
+        edit_range(world, source, start..start, &format!("({name}: {value})"))
+    }
+}
+
+fn edit_range(
+    world: &LabWorld,
+    source: &Source,
+    range: Range<usize>,
+    text: &str,
+) -> Option<Edit> {
+    let lines = source.lines();
+    let (line, col) = lines.byte_to_line_column(range.start)?;
+    let (end_line, end_col) = lines.byte_to_line_column(range.end)?;
+    Some(Edit {
+        loc: SourceLoc {
+            file: world.display_name(source.id()),
+            line: line + 1,
+            col: col + 1,
+            end_line: end_line + 1,
+            end_col: end_col + 1,
+        },
+        replacement: text.into(),
+        range,
+    })
+}
+
+/// Applies non-overlapping edits to a text. Overlapping edits after the first
+/// are dropped.
+pub fn apply(text: &str, edits: &[&Edit]) -> (String, usize) {
+    let mut sorted: Vec<&&Edit> = edits.iter().collect();
+    sorted.sort_by_key(|e| std::cmp::Reverse(e.range.start));
+    let mut out = text.to_string();
+    let mut applied = 0;
+    let mut floor = usize::MAX;
+    for edit in sorted {
+        if edit.range.end > floor || edit.range.end > out.len() {
+            continue;
+        }
+        out.replace_range(edit.range.clone(), &edit.replacement);
+        floor = edit.range.start;
+        applied += 1;
+    }
+    (out, applied)
+}

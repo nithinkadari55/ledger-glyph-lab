@@ -338,6 +338,11 @@ fn to_diagnostic(
 
     let mut out = Diagnostic::new(finding.rule, severity, message);
     out.loc = diag::resolve_span(world, span);
+    out.anchor = Some(match anchor {
+        Anchor::Container(index) => geometry.containers[index].span,
+        _ => finding.span,
+    });
+    out.side = Some(finding.side);
     out.elem = elem;
     out.label = finding.label;
     out.page = Some(page);

@@ -3,6 +3,7 @@ use typst::WorldExt;
 use typst::diag::{Severity as TypstSeverity, SourceDiagnostic};
 use typst::syntax::{DiagSpan, Span};
 
+use crate::fix::Fix;
 use crate::geom::BBox;
 use crate::world::LabWorld;
 
@@ -51,6 +52,12 @@ pub struct Diagnostic {
     pub hints: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub trace: Vec<TraceEntry>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fix: Option<Fix>,
+    #[serde(skip)]
+    pub anchor: Option<Span>,
+    #[serde(skip)]
+    pub side: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -81,6 +88,9 @@ impl Diagnostic {
             unit: None,
             hints: Vec::new(),
             trace: Vec::new(),
+            fix: None,
+            anchor: None,
+            side: None,
         }
     }
 }

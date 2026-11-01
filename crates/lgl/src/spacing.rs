@@ -178,6 +178,7 @@ fn diagnostic(
         ),
     );
     out.loc = diag::resolve_span(world, gap.span);
+    out.anchor = Some(gap.span);
     out.page = Some(gap.page + 1);
     out.bbox = Some(gap.bbox.rounded());
     out.measured = Some(size);
