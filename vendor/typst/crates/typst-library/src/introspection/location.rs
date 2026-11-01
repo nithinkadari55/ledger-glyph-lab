@@ -1,0 +1,417 @@
+use std::fmt::{self, Debug, Formatter};
+use std::num::NonZeroUsize;
+
+use comemo::Tracked;
+use ecow::{EcoString, eco_format};
+use typst_syntax::{Span, VirtualPath};
+
+use crate::diag::{SourceDiagnostic, warning};
+use crate::engine::Engine;
+use crate::foundations::{
+    Content, Dict, IntoValue, Repr, Selector, func, repr, scope, ty,
+};
+use crate::introspection::{
+    DocumentPosition, History, InnerHtmlPosition, Introspect, Introspector,
+};
+use crate::layout::Abs;
+use crate::model::Numbering;
+
+/// Identifies an element in the document.
+///
+/// A location uniquely identifies an element in the document and lets you
+/// access its absolute position on the pages. You can retrieve the current
+/// location with the @here function and the location of a queried or shown
+/// element with the @content.location[`location()`] method on content.
+///
+/// = #short-or-long[Locatable][Locatable elements] <locatable>
+/// Elements that are automatically assigned a location are called _locatable_
+/// and can be found with @query[queries]. Locatable elements are marked as such
+/// on their respective documentation pages, but you can also find an exhaustive
+/// list below.
+///
+/// - In the @reference:model[Model category], the following elements are
+///   locatable: @asset, @bibliography, @cite, @divider, @document, @emph,
+///   @enum, @figure, @figure.caption, @footnote, @footnote.entry, @heading,
+///   @link, @list, @outline, @outline.entry, @par, @quote, @ref, @strong,
+///   @table, @terms, and @title. Most of the elements in the _Model_ category
+///   are locatable because semantic elements like headings and figures are
+///   often used with introspection.
+///
+/// - In the @reference:text[Text category], the @raw element and the
+///   decoration elements @underline, @overline, @strike, and @highlight are
+///   locatable as these are also quite semantic in nature.
+///
+/// - In the @reference:introspection[Introspection category], the @metadata
+///   element is locatable as being queried for is its primary purpose.
+///
+/// - In the other categories, most elements are not locatable. Exceptions are
+///   @math.equation, @image, and @pdf.attach.
+///
+/// To find out whether a specific element is locatable, you can try to @query
+/// for it.
+///
+/// Note that you can still observe elements that are not locatable in queries
+/// through other means, for instance, when they have a label attached to them.
+#[ty(scope, since = "forever")]
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub struct Location(u128);
+
+impl Location {
+    /// Create a new location from a unique hash.
+    pub fn new(hash: u128) -> Self {
+        Self(hash)
+    }
+
+    /// Extract the raw hash.
+    pub fn hash(self) -> u128 {
+        self.0
+    }
+
+    /// Produces a well-known variant of this location.
+    ///
+    /// This is a synthetic location created from another one and is used, for
+    /// example, in bibliography management to create individual linkable
+    /// locations for reference entries from the bibliography's location.
+    pub fn variant(self, n: usize) -> Self {
+        Self(typst_utils::hash128(&(self.0, n)))
+    }
+}
+
+#[scope]
+impl Location {
+    /// Returns the page number for this location.
+    ///
+    /// Note that this does not return the value of the @counter[page counter]
+    /// at this location, but the true page number (starting from one). If you
+    /// want to know the value of the page counter, use
+    /// `{counter(page).at(loc)}` instead.
+    ///
+    /// In an HTML document, Typst cannot know where content will end up, so
+    /// this function returns `{none}`.
+    ///
+    /// This method can be used in combination with @here to retrieve the
+    /// physical page position of the current context.
+    ///
+    /// ```example
+    /// I am located on page
+    /// #context here().page()
+    /// ```
+    #[func(since = "forever")]
+    pub fn page(self, engine: &mut Engine, span: Span) -> Option<NonZeroUsize> {
+        engine.introspect(PageIntrospection(self, span))
+    }
+
+    /// Returns the page numbering pattern of the page at this location. This
+    /// can be used when displaying the page counter in order to obtain the
+    /// local numbering. This is useful if you are building custom indices or
+    /// outlines.
+    ///
+    /// If the page numbering is set to `{none}` at that location, this function
+    /// returns `{none}`.
+    ///
+    /// ```example
+    /// >>> #set page(margin: (bottom: 25pt))
+    /// #set page(numbering: "1")
+    /// #context {
+    ///   locate(<h>).page-numbering()
+    /// }
+    ///
+    /// #set page(numbering: "i")
+    /// = Heading <h>
+    /// ```
+    #[func(since = "forever")]
+    pub fn page_numbering(self, engine: &mut Engine, span: Span) -> Option<Numbering> {
+        engine.introspect(PageNumberingIntrospection(self, span))
+    }
+
+    /// Returns a dictionary with the page number and the x, y position for this
+    /// location. The page number starts at one and the coordinates are measured
+    /// from the top-left of the page.
+    ///
+    /// If you only need the page number, use @location.page[`page()`] instead
+    /// as it allows Typst to skip unnecessary work.
+    ///
+    /// In an HTML document, Typst cannot know where content will end up, so
+    /// this function returns `{none}`. The contents of an @html.frame form an
+    /// exception as these are laid out using Typst's layout engine. For
+    /// locations within such frames, this function returns a dictionary with
+    /// just the `x` and `y` coordinates within the frame, but no `page` key.
+    ///
+    /// ```example
+    /// #context here().position()
+    /// ```
+    #[func(since = "forever")]
+    pub fn position(self, engine: &mut Engine, span: Span) -> Option<Dict> {
+        engine
+            .introspect(PositionIntrospection(self, span))
+            .and_then(DocumentPosition::into_dict)
+    }
+}
+
+impl Debug for Location {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        if f.alternate() {
+            write!(f, "Location({})", self.0)
+        } else {
+            // Print a shorter version by default to make it more readable.
+            let truncated = self.0 as u16;
+            write!(f, "Location({truncated})")
+        }
+    }
+}
+
+impl Repr for Location {
+    fn repr(&self) -> EcoString {
+        "location(..)".into()
+    }
+}
+
+/// Can be used to have a location as a key in an ordered set or map.
+///
+/// [`Location`] itself does not implement [`Ord`] because comparing hashes like
+/// this has no semantic meaning. The potential for misuse (e.g. checking
+/// whether locations have a particular relative ordering) is relatively high.
+///
+/// Still, it can be useful to have orderable locations for things like sets.
+/// That's where this type comes in.
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct LocationKey(u128);
+
+impl LocationKey {
+    /// Create a location key from a location.
+    pub fn new(location: Location) -> Self {
+        Self(location.0)
+    }
+}
+
+impl From<Location> for LocationKey {
+    fn from(location: Location) -> Self {
+        Self::new(location)
+    }
+}
+
+/// Retrieves the exact position of an element in the document.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PositionIntrospection(pub Location, pub Span);
+
+impl Introspect for PositionIntrospection {
+    type Output = Option<DocumentPosition>;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        // A location that is not part of the document has no position. This
+        // notably includes every location in the first iteration, before there
+        // is a document to introspect.
+        introspector.position(self.0)
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "positions",
+            |element| eco_format!("{element} position"),
+            |pos| {
+                let coord = |v: Abs| repr::format_float(v.to_pt(), Some(0), false, "pt");
+                match pos {
+                    Some(DocumentPosition::Paged(pos)) => eco_format!(
+                        "page {} at ({}, {})",
+                        pos.page,
+                        coord(pos.point.x),
+                        coord(pos.point.y)
+                    ),
+                    Some(DocumentPosition::Html(pos)) => match pos.details() {
+                        Some(&InnerHtmlPosition::Frame(point)) => {
+                            eco_format!("({}, {})", coord(point.x), coord(point.y))
+                        }
+                        _ => "none".into(),
+                    },
+                    None => "none".into(),
+                }
+            },
+        )
+    }
+}
+
+/// Retrieves the number of the page where an element is located.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PageIntrospection(pub Location, pub Span);
+
+impl Introspect for PageIntrospection {
+    type Output = Option<NonZeroUsize>;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        introspector.page(self.0)
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "page numbers",
+            |element| eco_format!("page number of the {element}"),
+            |n| match n {
+                Some(n) => eco_format!("page {n}"),
+                None => "none".into(),
+            },
+        )
+    }
+}
+
+/// Retrieves the numbering of the page where an element is located.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PageNumberingIntrospection(pub Location, pub Span);
+
+impl Introspect for PageNumberingIntrospection {
+    type Output = Option<Numbering>;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        introspector.page_numbering(self.0).cloned()
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "numberings",
+            |element| {
+                eco_format!("numbering of the page on which the {element} is located")
+            },
+            |numbering| eco_format!("`{}`", numbering.clone().into_value().repr()),
+        )
+    }
+}
+
+/// Retrieves the supplement of the page where an element is located.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PageSupplementIntrospection(pub Location, pub Span);
+
+impl Introspect for PageSupplementIntrospection {
+    type Output = Content;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        // Maybe returns `None` here instead of empty content if no supplement
+        // was specified?
+        introspector.page_supplement(self.0).cloned().unwrap_or_default()
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "supplements",
+            |element| {
+                eco_format!("supplement of the page on which the {element} is located")
+            },
+            |supplement| eco_format!("`{}`", supplement.repr()),
+        )
+    }
+}
+
+/// Retrieves the file path of the document/asset which has or contains the
+/// given location.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct PathIntrospection(pub Location, pub Span);
+
+impl Introspect for PathIntrospection {
+    type Output = Option<VirtualPath>;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        introspector.path(self.0).cloned()
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "path",
+            |element| {
+                eco_format!("path of the document in which the {element} is located")
+            },
+            |path| {
+                eco_format!(
+                    "`{}`",
+                    path.as_ref().map(|p| p.get_with_slash()).into_value().repr()
+                )
+            },
+        )
+    }
+}
+
+/// Retrieves the location of the document in which an element is located.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct DocumentIntrospection(pub Location, pub Span);
+
+impl Introspect for DocumentIntrospection {
+    type Output = Option<Location>;
+
+    fn introspect(
+        &self,
+        _: &mut Engine,
+        introspector: Tracked<dyn Introspector + '_>,
+    ) -> Self::Output {
+        introspector.document(self.0)
+    }
+
+    fn diagnose(&self, history: &History<Self::Output>) -> SourceDiagnostic {
+        format_convergence_warning(
+            self.0,
+            self.1,
+            history,
+            "path",
+            |element| eco_format!("document in which the {element} is located"),
+            |_loc| eco_format!("TODO"),
+        )
+    }
+}
+
+/// The warning when an introspection on a [`Location`] did not converge.
+fn format_convergence_warning<T>(
+    loc: Location,
+    span: Span,
+    history: &History<T>,
+    output_kind_plural: &str,
+    format_output_kind: impl FnOnce(&str) -> EcoString,
+    format_output: impl FnMut(&T) -> EcoString,
+) -> SourceDiagnostic {
+    let elem = history.final_introspector().query_first(&Selector::Location(loc));
+    let kind = match &elem {
+        Some(content) => content.elem().name(),
+        None => "element",
+    };
+
+    let what = format_output_kind(kind);
+    let mut diag = warning!(span, "{what} did not stabilize");
+
+    if let Some(elem) = elem
+        && !elem.span().is_detached()
+    {
+        diag.spanned_hint(eco_format!("{kind} was created here"), elem.span());
+    }
+
+    diag.with_hint(history.hint(output_kind_plural, format_output))
+}

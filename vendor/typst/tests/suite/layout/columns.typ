@@ -1,0 +1,302 @@
+// Test the column layouter.
+
+--- columns-rtl paged ---
+// Test normal operation and RTL directions.
+#set page(height: 3.25cm, width: 7.05cm, columns: 2)
+#set text(lang: "ar", font: ("Noto Sans Arabic", "Libertinus Serif"))
+#set columns(gutter: 30pt)
+
+#box(fill: conifer, height: 8pt, width: 6pt) وتحفيز
+العديد من التفاعلات الكيميائية. (DNA) من أهم الأحماض النووية التي تُشكِّل
+إلى جانب كل من البروتينات والليبيدات والسكريات المتعددة
+#box(fill: eastern, height: 8pt, width: 6pt)
+الجزيئات الضخمة الأربعة الضرورية للحياة.
+
+--- columns-in-fixed-size-rect paged ---
+// Test the `columns` function.
+#set page(width: auto)
+
+#rect(width: 180pt, height: 100pt, inset: 8pt, columns(2, [
+    A special plight has befallen our document.
+    Columns in text boxes reigned down unto the soil
+    to waste a year's crop of rich layouts.
+    The columns at least were graciously balanced.
+]))
+
+--- columns-set-page paged ---
+// Test columns for a sized page.
+#set page(height: 5cm, width: 7.05cm, columns: 2)
+
+Lorem ipsum dolor sit amet is a common blind text
+and I again am in need of filling up this page
+#align(bottom, rect(fill: eastern, width: 100%, height: 12pt))
+#colbreak()
+
+so I'm returning to this trusty tool of tangible terror.
+Sure, it is not the most creative way of filling up
+a page for a test but it does get the job done.
+
+--- columns-in-auto-sized-rect paged ---
+// Test the expansion behaviour.
+#set page(height: 2.5cm, width: 7.05cm)
+
+#rect(inset: 6pt, columns(2, [
+    ABC \
+    BCD
+    #colbreak()
+    DEF
+]))
+
+--- columns-more-with-gutter paged ---
+// Test setting a column gutter and more than two columns.
+#set page(height: 3.25cm, width: 7.05cm, columns: 3)
+#set columns(gutter: 30pt)
+
+#rect(width: 100%, height: 2.5cm, fill: conifer) #parbreak()
+#rect(width: 100%, height: 2cm, fill: eastern) #parbreak()
+#circle(fill: eastern)
+
+--- columns-set-page-colbreak-pagebreak paged ---
+// Test the `colbreak` and `pagebreak` functions.
+#set page(height: 1cm, width: 7.05cm, columns: 2)
+
+A
+#colbreak()
+#colbreak()
+B
+#pagebreak()
+C
+#colbreak()
+D
+
+--- columns-empty-second-column paged ---
+// Test an empty second column.
+#set page(width: 7.05cm, columns: 2)
+
+#rect(width: 100%, inset: 3pt)[So there isn't anything in the second column?]
+
+--- columns-page-width-auto paged ---
+// Test columns when one of them is empty.
+#set page(width: auto, columns: 3)
+
+Arbitrary horizontal growth.
+
+--- columns-page-height-auto paged ---
+// Test columns in an infinitely high frame.
+#set page(width: 7.05cm, columns: 2)
+
+There can be as much content as you want in the left column
+and the document will grow with it.
+
+#rect(fill: conifer, width: 100%, height: 30pt)
+
+Only an explicit #colbreak() `#colbreak()` can put content in the
+second column.
+
+--- columns-one paged ---
+// Test a page with a single column.
+#set page(height: auto, width: 7.05cm, columns: 1)
+
+This is a normal page. Very normal.
+
+--- columns-zero eval ---
+// Test a page with zero columns.
+// Error: 49-50 number must be positive
+#set page(height: auto, width: 7.05cm, columns: 0)
+
+--- columns-colbreak-after-place paged ---
+// Test colbreak after only out-of-flow elements.
+#set page(width: 7.05cm, columns: 2)
+#place[OOF]
+#colbreak()
+In flow.
+
+--- issue-columns-heading paged ---
+// The well-known columns bug.
+#set page(height: 70pt)
+
+Hallo
+#columns(2)[
+  = A
+  Text
+  = B
+  Text
+]
+
+--- colbreak-weak paged ---
+#set page(columns: 2)
+#colbreak(weak: true)
+A
+#colbreak(weak: true)
+B
+
+--- columns-balanced paged ---
+#set page(width: 300pt)
+#set par(justify: true)
+#rect(inset: 0pt, outset: 0pt, stroke: yellow,
+  columns(3, balanced: true, separator: line(), lorem(40))
+)
+
+--- columns-balanced-leftover-2-3 paged ---
+// Test how column balancing distributes leftover lines across columns
+#set page(width: 300pt)
+#set text(size: 7pt)
+#set par(justify: true)
+#for (n, mm) in ((2, (31, 37)), (3, (29, 32, 37))) {
+  for m in mm {
+    rect(inset: 0pt, outset: 0pt, stroke: gray,
+      columns(n, balanced: true, separator: line(), lorem(m))
+    )
+  }
+}
+
+--- columns-balanced-leftover-4 paged ---
+// Test how column balancing distributes leftover lines across columns
+#set page(width: 300pt)
+#set text(size: 7pt)
+#set par(justify: true)
+#for (n, mm) in ((4, (26, 29, 32, 35)),) {
+  for m in mm {
+    rect(inset: 0pt, outset: 0pt, stroke: gray,
+      columns(n, balanced: true, separator: line(), lorem(m))
+    )
+  }
+}
+
+--- columns-balanced-leftover-5 paged ---
+// Test how column balancing distributes leftover lines across columns
+#set page(width: 300pt)
+#set text(size: 7pt)
+#set par(justify: true)
+#for (n, mm) in ((5, (21, 25, 27, 29, 31)),) {
+  for m in mm {
+    rect(inset: 0pt, outset: 0pt, stroke: gray,
+      columns(n, balanced: true, separator: line(), lorem(m))
+    )
+  }
+}
+
+--- columns-balanced-leftover-6 paged ---
+// Test how column balancing distributes leftover lines across columns
+#set page(width: 350pt)
+#set text(size: 6pt)
+#set par(justify: true)
+#for (n, mm) in ((6, (29, 31, 33, 35, 37, 39)),) {
+  for m in mm {
+    rect(inset: 0pt, outset: 0pt, stroke: gray,
+      columns(n, balanced: true, separator: line(), lorem(m))
+    )
+  }
+}
+
+--- columns-balanced-leftover-7 paged ---
+// Test how column balancing distributes leftover lines across columns
+#set page(width: 350pt)
+#set text(size: 6pt)
+#set text(hyphenate: true)
+#set par(justify: true)
+#for (n, mm) in ((7, (28, 30, 31, 32, 34, 36, 38)),) {
+  for m in mm {
+    rect(inset: 0pt, outset: 0pt, stroke: gray,
+      columns(n, balanced: true, separator: line(), lorem(m))
+    )
+  }
+}
+
+--- columns-balanced-widow paged ---
+#set page(width: 300pt, height: 100pt, columns: 6)
+#set text(size: 7pt)
+#set par(justify: true)
+#set columns(balanced: true, separator: line())
+#lorem(68) // just enough text to trigger a widow if not balanced correctly
+
+--- columns-balanced-pagebreak paged ---
+#set page(width: 300pt, height: 90pt, margin: 5pt, columns: 3)
+#set text(hyphenate: true)
+#set par(justify: true)
+#set columns(balanced: true, separator: line())
+#lorem(35)
+#pagebreak()
+#lorem(18)
+
+--- columns-balanced-figures paged ---
+#set page(width: 300pt, height: 190pt, margin: 5pt, columns: 3)
+#set columns(balanced: true, separator: line())
+#set text(hyphenate: true)
+#set par(justify: true)
+#figure(rect(height: 30pt, width: 100%))
+#lorem(25)#footnote[Footer]
+#figure(rect(height: 30pt, width: 100%), placement: bottom)
+#lorem(35)
+#figure(rect(height: 15pt, width: 80%), scope: "parent", placement: bottom)
+
+--- columns-balanced-footnotes paged ---
+#set page(width: 300pt, height: 90pt, margin: 5pt, columns: 3)
+#set text(hyphenate: true)
+#set par(justify: true)
+#set columns(balanced: true, separator: line())
+#lorem(10)#footnote[Footer]
+#lorem(50)#footnote[Footer]
+#lorem(22)
+
+--- columns-balanced-footnote-overflow paged ---
+#set page(width: 300pt, height: 150pt, columns: 2)
+#set columns(balanced: true, separator: line())
+#lorem(10)
+#footnote(lorem(30))
+#lorem(45)
+
+--- columns-balanced-blocks paged ---
+#set page(width: 100pt, height: auto, margin: 5pt, columns: 3)
+#set columns(balanced: true, separator: line())
+#set block(fill: gray, spacing: 1pt)
+#for i in range(10){block(width: 100%, height: 3pt * (1+i/5))}
+#pagebreak()
+#set block(breakable: false)
+#for i in range(10){block(width: 100%, height: 3pt * (1+i/5))}
+
+--- columns-balanced-tables paged ---
+// Check that balancing is repeated when
+// the height changes due to the repeated header
+#set page(width: 100pt, margin: 5pt, columns: 2)
+#set columns(balanced: true, separator: line())
+#table(columns: 2,
+  table.header([$x$], [$x^2$]),
+  ..for x in range(1,11){
+    ([#x], [#(x*x)])
+  }
+)
+
+--- columns-balanced-lists paged ---
+// Check that breakable blocks are balanced correctly via `multi` and `multi_spill`
+#set page(width: 350pt, columns: 4)
+#set columns(balanced: true, separator: line())
+#{
+  8 * [- #lorem(5)]
+}
+
+--- columns-separator paged ---
+#set page(width: 200pt, height: 100pt, columns: 2)
+#set text(hyphenate: true)
+#set par(justify: true)
+#set columns(separator: line(stroke: red + 1pt))
+#lorem(30)
+
+--- columns-separator-content paged ---
+#set page(width: 200pt, height: 100pt, columns: 2)
+#set text(hyphenate: true)
+#set par(justify: true)
+#set curve(stroke: blue)
+#set columns(
+  gutter: 20pt,
+  separator: curve(curve.cubic((-8pt, 0%), (8pt, 50%), (0pt, 50%)))
+)
+#lorem(29)
+
+--- columns-separator-rtl paged ---
+#set page(columns: 2)
+#set columns(separator: line(), gutter: 20pt)
+#set text(dir: rtl)
+#rect(width: 100%)[1]
+#colbreak()
+#rect(width: 100%)[2]

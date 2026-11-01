@@ -1,0 +1,99 @@
+--- link-tags-heading-without-numbering pdftags ---
+#set pdf(standard: "ua-1")
+= Heading <heading>
+
+#link(<heading>)[link to heading]
+
+--- link-tags-heading-with-numbering pdftags ---
+#set pdf(standard: "ua-1")
+#set heading(numbering: "1.")
+= Heading <heading>
+
+#link(<heading>)[link to heading]
+
+--- link-tags-non-refable-location pdftags ---
+#set pdf(standard: "ua-1")
+A random location <somewhere>
+
+#link(<somewhere>)[link to somewhere]
+
+--- link-tags-contact-prefix pdftags ---
+#set pdf(standard: "ua-1")
+#link("mailto:hello@typst.app")
+
+#link("tel:123")
+
+--- link-tags-position pdftags ---
+#set pdf(standard: "ua-1")
+#context link(here().position())[somewhere]
+
+--- link-tags-link-in-artifact pdftags ---
+#set pdf(standard: "ua-1")
+#pdf.artifact[
+  // Error: 4-42 PDF/UA-1 error: PDF artifacts may not contain links
+  // Hint: 4-42 references, citations, and footnotes are also considered links in PDF
+  #link("https://github.com/typst/typst")
+]
+
+--- link-tags-reference-in-artifact pdftags ---
+#set pdf(standard: "ua-1")
+#set heading(numbering: "1.")
+= Heading <heading>
+#pdf.artifact[
+  // Error: 3-11 PDF/UA-1 error: PDF artifacts may not contain links
+  // Hint: 3-11 references, citations, and footnotes are also considered links in PDF
+  @heading
+]
+
+--- link-tags-citation-in-artifact pdftags ---
+#set pdf(standard: "ua-1")
+#pdf.artifact[
+  // Error: 3-10 PDF/UA-1 error: PDF artifacts may not contain links
+  // Hint: 3-10 references, citations, and footnotes are also considered links in PDF
+  @netwok
+]
+#show bibliography: none
+#bibliography("/assets/bib/works.bib")
+
+--- link-tags-with-parbreak-error pdftags ---
+#set pdf(standard: "ua-1")
+// Error: 7-69 PDF/UA-1 error: invalid document structure, this element's PDF tag would be split up
+// Hint: 7-69 this is probably caused by paragraph grouping
+// Hint: 7-69 maybe you've used a `parbreak`, `colbreak`, or `pagebreak`
+Look #link("https://github.com/typst/typst")[this #parbreak() thing].
+
+--- link-tags-with-parbreak pdftags ---
+Look #link("https://github.com/typst/typst")[this #parbreak() thing].
+
+--- link-tags-with-linebreak pdftags ---
+#set pdf(standard: "ua-1")
+// This forces the use of `QuadPoints`.
+The following #link("https://github.com/typst/typst")[link breaks across] a line.
+
+--- issue-7301-link-tags-empty-link-body pdftags ---
+#link("asf")[#none\ #none]
+
+--- issue-7301-link-tags-empty-link-body-linebreak pdftags ---
+#link("asf", linebreak())
+
+--- issue-7301-link-tags-empty-link-body-footnote pdftags ---
+#footnote(numbering: it => "", [asdf])
+
+--- issue-7301-link-tags-empty-link-body-mutliple pdftags ---
+#link("asf")[#none\ #none] #link("asf")[#none\ #none]
+
+--- issue-7777-missing-link-parent pdftags ---
+#set text(hyphenate: true)
+#block(width: 0.9cm)[#link("x")[test]ing]
+
+--- issue-7777-missing-link-parent-repeated-hyphen pdftags ---
+// In Czech and some other slavic languages hyphens are repeated at the start
+// of the next line, which can cause issues with links in PDF.
+#set text(lang: "cs", hyphenate: true)
+#block(width: 0.9cm)[#link("x")[test-]ing]
+
+--- link-tags-nesting-across-pars pdftags ---
+This #link("https://outer.org")[is a split
+#link("https://inner.org")[ multi paragraph link.
+
+Thanks for the] multi attention.] Okay!
