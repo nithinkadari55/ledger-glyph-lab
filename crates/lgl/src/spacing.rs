@@ -147,9 +147,9 @@ fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool 
                     && bbox.x0 < band.x1
                     && band.x0 < bbox.x1
             }
-            _ => bbox.intersect(&band).is_some_and(|b| {
-                b.height() > MIN_DEVIATION_PT && b.width() > MIN_DEVIATION_PT
-            }),
+            // Any graphic crossing the gap, even a thin rule, separates the
+            // blocks visually.
+            _ => bbox.intersect(&band).is_some_and(|b| b.width() > MIN_DEVIATION_PT),
         }
     })
 }

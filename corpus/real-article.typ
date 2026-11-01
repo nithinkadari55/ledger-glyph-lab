@@ -1,4 +1,4 @@
-// expect-none
+// expect: L005.loose-line
 #set page(paper: "a4", margin: (x: 1.8cm, y: 2.2cm), columns: 2)
 #set columns(gutter: 1.2em)
 #set text(size: 10pt, lang: "en")
