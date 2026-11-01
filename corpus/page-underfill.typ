@@ -1,0 +1,7 @@
+// expect: L007.page-underfill
+#set page(paper: "a5", margin: 2cm)
+#lorem(60)
+
+#block(breakable: false, width: 100%, height: 13cm, fill: luma(235))[A tall unbreakable panel]
+
+#lorem(40)

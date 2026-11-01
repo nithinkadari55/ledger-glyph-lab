@@ -63,6 +63,10 @@ pub struct RegionProbe {
     pub kind: RegionKind,
     /// The size of the region.
     pub size: Size,
+    /// Whether this region ends a run of pages, i.e. whether it was ended by
+    /// a page break or the end of the document rather than by running out of
+    /// space.
+    pub last_in_run: bool,
 }
 
 /// The kind of a [`RegionProbe`].

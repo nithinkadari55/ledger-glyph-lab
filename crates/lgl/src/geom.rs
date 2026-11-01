@@ -185,6 +185,7 @@ pub struct Region {
     pub kind: &'static str,
     pub page: usize,
     pub bbox: BBox,
+    pub last_in_run: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -390,6 +391,7 @@ impl Walker {
                     },
                     page: self.page,
                     bbox,
+                    last_in_run: region.last_in_run,
                 });
                 self.regions.push(index);
             }

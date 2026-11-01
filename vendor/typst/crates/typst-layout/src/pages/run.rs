@@ -224,9 +224,14 @@ fn layout_page_run_impl(
     let footer = footer.clone().map(|f| f.artifact(ArtifactKind::Footer));
     let background = background.clone().map(|b| b.artifact(ArtifactKind::Background));
 
-    for mut inner in fragment {
+    let count = fragment.len();
+    for (i, mut inner) in fragment.into_iter().enumerate() {
         if probes {
-            let probe = RegionProbe { kind: RegionKind::PageBody, size: inner.size() };
+            let probe = RegionProbe {
+                kind: RegionKind::PageBody,
+                size: inner.size(),
+                last_in_run: i + 1 == count,
+            };
             inner.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
             inner.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
         }

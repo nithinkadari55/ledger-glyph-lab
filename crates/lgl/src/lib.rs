@@ -2,6 +2,7 @@ pub mod diag;
 pub mod geom;
 pub mod overlap;
 pub mod rules;
+pub mod whitespace;
 pub mod world;
 
 use typst_layout::PagedDocument;
