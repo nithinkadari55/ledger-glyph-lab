@@ -61,7 +61,11 @@ pub struct TraceEntry {
 }
 
 impl Diagnostic {
-    pub fn new(rule: impl Into<String>, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn new(
+        rule: impl Into<String>,
+        severity: Severity,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             v: SCHEMA_VERSION,
             rule: rule.into(),
@@ -111,7 +115,8 @@ pub fn from_typst(world: &LabWorld, diag: &SourceDiagnostic, stage: &str) -> Dia
         Severity::Error => "error",
         Severity::Warning | Severity::Info => "warning",
     };
-    let mut out = Diagnostic::new(format!("typst.{stage}.{kind}"), severity, diag.message.as_str());
+    let mut out =
+        Diagnostic::new(format!("typst.{stage}.{kind}"), severity, diag.message.as_str());
     out.loc = resolve(world, diag.span);
     out.hints = diag
         .hints

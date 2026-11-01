@@ -6,7 +6,11 @@ use clap::{Parser, Subcommand};
 use lgl::world::{LabWorld, WorldOptions};
 
 #[derive(Parser)]
-#[command(name = "lgl", version, about = "Compile Typst and report layout diagnostics as JSON lines")]
+#[command(
+    name = "lgl",
+    version,
+    about = "Compile Typst and report layout diagnostics as JSON lines"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,

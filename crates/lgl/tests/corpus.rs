@@ -32,14 +32,18 @@ fn corpus() {
     paths.sort();
     assert!(!paths.is_empty(), "corpus is empty");
 
-    let options = WorldOptions { creation_timestamp: Some(0), ..WorldOptions::default() };
+    let options = WorldOptions {
+        creation_timestamp: Some(0),
+        ..WorldOptions::default()
+    };
     let mut failures = Vec::new();
 
     for path in &paths {
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
         let source = std::fs::read_to_string(path).expect("readable corpus file");
         let Some(expected) = expectations(&source) else {
-            failures.push(format!("{name}: missing `// expect:` or `// expect-none` header"));
+            failures
+                .push(format!("{name}: missing `// expect:` or `// expect-none` header"));
             continue;
         };
 

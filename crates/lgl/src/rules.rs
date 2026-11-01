@@ -10,7 +10,11 @@ pub const PAGE_OVERFLOW: &str = "L001.page-overflow";
 
 const TOLERANCE_PT: f64 = 0.5;
 
-pub fn run(world: &LabWorld, _document: &PagedDocument, geometry: &Geometry) -> Vec<Diagnostic> {
+pub fn run(
+    world: &LabWorld,
+    _document: &PagedDocument,
+    geometry: &Geometry,
+) -> Vec<Diagnostic> {
     page_overflow(world, geometry)
 }
 
@@ -28,7 +32,8 @@ struct Overflow {
 }
 
 fn page_overflow(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
-    let mut worst: BTreeMap<(usize, Option<usize>, Option<usize>), Overflow> = BTreeMap::new();
+    let mut worst: BTreeMap<(usize, Option<usize>, Option<usize>), Overflow> =
+        BTreeMap::new();
 
     for (index, item) in geometry.items.iter().enumerate() {
         let Some(bbox) = visible(item) else { continue };
@@ -40,8 +45,7 @@ fn page_overflow(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             (bbox.x1 - (page.width + bleed_right), "right"),
             (bbox.y1 - (page.height + bleed_bottom), "bottom"),
         ];
-        let Some(&(amount, side)) =
-            sides.iter().max_by(|a, b| a.0.total_cmp(&b.0))
+        let Some(&(amount, side)) = sides.iter().max_by(|a, b| a.0.total_cmp(&b.0))
         else {
             continue;
         };

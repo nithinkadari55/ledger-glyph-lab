@@ -39,7 +39,10 @@ impl BBox {
     }
 
     pub fn is_finite(&self) -> bool {
-        self.x0.is_finite() && self.y0.is_finite() && self.x1.is_finite() && self.y1.is_finite()
+        self.x0.is_finite()
+            && self.y0.is_finite()
+            && self.x1.is_finite()
+            && self.y1.is_finite()
     }
 
     pub fn width(&self) -> f64 {
@@ -171,14 +174,14 @@ impl Walker {
                         Some(curve) => {
                             let local = curve.bbox(None);
                             match (BBox::transformed(local, group_ts), clip) {
-                                (Some(own), Some(outer)) => Some(
-                                    own.intersect(&outer).unwrap_or(BBox {
+                                (Some(own), Some(outer)) => {
+                                    Some(own.intersect(&outer).unwrap_or(BBox {
                                         x0: own.x0,
                                         y0: own.y0,
                                         x1: own.x0,
                                         y1: own.y0,
-                                    }),
-                                ),
+                                    }))
+                                }
                                 (Some(own), None) => Some(own),
                                 (None, outer) => outer,
                             }
@@ -306,7 +309,9 @@ impl Walker {
                 let element = &mut self.geometry.elements[index];
                 match element.boxes.iter_mut().find(|b| b.page == item.page) {
                     Some(existing) => existing.bbox = existing.bbox.union(&visible),
-                    None => element.boxes.push(PageBox { page: item.page, bbox: visible }),
+                    None => {
+                        element.boxes.push(PageBox { page: item.page, bbox: visible })
+                    }
                 }
                 cursor = element.parent;
             }

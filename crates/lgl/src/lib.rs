@@ -25,8 +25,12 @@ impl Outcome {
 pub fn check(world: &LabWorld, export_pdf: bool) -> Outcome {
     let mut diagnostics = Vec::new();
     let compiled = typst::compile::<PagedDocument>(world);
-    diagnostics
-        .extend(compiled.warnings.iter().map(|w| diag::from_typst(world, w, "compile")));
+    diagnostics.extend(
+        compiled
+            .warnings
+            .iter()
+            .map(|w| diag::from_typst(world, w, "compile")),
+    );
 
     let document = match compiled.output {
         Ok(document) => document,
@@ -47,7 +51,8 @@ pub fn check(world: &LabWorld, export_pdf: bool) -> Outcome {
         match exported.output {
             Ok(bytes) => Some(bytes),
             Err(errors) => {
-                diagnostics.extend(errors.iter().map(|e| diag::from_typst(world, e, "pdf")));
+                diagnostics
+                    .extend(errors.iter().map(|e| diag::from_typst(world, e, "pdf")));
                 None
             }
         }
