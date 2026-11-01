@@ -131,17 +131,39 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
                 && !descends_from(geometry, item.elem, index)
         });
         let continues = geometry.items.iter().any(|item| item.page > page);
-        if below || !continues {
+        if !continues {
             continue;
         }
-        let mut diagnostic = Diagnostic::new(
-            STRANDED_HEADING,
-            Severity::Warning,
-            format!(
-                "heading is the last content on page {}; its section starts on the next page",
+        let lines_below: Vec<_> = geometry
+            .lines
+            .iter()
+            .filter(|l| {
+                l.page == page
+                    && geometry.is_body(l.region)
+                    && l.bbox.y0 >= last.bbox.y1 - 0.5
+                    && !descends_from(geometry, l.elem, index)
+            })
+            .collect();
+        let message = match lines_below.as_slice() {
+            _ if !below => format!(
+                "heading is the last content on page {}; its section starts on the next \
+                 page",
                 page + 1
             ),
-        );
+            [only] if !geometry.items.iter().any(|item| {
+                item.page == page
+                    && geometry.is_body(item.region)
+                    && item.bbox.y0 > only.bbox.y1 + 0.5
+            }) =>
+            {
+                format!(
+                    "heading is followed by only one line of its section on page {}",
+                    page + 1
+                )
+            }
+            _ => continue,
+        };
+        let mut diagnostic = Diagnostic::new(STRANDED_HEADING, Severity::Warning, message);
         diagnostic.loc = diag::resolve_span(world, element.span);
         diagnostic.elem = Some("heading".into());
         diagnostic.label = element.label.clone();

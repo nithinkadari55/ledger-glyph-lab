@@ -6,6 +6,13 @@ use crate::world::LabWorld;
 
 pub const FIGURE_DISTANCE: &str = "L016.figure-far-from-reference";
 pub const NUMBER_ALIGNMENT: &str = "L017.misaligned-numbers";
+pub const FOOTNOTE_PAGE: &str = "L028.footnote-on-other-page";
+pub const NARROW_COLUMN: &str = "L029.narrow-column";
+
+/// A table column narrower than this, whose text wraps into many lines, is too
+/// narrow to read. Convention.
+const MIN_COLUMN_PT: f64 = 60.0;
+const MAX_NARROW_LINES: usize = 4;
 
 /// How many pages a figure may be placed after (or before) its first
 /// reference. Convention: the same or the following page.
@@ -20,6 +27,8 @@ const MAX_EDGE_SPREAD_PT: f64 = 1.0;
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = figure_distance(world, geometry);
     out.extend(number_alignment(world, geometry));
+    out.extend(footnote_pages(world, geometry));
+    out.extend(narrow_columns(world, geometry));
     out
 }
 
@@ -180,4 +189,123 @@ fn enclosing_cell(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usiz
         cursor = geometry.containers[index].parent;
     }
     None
+}
+
+fn footnote_pages(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let pages_of = |name: &str| -> Vec<(usize, Option<usize>)> {
+        geometry
+            .elements
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.name == name && !has_ancestor(geometry, e.parent, "entry"))
+            .map(|(i, _)| (i, first_page(geometry, i)))
+            .collect()
+    };
+    let markers = pages_of("footnote");
+    let entries = pages_of("entry");
+    if markers.len() != entries.len() {
+        return Vec::new();
+    }
+    markers
+        .iter()
+        .zip(&entries)
+        .filter_map(|(&(marker, marker_page), &(_, entry_page))| {
+            let (marker_page, entry_page) = (marker_page?, entry_page?);
+            (marker_page != entry_page).then_some((marker, marker_page, entry_page))
+        })
+        .map(|(marker, marker_page, entry_page)| {
+            let mut out = Diagnostic::new(
+                FOOTNOTE_PAGE,
+                Severity::Warning,
+                format!(
+                    "footnote marker is on page {} but its text is on page {}",
+                    marker_page + 1,
+                    entry_page + 1
+                ),
+            );
+            out.loc = diag::resolve_span(world, geometry.elements[marker].span);
+            out.elem = Some("footnote".into());
+            out.page = Some(marker_page + 1);
+            out.hints.push(
+                "shorten the footnote text, or move the footnote earlier in the paragraph"
+                    .into(),
+            );
+            out
+        })
+        .collect()
+}
+
+fn has_ancestor(geometry: &Geometry, mut cursor: Option<usize>, name: &str) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].name == name {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
+}
+
+fn narrow_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut lines_per_cell: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    for (index, line) in geometry.lines.iter().enumerate() {
+        if let Some(cell) = enclosing_cell(geometry, line.container) {
+            lines_per_cell.entry(cell).or_default().push(index);
+        }
+    }
+
+    let mut worst: BTreeMap<(usize, i64, i64), (usize, usize)> = BTreeMap::new();
+    for (cell, lines) in lines_per_cell {
+        let container = &geometry.containers[cell];
+        if container.bbox.width() >= MIN_COLUMN_PT || lines.len() < MAX_NARROW_LINES {
+            continue;
+        }
+        let key = (
+            container.page,
+            (container.bbox.x0 * 2.0).round() as i64,
+            (container.bbox.x1 * 2.0).round() as i64,
+        );
+        let entry = worst.entry(key).or_insert((cell, lines[0]));
+        if lines.len() > lines_per_cell_len(geometry, entry.0) {
+            *entry = (cell, lines[0]);
+        }
+    }
+
+    worst
+        .into_values()
+        .map(|(cell, line)| {
+            let container = &geometry.containers[cell];
+            let count = lines_per_cell_len(geometry, cell);
+            let mut out = Diagnostic::new(
+                NARROW_COLUMN,
+                Severity::Warning,
+                format!(
+                    "a table column on page {} is only {}pt wide, so its text wraps into \
+                     {count} lines",
+                    container.page + 1,
+                    round1(container.bbox.width())
+                ),
+            );
+            out.loc = diag::resolve_span(world, geometry.lines[line].span);
+            out.elem = Some("cell".into());
+            out.page = Some(container.page + 1);
+            out.bbox = Some(container.bbox.rounded());
+            out.measured = Some(round1(container.bbox.width()));
+            out.limit = Some(MIN_COLUMN_PT);
+            out.unit = Some("pt");
+            out.hints.push(
+                "give the column more room (auto or a larger fr share), or shorten its \
+                 content"
+                    .into(),
+            );
+            out
+        })
+        .collect()
+}
+
+fn lines_per_cell_len(geometry: &Geometry, cell: usize) -> usize {
+    geometry
+        .lines
+        .iter()
+        .filter(|line| enclosing_cell(geometry, line.container) == Some(cell))
+        .count()
 }
