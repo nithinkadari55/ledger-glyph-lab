@@ -1,0 +1,27 @@
+[package]
+name = "lgl"
+description = "Compile Typst, extract page geometry and report layout diagnostics."
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+publish = false
+
+[[bin]]
+name = "lgl"
+path = "src/main.rs"
+
+[dependencies]
+typst = { workspace = true }
+typst-kit = { workspace = true, features = ["embedded-fonts", "scan-fonts", "system-files", "system-downloader", "datetime"] }
+typst-layout = { workspace = true }
+typst-pdf = { workspace = true }
+typst-syntax = { workspace = true }
+clap = { workspace = true }
+ecow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
