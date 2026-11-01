@@ -3,6 +3,7 @@ pub mod fix;
 pub mod geom;
 pub mod overlap;
 pub mod pagecheck;
+pub mod quality;
 pub mod resources;
 pub mod rules;
 pub mod spacing;
