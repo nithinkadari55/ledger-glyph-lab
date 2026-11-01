@@ -333,7 +333,8 @@ mod tests {
     }
 
     fn world() -> LabWorld {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/ok-basic.typ");
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/ok-basic.typ");
         LabWorld::new(&path, &WorldOptions::default()).unwrap()
     }
 
