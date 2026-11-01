@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{Geometry, ItemKind, round1};
+use crate::typography::paragraph_of;
 use crate::world::LabWorld;
 
 pub const MIN_SIZE: &str = "L022.text-too-small";
@@ -132,13 +133,14 @@ fn runts(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let lines = &geometry.lines;
     let mut out = Vec::new();
     for (i, line) in lines.iter().enumerate() {
-        let Some(elem) = line.elem else { continue };
-        if geometry.elements[elem].name != "par" || i == 0 {
+        let par = |line: &crate::geom::Line| paragraph_of(geometry, line.elem);
+        let Some(elem) = par(line) else { continue };
+        if i == 0 {
             continue;
         }
         let previous = &lines[i - 1];
-        let is_last = lines.get(i + 1).is_none_or(|next| next.elem != Some(elem));
-        if !is_last || previous.elem != Some(elem) || line.available <= 0.0 {
+        let is_last = lines.get(i + 1).is_none_or(|next| par(next) != Some(elem));
+        if !is_last || par(previous) != Some(elem) || line.available <= 0.0 {
             continue;
         }
         if line.natural <= 0.0 || line.natural >= RUNT_SHARE * line.available {

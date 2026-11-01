@@ -24,11 +24,24 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// The lines of each paragraph in document order. Lines that do not belong to
 /// a paragraph element are skipped.
+/// The paragraph that an element belongs to: the element itself if it is a
+/// paragraph, or its nearest paragraph ancestor. Lines may report an inline
+/// element such as an equation or a link that starts at or before them.
+pub fn paragraph_of(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
+    while let Some(index) = cursor {
+        if geometry.elements[index].name == "par" {
+            return Some(index);
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    None
+}
+
 fn paragraphs(geometry: &Geometry) -> Vec<Vec<&Line>> {
     let mut out: Vec<Vec<&Line>> = Vec::new();
     let mut current = None;
     for line in &geometry.lines {
-        let Some(elem) = line.elem.filter(|&e| geometry.elements[e].name == "par") else {
+        let Some(elem) = paragraph_of(geometry, line.elem) else {
             current = None;
             continue;
         };
@@ -238,10 +251,8 @@ pub fn uneven_leading(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
             if usual <= 0.0 {
                 continue;
             }
-            let Some((index, &worst)) = pitches
-                .iter()
-                .enumerate()
-                .max_by(|a, b| a.1.total_cmp(b.1))
+            let Some((index, &worst)) =
+                pitches.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1))
             else {
                 continue;
             };
