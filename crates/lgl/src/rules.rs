@@ -4,7 +4,7 @@ use typst::syntax::Span;
 use typst_layout::PagedDocument;
 
 use crate::diag::{self, Diagnostic, Severity};
-use crate::geom::{BBox, Geometry, ItemKind, round1};
+use crate::geom::{BBox, Container, Geometry, ItemKind, round1};
 use crate::world::LabWorld;
 
 pub const PAGE_OVERFLOW: &str = "L001.page-overflow";
@@ -248,7 +248,7 @@ fn to_diagnostic(
         }
         (CONTAINER_OVERFLOW, Anchor::Container(container)) => {
             let container = &geometry.containers[container];
-            let kind = container.kind;
+            let kind = container_name(geometry, container);
             (
                 Severity::Error,
                 format!(
@@ -343,4 +343,26 @@ fn loose_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             out
         })
         .collect()
+}
+
+/// How to call a container in a message. Table and grid cells wrap their body
+/// in a block of the same size, which the author knows as the cell.
+fn container_name(geometry: &Geometry, container: &Container) -> &'static str {
+    match container.parent.map(|p| &geometry.containers[p]) {
+        Some(parent)
+            if container.kind == "block"
+                && parent.kind == "cell"
+                && same_box(&parent.bbox, &container.bbox) =>
+        {
+            "cell"
+        }
+        _ => container.kind,
+    }
+}
+
+fn same_box(a: &BBox, b: &BBox) -> bool {
+    (a.x0 - b.x0).abs() <= TOLERANCE_PT
+        && (a.y0 - b.y0).abs() <= TOLERANCE_PT
+        && (a.x1 - b.x1).abs() <= TOLERANCE_PT
+        && (a.y1 - b.y1).abs() <= TOLERANCE_PT
 }
