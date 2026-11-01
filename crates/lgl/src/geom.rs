@@ -177,6 +177,8 @@ pub struct Container {
     pub kind: &'static str,
     pub page: usize,
     pub bbox: BBox,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<usize>,
     pub clip: bool,
     pub sized: bool,
     pub visible: bool,
@@ -245,6 +247,13 @@ pub struct Geometry {
     pub regions: Vec<Region>,
     pub lines: Vec<Line>,
     pub items: Vec<Item>,
+}
+
+impl Geometry {
+    /// Whether a region is a page body, as opposed to a header or footer.
+    pub fn is_body(&self, region: Option<usize>) -> bool {
+        region.is_some_and(|r| self.regions[r].kind == "page-body")
+    }
 }
 
 pub fn extract(document: &PagedDocument) -> Geometry {
@@ -392,6 +401,7 @@ impl Walker {
                     },
                     page: self.page,
                     bbox,
+                    region: self.regions.last().copied(),
                     clip: container.clip,
                     sized: container.sized,
                     visible: container.visible,
@@ -410,6 +420,8 @@ impl Walker {
                 self.geometry.regions.push(Region {
                     kind: match region.kind {
                         RegionKind::PageBody => "page-body",
+                        RegionKind::Header => "header",
+                        RegionKind::Footer => "footer",
                     },
                     page: self.page,
                     bbox,

@@ -11,7 +11,7 @@ const MAX_EMPTY_SHARE: f64 = 0.2;
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for (index, region) in geometry.regions.iter().enumerate() {
-        if region.last_in_run {
+        if region.last_in_run || region.kind != "page-body" {
             continue;
         }
         let Some(bottom) = content_bottom(geometry, index) else { continue };
@@ -43,7 +43,7 @@ fn first_item(geometry: &Geometry, page: usize) -> Option<usize> {
         .iter()
         .enumerate()
         .filter(|(_, item)| {
-            item.page == page && item.region.is_some() && item.kind != ItemKind::Link
+            item.page == page && geometry.is_body(item.region) && item.kind != ItemKind::Link
         })
         .min_by(|(_, a), (_, b)| a.bbox.y0.total_cmp(&b.bbox.y0))
         .map(|(index, _)| index)

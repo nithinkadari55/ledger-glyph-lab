@@ -74,6 +74,10 @@ pub struct RegionProbe {
 pub enum RegionKind {
     /// The page area inside the margins.
     PageBody,
+    /// The area of the page header.
+    Header,
+    /// The area of the page footer.
+    Footer,
 }
 
 /// Facts about a committed paragraph line.

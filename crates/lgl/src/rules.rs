@@ -10,6 +10,7 @@ use crate::world::LabWorld;
 pub const PAGE_OVERFLOW: &str = "L001.page-overflow";
 pub const CONTAINER_OVERFLOW: &str = "L002.container-overflow";
 pub const MARGIN_INTRUSION: &str = "L003.margin-intrusion";
+pub const MARGINAL_OVERFLOW: &str = "L018.marginal-overflow";
 pub const LINE_OVERFLOW: &str = "L004.line-overflow";
 pub const LOOSE_LINE: &str = "L005.loose-line";
 
@@ -37,6 +38,7 @@ pub fn run(
     out.extend(crate::typography::run(world, geometry));
     out.extend(crate::spacing::run(world, geometry));
     out.extend(crate::structure::run(world, geometry));
+    out.extend(crate::pagecheck::run(world, geometry));
     out
 }
 
@@ -107,7 +109,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             bbox: container.bbox,
             tolerance: TOLERANCE_PT,
             container: container.parent,
-            region: region_of(geometry, container.page, &container.bbox),
+            region: container.region,
             span: container.span,
             elem: Some(container.kind.to_string()),
             label: container.elem.and_then(|e| geometry.elements[e].label.clone()),
@@ -203,7 +205,8 @@ fn classify(
     if exceeds_page {
         return Some((PAGE_OVERFLOW, Anchor::Span(subject.span), page_excess));
     }
-    Some((MARGIN_INTRUSION, Anchor::Span(subject.span), region_excess?))
+    let rule = if geometry.is_body(subject.region) { MARGIN_INTRUSION } else { MARGINAL_OVERFLOW };
+    Some((rule, Anchor::Span(subject.span), region_excess?))
 }
 
 /// The nearest container whose bounds the author can see or chose: a cell, a
@@ -223,13 +226,6 @@ fn bounded_container(geometry: &Geometry, mut cursor: Option<usize>) -> Option<u
         cursor = container.parent;
     }
     None
-}
-
-fn region_of(geometry: &Geometry, page: usize, bbox: &BBox) -> Option<usize> {
-    geometry
-        .regions
-        .iter()
-        .position(|r| r.page == page && r.bbox.intersect(bbox).is_some())
 }
 
 fn overfull_line(geometry: &Geometry, page: usize, bbox: &BBox) -> Option<usize> {
@@ -320,6 +316,16 @@ fn to_diagnostic(
                 }
                 _ => "let the content break across pages, or reduce its height",
             },
+            finding.span,
+            finding.elem,
+        ),
+        (MARGINAL_OVERFLOW, _) => (
+            Severity::Error,
+            format!(
+                "header or footer content extends {amount}pt beyond the {} edge of \n                 its area on page {page}",
+                finding.side
+            ),
+            "shorten the header or footer, reduce its font size, or enlarge the page \n             margin that holds it",
             finding.span,
             finding.elem,
         ),

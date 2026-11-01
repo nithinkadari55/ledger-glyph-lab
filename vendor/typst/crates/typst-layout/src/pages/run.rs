@@ -245,8 +245,10 @@ fn layout_page_run_impl(
             fill: fill.clone(),
             numbering: numbering.clone(),
             supplement: supplement.clone(),
-            header: layout_marginal(&header, header_size, Alignment::BOTTOM)?,
-            footer: layout_marginal(&footer, footer_size, Alignment::TOP)?,
+            header: layout_marginal(&header, header_size, Alignment::BOTTOM)?
+                .map(|frame| mark_marginal(frame, probes, RegionKind::Header)),
+            footer: layout_marginal(&footer, footer_size, Alignment::TOP)?
+                .map(|frame| mark_marginal(frame, probes, RegionKind::Footer)),
             background: layout_marginal(&background, full_size, mid)?,
             foreground: layout_marginal(foreground, full_size, mid)?,
             margin,
@@ -258,4 +260,14 @@ fn layout_page_run_impl(
     }
 
     Ok(layouted)
+}
+
+/// Marks the extent of a header or footer, if probes are enabled.
+fn mark_marginal(mut frame: Frame, probes: bool, kind: RegionKind) -> Frame {
+    if probes && !frame.is_empty() {
+        let probe = RegionProbe { kind, size: frame.size(), last_in_run: false };
+        frame.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
+        frame.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
+    }
+    frame
 }

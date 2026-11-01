@@ -126,7 +126,7 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
         let page = last.page;
         let below = geometry.items.iter().any(|item| {
             item.page == page
-                && item.region.is_some()
+                && geometry.is_body(item.region)
                 && item.bbox.y0 >= last.bbox.y1
                 && !descends_from(geometry, item.elem, index)
         });
