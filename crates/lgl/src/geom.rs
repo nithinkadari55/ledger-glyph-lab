@@ -206,6 +206,8 @@ pub struct Line {
     pub hyphenated: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elem: Option<usize>,
     #[serde(skip)]
     pub span: Span,
 }
@@ -429,6 +431,7 @@ impl Walker {
                     justify: line.justify,
                     hyphenated: line.hyphenated,
                     container: self.containers.last().copied(),
+                    elem: self.open.last().copied(),
                     span: line.span,
                 });
             }
