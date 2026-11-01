@@ -185,6 +185,9 @@ pub struct Library {
     pub features: Features,
     /// Registered [export formats](crate::format).
     pub formats: Vec<Format>,
+    /// Whether layout emits invisible [probes](crate::layout::Probe) for
+    /// external quality checks.
+    pub probes: bool,
 }
 
 /// Configurable builder for the standard library.
@@ -196,6 +199,7 @@ pub struct LibraryBuilder {
     inputs: Option<Dict>,
     features: Features,
     formats: Vec<Format>,
+    probes: bool,
 }
 
 impl LibraryBuilder {
@@ -210,6 +214,7 @@ impl LibraryBuilder {
             inputs: None,
             features: Features::default(),
             formats: formats.into_iter().collect(),
+            probes: false,
         }
     }
 
@@ -224,6 +229,13 @@ impl LibraryBuilder {
     /// No guarantees whatsover!
     pub fn with_features(mut self, features: Features) -> Self {
         self.features = features;
+        self
+    }
+
+    /// Configure whether layout emits invisible [probes](crate::layout::Probe)
+    /// for external quality checks.
+    pub fn with_probes(mut self, probes: bool) -> Self {
+        self.probes = probes;
         self
     }
 
@@ -245,6 +257,7 @@ impl LibraryBuilder {
             std: Binding::detached(global),
             features: self.features,
             formats: self.formats,
+            probes: self.probes,
         }
     }
 }

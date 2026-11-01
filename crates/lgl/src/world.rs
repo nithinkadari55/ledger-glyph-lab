@@ -85,7 +85,9 @@ impl LabWorld {
             files: FileStore::new(SystemFiles::new(FsRoot::new(root.clone()), packages)),
             root,
             main,
-            library: LazyHash::new(Library::new([typst_pdf::FORMAT])),
+            library: LazyHash::new(
+                Library::builder([typst_pdf::FORMAT]).with_probes(true).build(),
+            ),
             fonts,
             now,
         })

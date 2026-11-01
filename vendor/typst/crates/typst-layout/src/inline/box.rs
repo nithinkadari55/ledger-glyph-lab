@@ -4,7 +4,7 @@ use typst_library::diag::SourceResult;
 use typst_library::engine::Engine;
 use typst_library::foundations::{Packed, Resolve, Smart, StyleChain};
 use typst_library::introspection::Locator;
-use typst_library::layout::{BoxElem, Frame, FrameKind, Size};
+use typst_library::layout::{BoxElem, ContainerKind, Frame, FrameKind, Size};
 use typst_library::visualize::Stroke;
 use typst_utils::Numeric;
 
@@ -70,6 +70,9 @@ pub fn layout_box(
     if fill.is_some() || stroke.iter().any(Option::is_some) {
         fill_and_stroke(&mut frame, fill, &stroke, &outset, &radius, elem.span());
     }
+
+    let clip = elem.clip.get(styles);
+    crate::probe::container(engine, &mut frame, ContainerKind::Box, clip, elem.span());
 
     // Assign label to the frame.
     if let Some(label) = elem.label() {

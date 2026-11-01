@@ -6,8 +6,8 @@ use typst_library::engine::Engine;
 use typst_library::foundations::{Packed, Resolve, StyleChain};
 use typst_library::introspection::Locator;
 use typst_library::layout::{
-    Abs, Axes, BlockBody, BlockElem, Fragment, Frame, FrameKind, Region, Regions, Rel,
-    Sides, Size, Sizing,
+    Abs, Axes, BlockBody, BlockElem, ContainerKind, Fragment, Frame, FrameKind, Region,
+    Regions, Rel, Sides, Size, Sizing,
 };
 use typst_library::visualize::Stroke;
 use typst_utils::Numeric;
@@ -93,6 +93,9 @@ pub fn layout_single_block(
     if fill.is_some() || stroke.iter().any(Option::is_some) {
         fill_and_stroke(&mut frame, fill, &stroke, &outset, &radius, elem.span());
     }
+
+    let clip = elem.clip.get(styles);
+    crate::probe::container(engine, &mut frame, ContainerKind::Block, clip, elem.span());
 
     // Assign label to each frame in the fragment.
     if let Some(label) = elem.label() {
@@ -238,6 +241,8 @@ pub fn layout_multi_block(
         if has_fill_or_stroke && (i > 0 || !skip_first) {
             fill_and_stroke(frame, fill.clone(), &stroke, &outset, &radius, elem.span());
         }
+
+        crate::probe::container(engine, frame, ContainerKind::Block, clip, elem.span());
     }
 
     // Assign label to each frame in the fragment.

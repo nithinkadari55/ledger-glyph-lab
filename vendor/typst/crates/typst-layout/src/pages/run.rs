@@ -8,9 +8,9 @@ use typst_library::introspection::{
     Counter, CounterDisplayElem, CounterKey, Introspector, Locator, LocatorLink,
 };
 use typst_library::layout::{
-    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, HAlignment,
-    Length, OuterVAlignment, PageElem, Paper, Region, Regions, Rel, Sides, Size,
-    VAlignment,
+    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, FrameItem,
+    HAlignment, Length, OuterVAlignment, PageElem, Paper, Point, Probe, Region,
+    RegionKind, RegionProbe, Regions, Rel, Sides, Size, VAlignment,
 };
 use typst_library::model::{ArtifactKind, Numbering};
 use typst_library::routines::Pair;
@@ -201,6 +201,8 @@ fn layout_page_run_impl(
         FlowMode::Root,
     )?;
 
+    let probes = engine.library.probes;
+
     // Layouts a single marginal.
     let mut layout_marginal = |content: &Option<Content>, area, align| {
         let Some(content) = content else { return Ok(None) };
@@ -222,7 +224,13 @@ fn layout_page_run_impl(
     let footer = footer.clone().map(|f| f.artifact(ArtifactKind::Footer));
     let background = background.clone().map(|b| b.artifact(ArtifactKind::Background));
 
-    for inner in fragment {
+    for mut inner in fragment {
+        if probes {
+            let probe = RegionProbe { kind: RegionKind::PageBody, size: inner.size() };
+            inner.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
+            inner.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
+        }
+
         let header_size = Size::new(inner.width(), margin.top - header_ascent);
         let footer_size = Size::new(inner.width(), margin.bottom - footer_descent);
         let full_size = inner.size() + margin.sum_by_axis() + bleed.sum_by_axis();

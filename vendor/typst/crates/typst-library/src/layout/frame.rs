@@ -8,7 +8,7 @@ use typst_utils::{LazyHash, Numeric};
 
 use crate::foundations::Label;
 use crate::introspection::{Location, Tag};
-use crate::layout::{Abs, Axes, FixedAlignment, Point, Size, Transform};
+use crate::layout::{Abs, Axes, FixedAlignment, Point, Probe, Size, Transform};
 use crate::model::Destination;
 use crate::text::TextItem;
 use crate::visualize::{Color, Curve, FixedStroke, Geometry, Image, Paint, Shape};
@@ -496,6 +496,8 @@ pub enum FrameItem {
     Link(Destination, Size),
     /// An introspectable element that produced something within this frame.
     Tag(Tag),
+    /// An invisible record of a layout decision.
+    Probe(Probe),
 }
 
 impl Debug for FrameItem {
@@ -507,6 +509,7 @@ impl Debug for FrameItem {
             Self::Image(image, _, _) => write!(f, "{image:?}"),
             Self::Link(dest, _) => write!(f, "Link({dest:?})"),
             Self::Tag(tag) => write!(f, "{tag:?}"),
+            Self::Probe(probe) => write!(f, "{probe:?}"),
         }
     }
 }

@@ -382,6 +382,7 @@ pub(crate) fn handle_frame(
                     tags::handle_end(gc, fc, surface);
                 }
             }
+            FrameItem::Probe(_) => {}
         }
 
         fc.pop();

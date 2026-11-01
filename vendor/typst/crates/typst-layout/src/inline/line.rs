@@ -4,10 +4,11 @@ use std::ops::{Deref, DerefMut};
 use ecow::EcoVec;
 use typst_library::engine::Engine;
 use typst_library::introspection::{SplitLocator, Tag, TagFlags};
-use typst_library::layout::{Abs, Dir, Em, Fr, Frame, FrameItem, Point};
+use typst_library::layout::{Abs, Dir, Em, Fr, Frame, FrameItem, LineProbe, Point};
 use typst_library::model::ParLineMarker;
 use typst_library::text::{FontInstance, Lang, TextElem, families, variant};
-use typst_utils::Numeric;
+use typst_syntax::Span;
+use typst_utils::{Numeric, Scalar};
 
 use super::*;
 use crate::inline::linebreak::Trim;
@@ -631,6 +632,22 @@ pub fn commit(
         let y = top - frame.baseline();
         output.push_frame(Point::new(x, y), frame);
     }
+
+    crate::probe::line(
+        engine,
+        &mut output,
+        LineProbe {
+            available: width,
+            height: size.y,
+            natural: line.width + p.config.hanging_indent,
+            overflow: (-remaining).max(Abs::zero()),
+            ratio: Scalar::new(justification_ratio),
+            extra: extra_justification,
+            justify: line.justify,
+            hyphenated: line.dash == Some(Dash::Soft),
+            span: Span::detached(),
+        },
+    );
 
     Ok(output)
 }

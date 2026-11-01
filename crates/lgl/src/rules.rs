@@ -1,99 +1,352 @@
-use std::collections::BTreeMap;
+use std::collections::{HashMap, HashSet};
 
+use typst::syntax::Span;
 use typst_layout::PagedDocument;
 
 use crate::diag::{self, Diagnostic, Severity};
-use crate::geom::{BBox, Geometry, Item};
+use crate::geom::{BBox, Geometry, ItemKind, round1};
 use crate::world::LabWorld;
 
 pub const PAGE_OVERFLOW: &str = "L001.page-overflow";
+pub const CONTAINER_OVERFLOW: &str = "L002.container-overflow";
+pub const MARGIN_INTRUSION: &str = "L003.margin-intrusion";
+pub const LINE_OVERFLOW: &str = "L004.line-overflow";
+pub const LOOSE_LINE: &str = "L005.loose-line";
 
+/// Tolerance for geometric bounds, in points.
 const TOLERANCE_PT: f64 = 0.5;
+
+/// Text may hang into the margin by design (punctuation overhang), so text
+/// gets a tolerance relative to its size.
+const TEXT_TOLERANCE_EM: f64 = 0.35;
 
 pub fn run(
     world: &LabWorld,
     _document: &PagedDocument,
     geometry: &Geometry,
 ) -> Vec<Diagnostic> {
-    page_overflow(world, geometry)
+    let mut out = bounds(world, geometry);
+    out.extend(loose_lines(world, geometry));
+    out
 }
 
-fn visible(item: &Item) -> Option<BBox> {
-    match item.clip {
-        Some(clip) => item.bbox.intersect(&clip),
-        None => Some(item.bbox),
-    }
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Anchor {
+    Line(usize),
+    Container(usize),
+    Span(Span),
+    Item(usize),
 }
 
-struct Overflow {
+struct Finding {
+    rule: &'static str,
+    page: usize,
     amount: f64,
     side: &'static str,
-    item: usize,
+    span: Span,
+    elem: Option<String>,
+    label: Option<String>,
+    bbox: BBox,
 }
 
-fn page_overflow(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
-    let mut worst: BTreeMap<(usize, Option<usize>, Option<usize>), Overflow> =
-        BTreeMap::new();
+struct Subject {
+    page: usize,
+    bbox: BBox,
+    tolerance: f64,
+    container: Option<usize>,
+    region: Option<usize>,
+    span: Span,
+    elem: Option<String>,
+    label: Option<String>,
+}
 
-    for (index, item) in geometry.items.iter().enumerate() {
-        let Some(bbox) = visible(item) else { continue };
-        let page = &geometry.pages[item.page];
-        let [bleed_left, bleed_top, bleed_right, bleed_bottom] = page.bleed;
-        let sides = [
-            (-bleed_left - bbox.x0, "left"),
-            (-bleed_top - bbox.y0, "top"),
-            (bbox.x1 - (page.width + bleed_right), "right"),
-            (bbox.y1 - (page.height + bleed_bottom), "bottom"),
-        ];
-        let Some(&(amount, side)) = sides.iter().max_by(|a, b| a.0.total_cmp(&b.0))
-        else {
-            continue;
+type Findings = HashMap<(&'static str, Anchor), Finding>;
+
+fn record(
+    findings: &mut Findings,
+    (rule, anchor, (amount, side)): Classified,
+    subject: &Subject,
+) {
+    let entry = findings.entry((rule, anchor)).or_insert(Finding {
+        rule,
+        page: subject.page,
+        amount,
+        side,
+        span: subject.span,
+        elem: subject.elem.clone(),
+        label: subject.label.clone(),
+        bbox: subject.bbox,
+    });
+    if amount > entry.amount {
+        entry.amount = amount;
+        entry.side = side;
+        entry.bbox = subject.bbox;
+    }
+}
+
+fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut findings = Findings::new();
+    let mut flagged_containers = HashSet::new();
+
+    for (index, container) in geometry.containers.iter().enumerate() {
+        let subject = Subject {
+            page: container.page,
+            bbox: container.bbox,
+            tolerance: TOLERANCE_PT,
+            container: container.parent,
+            region: region_of(geometry, container.page, &container.bbox),
+            span: container.span,
+            elem: Some(container.kind.to_string()),
+            label: container
+                .elem
+                .and_then(|e| geometry.elements[e].label.clone()),
         };
-        if amount <= TOLERANCE_PT {
-            continue;
-        }
-        let key = (item.page, item.elem, item.elem.is_none().then_some(index));
-        let entry = worst.entry(key).or_insert(Overflow { amount, side, item: index });
-        if amount > entry.amount {
-            *entry = Overflow { amount, side, item: index };
+        if let Some(classified) = classify(geometry, &subject, None) {
+            flagged_containers.insert(index);
+            record(&mut findings, classified, &subject);
         }
     }
 
-    worst
-        .into_values()
-        .map(|overflow| {
-            let item = &geometry.items[overflow.item];
-            let element = item.elem.map(|e| &geometry.elements[e]);
-            let mut out = Diagnostic::new(
-                PAGE_OVERFLOW,
+    for (index, item) in geometry.items.iter().enumerate() {
+        let Some(bbox) = item.visible() else { continue };
+        let tolerance = match (item.kind, item.font_size) {
+            (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
+            _ => TOLERANCE_PT,
+        };
+        let element = item.elem.map(|e| &geometry.elements[e]);
+        let subject = Subject {
+            page: item.page,
+            bbox,
+            tolerance,
+            container: item.container,
+            region: item.region,
+            span: item.span,
+            elem: element.map(|e| e.name.to_string()),
+            label: element.and_then(|e| e.label.clone()),
+        };
+        let line = (item.kind == ItemKind::Text)
+            .then(|| overfull_line(geometry, item.page, &bbox))
+            .flatten();
+        let Some((rule, anchor, excess)) = classify(geometry, &subject, line) else {
+            continue;
+        };
+        if rule != CONTAINER_OVERFLOW
+            && rule != LINE_OVERFLOW
+            && inside_flagged(geometry, item.container, &flagged_containers)
+        {
+            continue;
+        }
+        let anchor = match anchor {
+            Anchor::Span(span) if span.is_detached() => Anchor::Item(index),
+            other => other,
+        };
+        record(&mut findings, (rule, anchor, excess), &subject);
+    }
+
+    let mut out: Vec<Diagnostic> = findings
+        .into_iter()
+        .map(|((_, anchor), finding)| to_diagnostic(world, geometry, anchor, finding))
+        .collect();
+    out.sort_by(|a, b| {
+        a.page
+            .cmp(&b.page)
+            .then_with(|| a.rule.cmp(&b.rule))
+            .then_with(|| a.message.cmp(&b.message))
+    });
+    out
+}
+
+type Classified = (&'static str, Anchor, (f64, &'static str));
+
+fn classify(
+    geometry: &Geometry,
+    subject: &Subject,
+    line: Option<usize>,
+) -> Option<Classified> {
+    let page = &geometry.pages[subject.page];
+    let page_excess = subject.bbox.excess(&page.bounds());
+    let container = subject
+        .container
+        .map(|c| &geometry.containers[c])
+        .filter(|c| !c.clip);
+    let container_excess = container.map(|c| subject.bbox.excess(&c.bbox));
+    let region_excess = subject
+        .region
+        .map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
+
+    let exceeds_container = container_excess.is_some_and(|e| e.0 > subject.tolerance);
+    let exceeds_page = page_excess.0 > TOLERANCE_PT;
+    let exceeds_region = region_excess.is_some_and(|e| e.0 > subject.tolerance);
+    if !exceeds_container && !exceeds_page && !exceeds_region {
+        return None;
+    }
+
+    if let Some(line) = line {
+        let excess = (geometry.lines[line].overflow, "right");
+        return Some((LINE_OVERFLOW, Anchor::Line(line), excess));
+    }
+    if exceeds_container {
+        let index = subject.container.unwrap();
+        return Some((CONTAINER_OVERFLOW, Anchor::Container(index), container_excess?));
+    }
+    if exceeds_page {
+        return Some((PAGE_OVERFLOW, Anchor::Span(subject.span), page_excess));
+    }
+    Some((MARGIN_INTRUSION, Anchor::Span(subject.span), region_excess?))
+}
+
+fn region_of(geometry: &Geometry, page: usize, bbox: &BBox) -> Option<usize> {
+    geometry
+        .regions
+        .iter()
+        .position(|r| r.page == page && r.bbox.intersect(bbox).is_some())
+}
+
+fn overfull_line(geometry: &Geometry, page: usize, bbox: &BBox) -> Option<usize> {
+    let center = (bbox.y0 + bbox.y1) / 2.0;
+    geometry.lines.iter().position(|line| {
+        line.page == page
+            && line.overflow > TOLERANCE_PT
+            && line.bbox.y0 <= center
+            && center <= line.bbox.y1
+            && bbox.x1 > line.bbox.x0
+            && bbox.x0 < line.bbox.x1 + line.overflow + TOLERANCE_PT
+    })
+}
+
+fn inside_flagged(
+    geometry: &Geometry,
+    mut cursor: Option<usize>,
+    flagged: &HashSet<usize>,
+) -> bool {
+    while let Some(index) = cursor {
+        if flagged.contains(&index) {
+            return true;
+        }
+        cursor = geometry.containers[index].parent;
+    }
+    false
+}
+
+fn to_diagnostic(
+    world: &LabWorld,
+    geometry: &Geometry,
+    anchor: Anchor,
+    finding: Finding,
+) -> Diagnostic {
+    let page = finding.page + 1;
+    let amount = round1(finding.amount);
+    let (severity, message, hint, span, elem) =
+        match (finding.rule, anchor) {
+            (LINE_OVERFLOW, Anchor::Line(line)) => {
+                let line = &geometry.lines[line];
+                (
+                    Severity::Error,
+                    format!(
+                        "line is {amount}pt wider than the {:.1}pt available on page {page}",
+                        line.available
+                    ),
+                    "allow a break inside the long word or URL (enable hyphenation, \
+                     insert #sym.zws or a soft hyphen), or reduce the content's width",
+                    line.span,
+                    finding.elem,
+                )
+            }
+            (CONTAINER_OVERFLOW, Anchor::Container(container)) => {
+                let container = &geometry.containers[container];
+                let kind = container.kind;
+                (
+                    Severity::Error,
+                    format!(
+                        "content extends {amount}pt beyond the {} edge of its {kind} \
+                         ({:.1}pt x {:.1}pt) on page {page}",
+                        finding.side,
+                        container.bbox.width(),
+                        container.bbox.height()
+                    ),
+                    match finding.side {
+                        "left" | "right" => {
+                            "give the container more width (auto, fr or %), let the \
+                             content wrap, or enable clip if cutting it off is intended"
+                        }
+                        _ => {
+                            "give the container more height (auto), reduce the content, \
+                             or enable clip if cutting it off is intended"
+                        }
+                    },
+                    if finding.span.is_detached() { container.span } else { finding.span },
+                    Some(kind.to_string()),
+                )
+            }
+            (PAGE_OVERFLOW, _) => (
                 Severity::Error,
                 format!(
-                    "content extends {:.1}pt beyond the {} edge of page {}",
-                    overflow.amount,
-                    overflow.side,
-                    item.page + 1
+                    "content extends {amount}pt beyond the {} edge of page {page}",
+                    finding.side
+                ),
+                match finding.side {
+                    "left" | "right" => {
+                        "reduce the width: use relative (%) or fractional (fr) sizes, or \
+                         let the content wrap"
+                    }
+                    _ => "let the content break across pages, or reduce its height",
+                },
+                finding.span,
+                finding.elem,
+            ),
+            _ => (
+                Severity::Error,
+                format!(
+                    "content extends {amount}pt into the {} margin of page {page}",
+                    finding.side
+                ),
+                "keep the content within the text area: reduce its size or use \
+                 relative (%) or fractional (fr) sizes",
+                finding.span,
+                finding.elem,
+            ),
+        };
+
+    let mut out = Diagnostic::new(finding.rule, severity, message);
+    out.loc = diag::resolve_span(world, span);
+    out.elem = elem;
+    out.label = finding.label;
+    out.page = Some(page);
+    out.bbox = Some(finding.bbox.rounded());
+    out.measured = Some(amount);
+    out.limit = Some(TOLERANCE_PT);
+    out.unit = Some("pt");
+    out.hints.push(hint.into());
+    out
+}
+
+fn loose_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    geometry
+        .lines
+        .iter()
+        .filter(|line| line.justify && line.extra > 0.01)
+        .map(|line| {
+            let page = line.page + 1;
+            let extra = (line.extra * 100.0).round() / 100.0;
+            let mut out = Diagnostic::new(
+                LOOSE_LINE,
+                Severity::Warning,
+                format!(
+                    "justified line on page {page} ran out of stretchable space and \
+                     adds {extra}pt between characters"
                 ),
             );
-            out.loc = diag::resolve_span(world, item.span)
-                .or_else(|| element.and_then(|e| diag::resolve_span(world, e.span)));
-            out.elem = element.map(|e| e.name.to_string());
-            out.label = element.and_then(|e| e.label.clone());
-            out.page = Some(item.page + 1);
-            out.bbox = Some(item.bbox);
-            out.measured = Some(round(overflow.amount));
-            out.limit = Some(TOLERANCE_PT);
+            out.loc = diag::resolve_span(world, line.span);
+            out.page = Some(page);
+            out.bbox = Some(line.bbox.rounded());
+            out.measured = Some(extra);
+            out.limit = Some(0.0);
             out.unit = Some("pt");
-            out.hints.push(match overflow.side {
-                "left" | "right" => {
-                    "reduce the width: use relative (%) or fractional (fr) sizes, enable hyphenation, or allow the content to wrap".into()
-                }
-                _ => "allow the content to break across pages, or reduce its height".into(),
-            });
+            out.hints.push(
+                "enable hyphenation, rephrase the paragraph, or widen the text column"
+                    .into(),
+            );
             out
         })
         .collect()
-}
-
-fn round(value: f64) -> f64 {
-    (value * 10.0).round() / 10.0
 }

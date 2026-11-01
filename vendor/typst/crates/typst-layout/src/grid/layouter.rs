@@ -1339,7 +1339,9 @@ impl<'a> GridLayouter<'a> {
             // and grid cells need to be locatable for pdf accessibility, but
             // the introspection tags interfere with the layouting.
             fn is_empty_frame(frame: &Frame) -> bool {
-                frame.items().all(|(_, item)| matches!(item, FrameItem::Tag(_)))
+                frame
+                    .items()
+                    .all(|(_, item)| matches!(item, FrameItem::Tag(_) | FrameItem::Probe(_)))
             }
 
             // Skip the first region if one cell in it is empty. Then,

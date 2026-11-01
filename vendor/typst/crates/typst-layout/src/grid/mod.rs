@@ -11,7 +11,8 @@ use typst_library::foundations::{Content, NativeElement, Packed, StyleChain};
 use typst_library::introspection::{Location, Locator, SplitLocator, Tag, TagFlags};
 use typst_library::layout::grid::resolve::Cell;
 use typst_library::layout::{
-    Fragment, FrameItem, FrameParent, GridCell, GridElem, Inherit, Point, Regions,
+    ContainerKind, Fragment, FrameItem, FrameParent, GridCell, GridElem, Inherit, Point,
+    Regions,
 };
 use typst_library::model::{TableCell, TableElem};
 
@@ -54,8 +55,18 @@ pub fn layout_cell(
     let locator = locator.next(&cell.body.span());
     let fragment = crate::layout_fragment(engine, &cell.body, locator, styles, regions)?;
 
-    // Manually insert tags.
     let mut frames = fragment.into_frames();
+    for frame in &mut frames {
+        crate::probe::container(
+            engine,
+            frame,
+            ContainerKind::Cell,
+            false,
+            cell.body.span(),
+        );
+    }
+
+    // Manually insert tags.
     if let Some((elem, loc, key)) = tags
         && let Some((first, remainder)) = frames.split_first_mut()
     {

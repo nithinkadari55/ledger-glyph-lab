@@ -11,6 +11,7 @@ mod math;
 mod modifiers;
 mod pad;
 mod pages;
+mod probe;
 mod repeat;
 mod rules;
 mod shapes;

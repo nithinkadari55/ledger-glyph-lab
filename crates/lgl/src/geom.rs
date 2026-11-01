@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 use typst::introspection::{Location, Tag};
-use typst::layout::{Frame, FrameItem, Point, Rect, Transform};
+use typst::layout::{
+    ContainerKind, Frame, FrameItem, Point, Probe, Rect, RegionKind, Size, Transform,
+};
 use typst::syntax::Span;
 use typst_layout::PagedDocument;
 
@@ -38,6 +40,10 @@ impl BBox {
         out.is_finite().then_some(out)
     }
 
+    fn sized(size: Size, ts: Transform) -> Option<Self> {
+        Self::transformed(Rect::from_pos_size(Point::zero(), size), ts)
+    }
+
     pub fn is_finite(&self) -> bool {
         self.x0.is_finite()
             && self.y0.is_finite()
@@ -71,6 +77,33 @@ impl BBox {
         };
         (out.x0 <= out.x1 && out.y0 <= out.y1).then_some(out)
     }
+
+    /// How far `self` extends beyond `bounds`, as the largest excess on any
+    /// side together with the side's name.
+    pub fn excess(&self, bounds: &Self) -> (f64, &'static str) {
+        [
+            (bounds.x0 - self.x0, "left"),
+            (bounds.y0 - self.y0, "top"),
+            (self.x1 - bounds.x1, "right"),
+            (self.y1 - bounds.y1, "bottom"),
+        ]
+        .into_iter()
+        .max_by(|a, b| a.0.total_cmp(&b.0))
+        .unwrap()
+    }
+
+    pub fn rounded(&self) -> Self {
+        Self {
+            x0: round1(self.x0),
+            y0: round1(self.y0),
+            x1: round1(self.x1),
+            y1: round1(self.y1),
+        }
+    }
+}
+
+pub fn round1(value: f64) -> f64 {
+    (value * 10.0).round() / 10.0
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -92,11 +125,25 @@ pub struct Item {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elem: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub container: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f64>,
     #[serde(skip)]
     pub span: Span,
+}
+
+impl Item {
+    /// The part of the item that is not clipped away.
+    pub fn visible(&self) -> Option<BBox> {
+        match self.clip {
+            Some(clip) => self.bbox.intersect(&clip),
+            None => Some(self.bbox),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -118,6 +165,44 @@ pub struct PageBox {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct Container {
+    pub kind: &'static str,
+    pub page: usize,
+    pub bbox: BBox,
+    pub clip: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub elem: Option<usize>,
+    #[serde(skip)]
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Region {
+    pub kind: &'static str,
+    pub page: usize,
+    pub bbox: BBox,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Line {
+    pub page: usize,
+    pub bbox: BBox,
+    pub available: f64,
+    pub natural: f64,
+    pub overflow: f64,
+    pub ratio: f64,
+    pub extra: f64,
+    pub justify: bool,
+    pub hyphenated: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container: Option<usize>,
+    #[serde(skip)]
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct PageInfo {
     pub index: usize,
     pub number: u64,
@@ -126,10 +211,26 @@ pub struct PageInfo {
     pub bleed: [f64; 4],
 }
 
+impl PageInfo {
+    /// The page area including bleed.
+    pub fn bounds(&self) -> BBox {
+        let [left, top, right, bottom] = self.bleed;
+        BBox {
+            x0: -left,
+            y0: -top,
+            x1: self.width + right,
+            y1: self.height + bottom,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Geometry {
     pub pages: Vec<PageInfo>,
     pub elements: Vec<Element>,
+    pub containers: Vec<Container>,
+    pub regions: Vec<Region>,
+    pub lines: Vec<Line>,
     pub items: Vec<Item>,
 }
 
@@ -150,6 +251,8 @@ pub fn extract(document: &PagedDocument) -> Geometry {
             ],
         });
         walker.page = index;
+        walker.containers.clear();
+        walker.regions.clear();
         walker.frame(&page.frame, Transform::identity(), None);
     }
     walker.finish()
@@ -160,6 +263,8 @@ struct Walker {
     geometry: Geometry,
     page: usize,
     open: Vec<usize>,
+    containers: Vec<usize>,
+    regions: Vec<usize>,
     by_location: HashMap<Location, usize>,
 }
 
@@ -188,7 +293,10 @@ impl Walker {
                         }
                         None => clip,
                     };
+                    let depth = (self.containers.len(), self.regions.len());
                     self.frame(&group.frame, group_ts, group_clip);
+                    self.containers.truncate(depth.0);
+                    self.regions.truncate(depth.1);
                 }
                 FrameItem::Text(text) => {
                     let span = text
@@ -241,6 +349,65 @@ impl Walker {
                     );
                 }
                 FrameItem::Tag(tag) => self.tag(tag),
+                FrameItem::Probe(probe) => self.probe(probe, item_ts),
+            }
+        }
+    }
+
+    fn probe(&mut self, probe: &Probe, ts: Transform) {
+        match probe {
+            Probe::ContainerStart(container) => {
+                let Some(bbox) = BBox::sized(container.size, ts) else { return };
+                let index = self.geometry.containers.len();
+                self.geometry.containers.push(Container {
+                    kind: match container.kind {
+                        ContainerKind::Box => "box",
+                        ContainerKind::Block => "block",
+                        ContainerKind::Cell => "cell",
+                    },
+                    page: self.page,
+                    bbox,
+                    clip: container.clip,
+                    parent: self.containers.last().copied(),
+                    elem: self.open.last().copied(),
+                    span: container.span,
+                });
+                self.containers.push(index);
+            }
+            Probe::ContainerEnd => {
+                self.containers.pop();
+            }
+            Probe::RegionStart(region) => {
+                let Some(bbox) = BBox::sized(region.size, ts) else { return };
+                let index = self.geometry.regions.len();
+                self.geometry.regions.push(Region {
+                    kind: match region.kind {
+                        RegionKind::PageBody => "page-body",
+                    },
+                    page: self.page,
+                    bbox,
+                });
+                self.regions.push(index);
+            }
+            Probe::RegionEnd => {
+                self.regions.pop();
+            }
+            Probe::Line(line) => {
+                let size = Size::new(line.available, line.height);
+                let Some(bbox) = BBox::sized(size, ts) else { return };
+                self.geometry.lines.push(Line {
+                    page: self.page,
+                    bbox,
+                    available: line.available.to_pt(),
+                    natural: line.natural.to_pt(),
+                    overflow: line.overflow.to_pt(),
+                    ratio: line.ratio.get(),
+                    extra: line.extra.to_pt(),
+                    justify: line.justify,
+                    hyphenated: line.hyphenated,
+                    container: self.containers.last().copied(),
+                    span: line.span,
+                });
             }
         }
     }
@@ -288,6 +455,8 @@ impl Walker {
             bbox,
             clip,
             elem: self.open.last().copied(),
+            container: self.containers.last().copied(),
+            region: self.regions.last().copied(),
             text,
             font_size,
             span,
@@ -297,13 +466,7 @@ impl Walker {
     fn finish(mut self) -> Geometry {
         let items = std::mem::take(&mut self.geometry.items);
         for item in &items {
-            let visible = match item.clip {
-                Some(clip) => match item.bbox.intersect(&clip) {
-                    Some(visible) => visible,
-                    None => continue,
-                },
-                None => item.bbox,
-            };
+            let Some(visible) = item.visible() else { continue };
             let mut cursor = item.elem;
             while let Some(index) = cursor {
                 let element = &mut self.geometry.elements[index];
