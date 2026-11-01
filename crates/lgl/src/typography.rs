@@ -1,5 +1,5 @@
 use crate::diag::{self, Diagnostic, Severity};
-use crate::geom::{Geometry, Line};
+use crate::geom::{Geometry, Line, round1};
 use crate::world::LabWorld;
 
 pub const ORPHAN: &str = "L010.orphan";
@@ -18,6 +18,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         hyphen_ladder(world, &lines, &mut out);
     }
     stranded_headings(world, geometry, &mut out);
+    out.extend(uneven_leading(world, geometry));
     out
 }
 
@@ -207,5 +208,66 @@ fn line_diagnostic(
     out.page = Some(line.page + 1);
     out.bbox = Some(line.bbox.rounded());
     out.hints.push(hint.into());
+    out
+}
+
+pub const UNEVEN_LEADING: &str = "L031.uneven-line-spacing";
+
+/// How much taller than the paragraph's usual line pitch a line may be.
+const MAX_PITCH_GROWTH: f64 = 1.25;
+
+/// Lines whose distance to the previous line is much larger than the
+/// paragraph's usual line pitch, typically because a tall inline element
+/// (a fraction, a large symbol or an inline image) widens the line.
+pub fn uneven_leading(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for lines in paragraphs(geometry) {
+        let columns: Vec<Vec<&Line>> = lines
+            .chunk_by(|a, b| a.page == b.page && (a.bbox.x0 - b.bbox.x0).abs() < 0.5)
+            .map(<[_]>::to_vec)
+            .collect();
+        for run in columns {
+            if run.len() < 3 {
+                continue;
+            }
+            let pitches: Vec<f64> =
+                run.windows(2).map(|w| w[1].bbox.y0 - w[0].bbox.y0).collect();
+            let mut sorted = pitches.clone();
+            sorted.sort_by(f64::total_cmp);
+            let usual = sorted[sorted.len() / 2];
+            if usual <= 0.0 {
+                continue;
+            }
+            let Some((index, &worst)) = pitches
+                .iter()
+                .enumerate()
+                .max_by(|a, b| a.1.total_cmp(b.1))
+            else {
+                continue;
+            };
+            if worst <= usual * MAX_PITCH_GROWTH + 1.0 {
+                continue;
+            }
+            let taller = run[index + 1];
+            let mut diagnostic = line_diagnostic(
+                world,
+                UNEVEN_LEADING,
+                taller,
+                format!(
+                    "a line on page {} sits {}pt below the previous one, but lines in this \
+                     paragraph are usually {}pt apart",
+                    taller.page + 1,
+                    round1(worst),
+                    round1(usual)
+                ),
+                "move tall inline content (fractions, large symbols, images) into its \
+                 own display block, or reduce its size",
+            );
+            diagnostic.measured = Some(round1(worst));
+            diagnostic.limit = Some(round1(usual * MAX_PITCH_GROWTH + 1.0));
+            diagnostic.unit = Some("pt");
+            out.push(diagnostic);
+        }
+    }
     out
 }

@@ -267,6 +267,14 @@ pub const CATALOG: &[RuleInfo] = &[
         "Avoid fractional spacing and bottom alignment around grid text.",
         false,
     ),
+    rule(
+        "L031.uneven-line-spacing",
+        "warning",
+        "A line in a paragraph sits much further below the previous one than usual, \n         typically because of tall inline content.",
+        "25% above the paragraph's median pitch, plus 1pt",
+        "Move tall inline content into a display block, or reduce it.",
+        false,
+    ),
 ];
 
 /// Typst's own diagnostics are reported with these rule names.
@@ -315,6 +323,7 @@ mod tests {
             quality::SPLIT_FIGURE,
             quality::PAGE_FRAME,
             grid::OFF_GRID,
+            typography::UNEVEN_LEADING,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");
