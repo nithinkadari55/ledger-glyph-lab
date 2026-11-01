@@ -59,8 +59,11 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             for &other in &active {
                 let (a, b) = (&candidates[other], &candidates[current]);
                 let Some((width, height)) = conflict(a, b) else { continue };
-                let (lower, upper) =
-                    if a.index < b.index { (a.index, b.index) } else { (b.index, a.index) };
+                let (lower, upper) = if a.index < b.index {
+                    (a.index, b.index)
+                } else {
+                    (b.index, a.index)
+                };
                 let spans = (geometry.items[lower].span, geometry.items[upper].span);
                 let entry = findings.entry(spans).or_insert(Finding {
                     page: a.item.page,
@@ -80,8 +83,10 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
 
-    let mut out: Vec<Diagnostic> =
-        findings.into_values().map(|f| to_diagnostic(world, geometry, f)).collect();
+    let mut out: Vec<Diagnostic> = findings
+        .into_values()
+        .map(|f| to_diagnostic(world, geometry, f))
+        .collect();
     out.sort_by(|a, b| a.page.cmp(&b.page).then_with(|| a.message.cmp(&b.message)));
     out
 }
