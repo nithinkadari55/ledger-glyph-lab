@@ -202,10 +202,18 @@ fn classify(
         let index = bounded?;
         return Some((CONTAINER_OVERFLOW, Anchor::Container(index), container_excess?));
     }
+    let marginal = subject.region.is_some() && !geometry.is_body(subject.region);
+    if marginal && exceeds_region {
+        return Some((MARGINAL_OVERFLOW, Anchor::Span(subject.span), region_excess?));
+    }
     if exceeds_page {
         return Some((PAGE_OVERFLOW, Anchor::Span(subject.span), page_excess));
     }
-    let rule = if geometry.is_body(subject.region) { MARGIN_INTRUSION } else { MARGINAL_OVERFLOW };
+    let rule = if geometry.is_body(subject.region) {
+        MARGIN_INTRUSION
+    } else {
+        MARGINAL_OVERFLOW
+    };
     Some((rule, Anchor::Span(subject.span), region_excess?))
 }
 

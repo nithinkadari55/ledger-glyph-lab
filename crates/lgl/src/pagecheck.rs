@@ -35,7 +35,9 @@ fn empty_pages(geometry: &Geometry) -> Vec<Diagnostic> {
             continue;
         }
         let has_content = geometry.items.iter().any(|item| {
-            item.region == Some(index) && item.kind != ItemKind::Link && item.visible().is_some()
+            item.region == Some(index)
+                && item.kind != ItemKind::Link
+                && item.visible().is_some()
         });
         if has_content {
             continue;
@@ -62,9 +64,7 @@ fn empty_pages(geometry: &Geometry) -> Vec<Diagnostic> {
 fn columns(geometry: &Geometry) -> BTreeMap<usize, Vec<Vec<&Line>>> {
     let mut pages: BTreeMap<usize, BTreeMap<(i64, i64), Vec<&Line>>> = BTreeMap::new();
     for line in &geometry.lines {
-        if !line.elem.is_some_and(|e| geometry.elements[e].name == "par")
-            || !in_body(geometry, line)
-        {
+        if !is_body_text(geometry, line) || !in_body(geometry, line) {
             continue;
         }
         let key = (line.bbox.x0.round() as i64, line.bbox.width().round() as i64);
@@ -76,15 +76,27 @@ fn columns(geometry: &Geometry) -> BTreeMap<usize, Vec<Vec<&Line>>> {
         .collect()
 }
 
+/// Whether a line is running body text: part of a paragraph, or inline text
+/// that Typst does not wrap in a paragraph element (e.g. a container without
+/// paragraph breaks).
+fn is_body_text(geometry: &Geometry, line: &Line) -> bool {
+    line.elem.is_none_or(|e| geometry.elements[e].name == "par")
+}
+
 fn in_body(geometry: &Geometry, line: &Line) -> bool {
     geometry.regions.iter().any(|r| {
-        r.page == line.page && r.kind == "page-body" && r.bbox.intersect(&line.bbox).is_some()
+        r.page == line.page
+            && r.kind == "page-body"
+            && r.bbox.intersect(&line.bbox).is_some()
     })
 }
 
 fn pitch(lines: &[&Line]) -> Option<f64> {
-    let mut steps: Vec<f64> =
-        lines.windows(2).map(|w| w[1].bbox.y0 - w[0].bbox.y0).filter(|d| *d > 0.0).collect();
+    let mut steps: Vec<f64> = lines
+        .windows(2)
+        .map(|w| w[1].bbox.y0 - w[0].bbox.y0)
+        .filter(|d| *d > 0.0)
+        .collect();
     steps.sort_by(f64::total_cmp);
     steps.get(steps.len() / 2).copied()
 }
@@ -132,11 +144,14 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         );
         diagnostic.loc = diag::resolve_span(world, shortest[0].span);
         diagnostic.page = Some(page + 1);
-        diagnostic.bbox = Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
+        diagnostic.bbox =
+            Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
         diagnostic.measured = Some(round1(diff));
         diagnostic.limit = Some(round1(MAX_COLUMN_DIFF_LINES * pitch));
         diagnostic.unit = Some("pt");
-        diagnostic.hints.push("balance the columns (columns(.., balanced: true))".into());
+        diagnostic
+            .hints
+            .push("balance the columns (columns(.., balanced: true))".into());
         out.push(diagnostic);
     }
     out
@@ -172,7 +187,7 @@ fn line_length(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let Some(elem) = line.elem else { continue };
         let is_last_of_par = lines.get(i + 1).is_none_or(|next| next.elem != Some(elem));
         if is_last_of_par
-            || geometry.elements[elem].name != "par"
+            || !is_body_text(geometry, line)
             || !line.justify
             || !in_body(geometry, line)
         {
@@ -201,7 +216,8 @@ fn line_length(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     }
     counts.sort_by(f64::total_cmp);
     let median = counts[counts.len() / 2];
-    let (too_long, too_short) = (median > MAX_CHARS_PER_LINE, median < MIN_CHARS_PER_LINE);
+    let (too_long, too_short) =
+        (median > MAX_CHARS_PER_LINE, median < MIN_CHARS_PER_LINE);
     if !too_long && !too_short {
         return Vec::new();
     }
@@ -218,7 +234,8 @@ fn line_length(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     diagnostic.loc = diag::resolve_span(world, line.span);
     diagnostic.page = Some(line.page + 1);
     diagnostic.measured = Some(median);
-    diagnostic.limit = Some(if too_long { MAX_CHARS_PER_LINE } else { MIN_CHARS_PER_LINE });
+    diagnostic.limit =
+        Some(if too_long { MAX_CHARS_PER_LINE } else { MIN_CHARS_PER_LINE });
     diagnostic.unit = Some("chars");
     diagnostic.hints.push(if too_long {
         "use a larger font size, wider margins or two columns".into()

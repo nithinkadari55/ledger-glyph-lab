@@ -43,7 +43,9 @@ fn first_item(geometry: &Geometry, page: usize) -> Option<usize> {
         .iter()
         .enumerate()
         .filter(|(_, item)| {
-            item.page == page && geometry.is_body(item.region) && item.kind != ItemKind::Link
+            item.page == page
+                && geometry.is_body(item.region)
+                && item.kind != ItemKind::Link
         })
         .min_by(|(_, a), (_, b)| a.bbox.y0.total_cmp(&b.bbox.y0))
         .map(|(index, _)| index)
