@@ -40,6 +40,7 @@ pub fn run(
     out.extend(crate::structure::run(world, geometry));
     out.extend(crate::pagecheck::run(world, geometry));
     out.extend(crate::quality::run(world, geometry));
+    out.extend(crate::grid::run(world, geometry));
     out
 }
 

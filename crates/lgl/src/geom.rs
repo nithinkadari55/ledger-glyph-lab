@@ -196,12 +196,15 @@ pub struct Region {
     pub page: usize,
     pub bbox: BBox,
     pub last_in_run: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grid: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Line {
     pub page: usize,
     pub bbox: BBox,
+    pub baseline: f64,
     pub available: f64,
     pub natural: f64,
     pub overflow: f64,
@@ -442,6 +445,7 @@ impl Walker {
                     page: self.page,
                     bbox,
                     last_in_run: region.last_in_run,
+                    grid: region.grid.map(|pitch| pitch.to_pt()),
                 });
                 self.regions.push(index);
                 let isolated = region.kind != RegionKind::PageBody;
@@ -459,6 +463,7 @@ impl Walker {
                 self.geometry.lines.push(Line {
                     page: self.page,
                     bbox,
+                    baseline: line.baseline.to_pt(),
                     available: line.available.to_pt(),
                     natural: line.natural.to_pt(),
                     overflow: line.overflow.to_pt(),

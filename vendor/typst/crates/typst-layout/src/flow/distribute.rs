@@ -347,9 +347,12 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
 
     /// Processes a line of a paragraph.
     fn line(&mut self, line: &'b LineChild) -> Result<(), Stop> {
+        // The space needed to put the line's baseline on the baseline grid.
+        let pad = self.grid_pad(line.frame.baseline());
+
         // If the line doesn't fit and a followup region may improve things,
         // finish the region.
-        if !self.fits(line.frame.height()) && self.regions.may_progress() {
+        if !self.fits(pad + line.frame.height()) && self.regions.may_progress() {
             return Err(Stop::Finish(Finish::Soft));
         }
 
@@ -357,7 +360,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         // following lines grouped by widow/orphan prevention, does not fit into
         // the current region, but does fit into the next region, finish the
         // region.
-        if !self.fits(line.need)
+        if !self.fits(pad + line.need)
             && self
                 .regions
                 .iter()
@@ -367,7 +370,32 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
             return Err(Stop::Finish(Finish::Soft));
         }
 
+        // Grid padding is strong spacing: it must neither collapse with nor be
+        // trimmed like weak spacing. It is only added once the line is known
+        // to stay in this region, so it never carries over to the next one.
+        if !pad.is_zero() {
+            self.use_height(pad);
+            self.items.push(Item::Abs(pad, 0));
+        }
+
         self.frame(line.frame.clone(), line.align, false, false)
+    }
+
+    /// The space needed above a line with the given baseline offset so that
+    /// its baseline lands on the next line of the baseline grid. Zero if there
+    /// is no grid or the baseline is already on a grid line.
+    fn grid_pad(&self, baseline: Abs) -> Abs {
+        let Some(pitch) = self.composer.config.baseline_grid else {
+            return Abs::zero();
+        };
+        let pitch = pitch.to_pt();
+        let rest = (self.used.y + baseline).to_pt().rem_euclid(pitch);
+        let epsilon = (1e-5 * pitch).max(1e-3);
+        if rest <= epsilon || pitch - rest <= epsilon {
+            Abs::zero()
+        } else {
+            Abs::pt(pitch - rest)
+        }
     }
 
     /// Processes an unbreakable block.

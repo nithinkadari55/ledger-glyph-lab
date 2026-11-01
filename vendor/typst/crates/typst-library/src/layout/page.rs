@@ -449,6 +449,18 @@ pub struct PageElem {
     #[ghost]
     pub footer_descent: Rel<Length>,
 
+    /// The distance between the lines of a baseline grid that the lines of
+    /// top-level paragraphs snap to, or `{none}` to disable snapping.
+    ///
+    /// Each line of a top-level paragraph moves down by the smallest amount
+    /// that puts its baseline on a grid line. Grid lines are measured from the
+    /// top of the area that holds the page's flow content, so they line up
+    /// across columns and pages. Blocks such as headings, figures and
+    /// equations keep their natural size; the text after them returns to
+    /// the grid.
+    #[ghost]
+    pub baseline_grid: Option<Length>,
+
     /// Content in the page's background.
     ///
     /// This content will be placed behind the page's body. It can be used to

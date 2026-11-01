@@ -67,6 +67,8 @@ pub struct RegionProbe {
     /// a page break or the end of the document rather than by running out of
     /// space.
     pub last_in_run: bool,
+    /// The pitch of the baseline grid of this region, if any.
+    pub grid: Option<Abs>,
 }
 
 /// The kind of a [`RegionProbe`].
@@ -91,6 +93,8 @@ pub struct LineProbe {
     pub available: Abs,
     /// The height of the line.
     pub height: Abs,
+    /// The distance from the top of the line to its baseline.
+    pub baseline: Abs,
     /// The natural width of the line's content.
     pub natural: Abs,
     /// The width by which the content exceeds the available width after all

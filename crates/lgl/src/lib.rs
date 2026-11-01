@@ -1,6 +1,7 @@
 pub mod diag;
 pub mod fix;
 pub mod geom;
+pub mod grid;
 pub mod overlap;
 pub mod pagecheck;
 pub mod quality;

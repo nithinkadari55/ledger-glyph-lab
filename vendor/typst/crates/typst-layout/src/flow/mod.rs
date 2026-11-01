@@ -298,6 +298,10 @@ fn configuration<'x>(
                 )
             },
         }),
+        baseline_grid: (mode == FlowMode::Root)
+            .then(|| shared.resolve(PageElem::baseline_grid))
+            .flatten()
+            .filter(|pitch| *pitch > Abs::zero()),
     }
 }
 
@@ -395,6 +399,8 @@ struct Config<'x> {
     footnote: FootnoteConfig,
     /// Settings for line numbers.
     line_numbers: Option<LineNumberConfig>,
+    /// The pitch of the baseline grid that root paragraph lines snap to.
+    baseline_grid: Option<Abs>,
 }
 
 /// Configuration of footnotes.

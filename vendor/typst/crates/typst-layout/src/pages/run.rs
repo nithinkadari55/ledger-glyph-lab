@@ -202,6 +202,9 @@ fn layout_page_run_impl(
     )?;
 
     let probes = engine.library.probes;
+    let grid = styles
+        .resolve(PageElem::baseline_grid)
+        .filter(|pitch| *pitch > Abs::zero());
 
     // Layouts a single marginal.
     let mut layout_marginal = |content: &Option<Content>, area, align| {
@@ -231,6 +234,7 @@ fn layout_page_run_impl(
                 kind: RegionKind::PageBody,
                 size: inner.size(),
                 last_in_run: i + 1 == count,
+                grid,
             };
             inner.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
             inner.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
@@ -268,7 +272,8 @@ fn layout_page_run_impl(
 /// are enabled.
 fn mark_marginal(mut frame: Frame, probes: bool, kind: RegionKind) -> Frame {
     if probes && !frame.is_empty() {
-        let probe = RegionProbe { kind, size: frame.size(), last_in_run: false };
+        let probe =
+            RegionProbe { kind, size: frame.size(), last_in_run: false, grid: None };
         frame.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
         frame.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
     }

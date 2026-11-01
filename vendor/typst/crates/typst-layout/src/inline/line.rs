@@ -639,6 +639,7 @@ pub fn commit(
         LineProbe {
             available: width,
             height: size.y,
+            baseline: top,
             natural: line.width + p.config.hanging_indent,
             overflow: (-remaining).max(Abs::zero()),
             ratio: Scalar::new(justification_ratio),
