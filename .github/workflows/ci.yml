@@ -22,9 +22,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@f8be11a05b1d4f3fcebe6410cc16743212b999b0 # 1.98.0
         with:
           components: rustfmt
-      - run: cargo fmt --all --check
-      - run: cargo fmt --all --check
-        working-directory: vendor/typst
+      - name: Format
+        run: |
+          cargo fmt --all
+          (cd vendor/typst && cargo fmt --all)
+          git diff > fmt.patch
+          git diff --stat
+          git diff --quiet
+      - name: Upload format patch
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: fmt.patch
+          path: fmt.patch
+          retention-days: 7
 
   test:
     name: Clippy and test
