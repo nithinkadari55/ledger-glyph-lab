@@ -1,6 +1,7 @@
 pub mod diag;
 pub mod geom;
 pub mod overlap;
+pub mod resources;
 pub mod rules;
 pub mod whitespace;
 pub mod world;

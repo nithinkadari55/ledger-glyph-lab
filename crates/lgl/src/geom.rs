@@ -6,6 +6,7 @@ use typst::layout::{
     ContainerKind, Frame, FrameItem, Point, Probe, Rect, RegionKind, Size, Transform,
 };
 use typst::syntax::Span;
+use typst::visualize::ImageKind;
 use typst_layout::PagedDocument;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -132,6 +133,10 @@ pub struct Item {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub missing: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pixels: Option<[u32; 2]>,
     #[serde(skip)]
     pub span: Span,
 }
@@ -308,7 +313,13 @@ impl Walker {
                         .map(|glyph| glyph.span.0)
                         .find(|span| !span.is_detached())
                         .unwrap_or_else(Span::detached);
-                    self.push(
+                    let missing: String = text
+                        .glyphs
+                        .iter()
+                        .filter(|glyph| glyph.id == 0)
+                        .filter_map(|glyph| text.text.get(glyph.range()))
+                        .collect();
+                    if let Some(item) = self.push(
                         ItemKind::Text,
                         text.bbox(),
                         item_ts,
@@ -316,7 +327,10 @@ impl Walker {
                         span,
                         Some(text.text.to_string()),
                         Some(text.size.to_pt()),
-                    );
+                    ) && !missing.is_empty()
+                    {
+                        item.missing = Some(missing);
+                    }
                 }
                 FrameItem::Shape(shape, span) => {
                     self.push(
@@ -329,8 +343,8 @@ impl Walker {
                         None,
                     );
                 }
-                FrameItem::Image(_, size, span) => {
-                    self.push(
+                FrameItem::Image(image, size, span) => {
+                    if let Some(item) = self.push(
                         ItemKind::Image,
                         Rect::from_pos_size(Point::zero(), *size),
                         item_ts,
@@ -338,7 +352,10 @@ impl Walker {
                         *span,
                         None,
                         None,
-                    );
+                    ) && let ImageKind::Raster(raster) = image.kind()
+                    {
+                        item.pixels = Some([raster.width(), raster.height()]);
+                    }
                 }
                 FrameItem::Link(_, size) => {
                     self.push(
@@ -453,8 +470,8 @@ impl Walker {
         span: Span,
         text: Option<String>,
         font_size: Option<f64>,
-    ) {
-        let Some(bbox) = BBox::transformed(local, ts) else { return };
+    ) -> Option<&mut Item> {
+        let bbox = BBox::transformed(local, ts)?;
         self.geometry.items.push(Item {
             kind,
             page: self.page,
@@ -465,8 +482,11 @@ impl Walker {
             region: self.regions.last().copied(),
             text,
             font_size,
+            missing: None,
+            pixels: None,
             span,
         });
+        self.geometry.items.last_mut()
     }
 
     fn finish(mut self) -> Geometry {

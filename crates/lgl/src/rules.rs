@@ -33,6 +33,7 @@ pub fn run(
     out.extend(loose_lines(world, geometry));
     out.extend(crate::overlap::run(world, geometry));
     out.extend(crate::whitespace::run(world, geometry));
+    out.extend(crate::resources::run(world, geometry));
     out
 }
 
