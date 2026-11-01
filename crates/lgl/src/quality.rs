@@ -58,6 +58,7 @@ fn small_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     item.page + 1
                 ),
             );
+            out.anchor = Some(item.span);
             out.loc = diag::resolve_span(world, item.span);
             out.page = Some(item.page + 1);
             out.bbox = Some(item.bbox.rounded());
@@ -109,6 +110,7 @@ fn distorted_images(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     deviation * 100.0
                 ),
             );
+            out.anchor = Some(item.span);
             out.loc = diag::resolve_span(world, item.span);
             out.elem = Some("image".into());
             out.page = Some(item.page + 1);

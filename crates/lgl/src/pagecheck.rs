@@ -142,6 +142,7 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 diff / pitch
             ),
         );
+        diagnostic.anchor = Some(shortest[0].span);
         diagnostic.loc = diag::resolve_span(world, shortest[0].span);
         diagnostic.page = Some(page + 1);
         diagnostic.bbox =

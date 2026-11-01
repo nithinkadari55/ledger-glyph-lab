@@ -6,6 +6,8 @@ use typst::syntax::ast::{self, AstNode};
 use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::diag::{Diagnostic, SourceLoc};
+use crate::pagecheck::COLUMN_IMBALANCE;
+use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
 use crate::spacing::SPACING;
 use crate::whitespace::PAGE_UNDERFILL;
@@ -44,6 +46,25 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
             }
             PAGE_UNDERFILL => underfill_fix(world, &source, anchor),
             SPACING => spacing_fix(world, &source, anchor),
+            ASPECT => call_at(&source, anchor, &["image"]).and_then(|call| {
+                Some(Fix {
+                    description: "keep the image's aspect ratio".into(),
+                    edits: vec![set_named(world, &source, &call, "fit", "\"contain\"")?],
+                })
+            }),
+            COLUMN_IMBALANCE => enclosing_call(&source, anchor, "columns").and_then(|call| {
+                Some(Fix {
+                    description: "balance the columns".into(),
+                    edits: vec![set_named(world, &source, &call, "balanced", "true")?],
+                })
+            }),
+            MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
+                named_arg(&call, "size")?;
+                Some(Fix {
+                    description: "raise the text to the readable minimum".into(),
+                    edits: vec![set_named(world, &source, &call, "size", "6pt")?],
+                })
+            }),
             _ => None,
         };
     }
@@ -116,6 +137,20 @@ fn spacing_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
         description: "remove the manual vertical space".into(),
         edits: vec![edit_range(world, source, start..end, "")?],
     })
+}
+
+/// The nearest call of the given function that contains the span.
+fn enclosing_call<'a>(source: &'a Source, span: Span, name: &str) -> Option<LinkedNode<'a>> {
+    let mut node = LinkedNode::new(source.root()).find(span)?;
+    loop {
+        if let Some(call) = ast::FuncCall::from_untyped(&node)
+            && let ast::Expr::Ident(callee) = call.callee()
+            && callee.get() == name
+        {
+            return Some(node);
+        }
+        node = node.parent()?.clone();
+    }
 }
 
 /// The call of one of the given functions at the span.

@@ -69,3 +69,37 @@ fn clean_documents_are_left_untouched() {
         assert_eq!(text, original);
     }
 }
+
+#[test]
+fn unbalanced_columns_get_balanced() {
+    let (rules, applied, text) = rules_after_repair("column-imbalance.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(!rules.iter().any(|r| r.starts_with("L019")), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("balanced: true"), "{text}");
+}
+
+#[test]
+fn tiny_text_is_raised_to_readable_minimum() {
+    let (rules, applied, text) = rules_after_repair("text-too-small.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("size: 6pt"), "{text}");
+}
+
+#[test]
+fn distorted_image_keeps_aspect_ratio() {
+    let text = std::fs::read_to_string(corpus("distorted-image.typ")).unwrap();
+    let dir = scratch("assets");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::copy(corpus("assets/tiny.png"), dir.join("tiny.png")).unwrap();
+    let out = scratch("distorted-image.typ");
+    let options = WorldOptions { creation_timestamp: Some(0), ..WorldOptions::default() };
+    let (applied, _) = lgl::repair(&text, &out, &options, 5).unwrap();
+    let world = LabWorld::new(&out, &options).unwrap();
+    let rules: Vec<String> =
+        lgl::check(&world, false).diagnostics.into_iter().map(|d| d.rule).collect();
+    let fixed = std::fs::read_to_string(&out).unwrap();
+    assert!(applied > 0, "no fix applied");
+    assert!(!rules.iter().any(|r| r.starts_with("L023")), "remaining: {rules:?}\n{fixed}");
+    assert!(fixed.contains("fit: \"contain\""), "{fixed}");
+}
