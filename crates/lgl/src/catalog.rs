@@ -183,7 +183,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L020.line-length",
         "warning",
         "Justified body lines are too long or too short to read comfortably.",
-        "30-95 characters (median)",
+        "30-115 characters (median)",
         "Change font size, margins or column count.",
         false,
     ),

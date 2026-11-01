@@ -123,8 +123,8 @@ fn gaps(geometry: &Geometry, blocks: &[Block]) -> Vec<Gap> {
     out
 }
 
-/// Whether a shape or image lies between two blocks. Text in between would
-/// form a block itself, and descenders of the blocks may reach into the gap.
+/// Whether anything visible lies between two blocks, such as a table, an
+/// equation, an image, or text that is not part of a paragraph.
 fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool {
     let band = BBox {
         x0: above.bbox.x0.min(below.bbox.x0),
@@ -133,11 +133,21 @@ fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool 
         y1: below.bbox.y0,
     };
     geometry.items.iter().any(|item| {
-        item.page == below.page
-            && matches!(item.kind, ItemKind::Shape | ItemKind::Image)
-            && item.visible().and_then(|b| b.intersect(&band)).is_some_and(|b| {
+        if item.page != below.page || item.kind == ItemKind::Link {
+            return false;
+        }
+        let Some(bbox) = item.visible() else { return false };
+        match item.kind {
+            // Text belongs to something in the gap if its middle is there.
+            // Descenders of the block above only reach into the gap.
+            ItemKind::Text => {
+                let middle = (bbox.y0 + bbox.y1) / 2.0;
+                band.y0 < middle && middle < band.y1 && bbox.x0 < band.x1 && band.x0 < bbox.x1
+            }
+            _ => bbox.intersect(&band).is_some_and(|b| {
                 b.height() > MIN_DEVIATION_PT && b.width() > MIN_DEVIATION_PT
-            })
+            }),
+        }
     })
 }
 

@@ -13,7 +13,7 @@ const MAX_COLUMN_DIFF_LINES: f64 = 3.0;
 
 /// Comfortable characters per line of body text. Convention.
 const MIN_CHARS_PER_LINE: f64 = 30.0;
-const MAX_CHARS_PER_LINE: f64 = 95.0;
+const MAX_CHARS_PER_LINE: f64 = 115.0;
 
 /// Full body lines needed before line length is judged.
 const MIN_MEASURED_LINES: usize = 5;
