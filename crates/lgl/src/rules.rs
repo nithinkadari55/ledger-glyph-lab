@@ -31,6 +31,7 @@ pub fn run(
 ) -> Vec<Diagnostic> {
     let mut out = bounds(world, geometry);
     out.extend(loose_lines(world, geometry));
+    out.extend(crate::overlap::run(world, geometry));
     out
 }
 
