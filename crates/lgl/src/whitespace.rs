@@ -88,7 +88,10 @@ fn underfill(
     out.limit = Some(round1(limit));
     out.unit = Some("pt");
     if let Some(item) = next {
-        let span = blocker.map(|c| c.span).filter(|s| !s.is_detached()).unwrap_or(item.span);
+        let span = blocker
+            .map(|c| c.span)
+            .filter(|s| !s.is_detached())
+            .unwrap_or(item.span);
         out.loc = diag::resolve_span(world, span);
         out.elem = blocker
             .map(|c| c.kind.to_string())

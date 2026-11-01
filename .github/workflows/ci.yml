@@ -52,6 +52,7 @@ jobs:
       - name: Test
         run: cargo test --locked --workspace --no-fail-fast
       - name: Corpus report
+        if: always()
         run: |
           cargo build --locked -q -p lgl
           mkdir -p target/geom
