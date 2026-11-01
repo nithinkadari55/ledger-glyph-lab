@@ -38,7 +38,10 @@ fn small_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut by_span = BTreeMap::new();
     for item in &geometry.items {
         let Some(size) = item.font_size else { continue };
-        if size >= MIN_TEXT_PT || item.visible().is_none() || in_equation(geometry, item.elem) {
+        if size >= MIN_TEXT_PT
+            || item.visible().is_none()
+            || in_equation(geometry, item.elem)
+        {
             continue;
         }
         by_span.entry(item.span.into_raw().get()).or_insert((item, size));
@@ -170,6 +173,13 @@ fn last_page(geometry: &Geometry) -> Vec<Diagnostic> {
         return Vec::new();
     }
     let page = geometry.pages.len() - 1;
+    let continued = geometry
+        .regions
+        .iter()
+        .any(|r| r.page + 1 == page && r.kind == "page-body" && !r.last_in_run);
+    if !continued {
+        return Vec::new();
+    }
     let Some((index, region)) = geometry
         .regions
         .iter()
@@ -192,10 +202,7 @@ fn last_page(geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Diagnostic::new(
         LAST_PAGE,
         Severity::Warning,
-        format!(
-            "the last page holds only {:.0}% of a page of content",
-            share * 100.0
-        ),
+        format!("the last page holds only {:.0}% of a page of content", share * 100.0),
     );
     out.page = Some(page + 1);
     out.bbox = Some(content.rounded());

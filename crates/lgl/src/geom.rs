@@ -275,6 +275,7 @@ pub fn extract(document: &PagedDocument) -> Geometry {
         walker.page = index;
         walker.containers.clear();
         walker.regions.clear();
+        walker.isolation.clear();
         walker.frame(&page.frame, Transform::identity(), None);
     }
     walker.finish()
@@ -287,10 +288,20 @@ struct Walker {
     open: Vec<usize>,
     containers: Vec<usize>,
     regions: Vec<usize>,
+    /// For each open region, the length of `open` when it started, if the
+    /// region is a separate content tree (header, footer, background or
+    /// foreground) that must not inherit elements open in the page body.
+    isolation: Vec<Option<usize>>,
     by_location: HashMap<Location, usize>,
 }
 
 impl Walker {
+    /// The innermost open element visible from the current position.
+    fn current(&self) -> Option<usize> {
+        let base = self.isolation.iter().rev().flatten().next().copied().unwrap_or(0);
+        self.open.get(base..).and_then(|open| open.last()).copied()
+    }
+
     fn frame(&mut self, frame: &Frame, ts: Transform, clip: Option<BBox>) {
         for (pos, item) in frame.items() {
             let item_ts = ts.pre_concat(Transform::translate(pos.x, pos.y));
@@ -319,6 +330,7 @@ impl Walker {
                     self.frame(&group.frame, group_ts, group_clip);
                     self.containers.truncate(depth.0);
                     self.regions.truncate(depth.1);
+                    self.isolation.truncate(depth.1);
                 }
                 FrameItem::Text(text) => {
                     let span = text
@@ -406,7 +418,7 @@ impl Walker {
                     sized: container.sized,
                     visible: container.visible,
                     parent: self.containers.last().copied(),
-                    elem: self.open.last().copied(),
+                    elem: self.current(),
                     span: container.span,
                 });
                 self.containers.push(index);
@@ -422,15 +434,22 @@ impl Walker {
                         RegionKind::PageBody => "page-body",
                         RegionKind::Header => "header",
                         RegionKind::Footer => "footer",
+                        RegionKind::Background => "background",
+                        RegionKind::Foreground => "foreground",
                     },
                     page: self.page,
                     bbox,
                     last_in_run: region.last_in_run,
                 });
                 self.regions.push(index);
+                let isolated = region.kind != RegionKind::PageBody;
+                self.isolation.push(isolated.then_some(self.open.len()));
             }
             Probe::RegionEnd => {
                 self.regions.pop();
+                if let Some(Some(base)) = self.isolation.pop() {
+                    self.open.truncate(base);
+                }
             }
             Probe::Line(line) => {
                 let size = Size::new(line.available, line.height);
@@ -446,7 +465,7 @@ impl Walker {
                     justify: line.justify,
                     hyphenated: line.hyphenated,
                     container: self.containers.last().copied(),
-                    elem: self.open.last().copied(),
+                    elem: self.current(),
                     span: line.span,
                 });
             }
@@ -464,7 +483,7 @@ impl Walker {
                     target: content
                         .to_packed::<RefElem>()
                         .map(|r| r.target.resolve().to_string()),
-                    parent: self.open.last().copied(),
+                    parent: self.current(),
                     boxes: Vec::new(),
                     span: content.span(),
                 });
@@ -498,7 +517,7 @@ impl Walker {
             page: self.page,
             bbox,
             clip,
-            elem: self.open.last().copied(),
+            elem: self.current(),
             container: self.containers.last().copied(),
             region: self.regions.last().copied(),
             text,

@@ -78,6 +78,10 @@ pub enum RegionKind {
     Header,
     /// The area of the page footer.
     Footer,
+    /// The page background, including bleed.
+    Background,
+    /// The page foreground, including bleed.
+    Foreground,
 }
 
 /// Facts about a committed paragraph line.
