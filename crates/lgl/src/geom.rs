@@ -5,8 +5,8 @@ use typst::introspection::{Location, Tag};
 use typst::layout::{
     ContainerKind, Frame, FrameItem, Point, Probe, Rect, RegionKind, Size, Transform,
 };
-use typst::syntax::Span;
 use typst::model::RefElem;
+use typst::syntax::Span;
 use typst::visualize::ImageKind;
 use typst_layout::PagedDocument;
 
