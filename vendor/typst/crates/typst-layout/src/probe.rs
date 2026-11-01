@@ -23,7 +23,14 @@ pub fn container(
         return;
     }
 
-    let probe = ContainerProbe { kind, size: frame.size(), clip, sized, visible, span };
+    let probe = ContainerProbe {
+        kind,
+        size: frame.size(),
+        clip,
+        sized,
+        visible,
+        span,
+    };
     frame.prepend(Point::zero(), FrameItem::Probe(Probe::ContainerStart(probe)));
     frame.push(Point::zero(), FrameItem::Probe(Probe::ContainerEnd));
 }
