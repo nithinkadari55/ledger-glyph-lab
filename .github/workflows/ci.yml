@@ -10,6 +10,7 @@ permissions:
 env:
   RUSTFLAGS: "-Dwarnings"
   CARGO_TERM_COLOR: always
+  SOURCE_DATE_EPOCH: "0"
 
 jobs:
   fmt:
@@ -33,17 +34,14 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-      - name: Resolve dependencies
-        run: |
-          cargo metadata --format-version 1 > /dev/null
-          git diff --stat -- Cargo.lock
-      - name: Upload lockfile
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
-        with:
-          name: Cargo.lock
-          path: Cargo.lock
-          retention-days: 7
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace --no-fail-fast
+        run: cargo test --locked --workspace --no-fail-fast
+      - name: Corpus report
+        run: |
+          cargo build --locked -q -p lgl
+          for f in corpus/*.typ; do
+            echo "== $f"
+            ./target/debug/lgl check "$f" || echo "exit=$?"
+          done
