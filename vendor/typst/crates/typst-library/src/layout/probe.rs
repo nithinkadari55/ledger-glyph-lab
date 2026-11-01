@@ -37,6 +37,10 @@ pub struct ContainerProbe {
     pub size: Size,
     /// Whether the container clips its content.
     pub clip: bool,
+    /// Whether the container has an explicit, non-automatic width or height.
+    pub sized: bool,
+    /// Whether the container has a visible fill or stroke.
+    pub visible: bool,
     /// The span of the element that produced the container.
     pub span: Span,
 }

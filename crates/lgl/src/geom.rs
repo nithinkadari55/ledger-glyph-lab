@@ -170,6 +170,8 @@ pub struct Container {
     pub page: usize,
     pub bbox: BBox,
     pub clip: bool,
+    pub sized: bool,
+    pub visible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -368,6 +370,8 @@ impl Walker {
                     page: self.page,
                     bbox,
                     clip: container.clip,
+                    sized: container.sized,
+                    visible: container.visible,
                     parent: self.containers.last().copied(),
                     elem: self.open.last().copied(),
                     span: container.span,

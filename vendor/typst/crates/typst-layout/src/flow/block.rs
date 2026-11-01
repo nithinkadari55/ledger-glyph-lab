@@ -90,12 +90,20 @@ pub fn layout_single_block(
     }
 
     // Add fill and/or stroke.
-    if fill.is_some() || stroke.iter().any(Option::is_some) {
+    let visible = fill.is_some() || stroke.iter().any(Option::is_some);
+    if visible {
         fill_and_stroke(&mut frame, fill, &stroke, &outset, &radius, elem.span());
     }
 
-    let clip = elem.clip.get(styles);
-    crate::probe::container(engine, &mut frame, ContainerKind::Block, clip, elem.span());
+    crate::probe::container(
+        engine,
+        &mut frame,
+        ContainerKind::Block,
+        elem.span(),
+        elem.clip.get(styles),
+        !width.is_auto() || !height.is_auto(),
+        visible,
+    );
 
     // Assign label to each frame in the fragment.
     if let Some(label) = elem.label() {
@@ -242,7 +250,15 @@ pub fn layout_multi_block(
             fill_and_stroke(frame, fill.clone(), &stroke, &outset, &radius, elem.span());
         }
 
-        crate::probe::container(engine, frame, ContainerKind::Block, clip, elem.span());
+        crate::probe::container(
+            engine,
+            frame,
+            ContainerKind::Block,
+            elem.span(),
+            clip,
+            !width.is_auto() || !height.is_auto(),
+            has_fill_or_stroke,
+        );
     }
 
     // Assign label to each frame in the fragment.

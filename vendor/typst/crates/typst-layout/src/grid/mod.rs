@@ -61,8 +61,10 @@ pub fn layout_cell(
             engine,
             frame,
             ContainerKind::Cell,
-            false,
             cell.body.span(),
+            false,
+            true,
+            false,
         );
     }
 

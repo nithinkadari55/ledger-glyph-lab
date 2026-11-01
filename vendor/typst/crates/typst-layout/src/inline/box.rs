@@ -67,12 +67,20 @@ pub fn layout_box(
     }
 
     // Add fill and/or stroke.
-    if fill.is_some() || stroke.iter().any(Option::is_some) {
+    let visible = fill.is_some() || stroke.iter().any(Option::is_some);
+    if visible {
         fill_and_stroke(&mut frame, fill, &stroke, &outset, &radius, elem.span());
     }
 
-    let clip = elem.clip.get(styles);
-    crate::probe::container(engine, &mut frame, ContainerKind::Box, clip, elem.span());
+    crate::probe::container(
+        engine,
+        &mut frame,
+        ContainerKind::Box,
+        elem.span(),
+        elem.clip.get(styles),
+        !width.is_auto() || !height.is_auto(),
+        visible,
+    );
 
     // Assign label to the frame.
     if let Some(label) = elem.label() {

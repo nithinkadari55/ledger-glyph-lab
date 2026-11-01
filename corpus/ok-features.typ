@@ -62,6 +62,8 @@ fn main() {
 }
 ```
 
+#set par(justify: false)
+
 #grid(
   columns: (1fr, 1fr),
   gutter: 12pt,

@@ -14,14 +14,16 @@ pub fn container(
     engine: &Engine,
     frame: &mut Frame,
     kind: ContainerKind,
-    clip: bool,
     span: Span,
+    clip: bool,
+    sized: bool,
+    visible: bool,
 ) {
     if !engine.library.probes || frame.is_empty() {
         return;
     }
 
-    let probe = ContainerProbe { kind, size: frame.size(), clip, span };
+    let probe = ContainerProbe { kind, size: frame.size(), clip, sized, visible, span };
     frame.prepend(Point::zero(), FrameItem::Probe(Probe::ContainerStart(probe)));
     frame.push(Point::zero(), FrameItem::Probe(Probe::ContainerEnd));
 }

@@ -20,6 +20,10 @@ const TOLERANCE_PT: f64 = 0.5;
 /// gets a tolerance relative to its size.
 const TEXT_TOLERANCE_EM: f64 = 0.35;
 
+/// Extra space between characters of a justified line from which letter
+/// spacing becomes visible.
+const LOOSE_EXTRA_PT: f64 = 0.5;
+
 pub fn run(
     world: &LabWorld,
     _document: &PagedDocument,
@@ -89,6 +93,9 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut flagged_containers = HashSet::new();
 
     for (index, container) in geometry.containers.iter().enumerate() {
+        if container.kind != "cell" && !container.sized && !container.visible {
+            continue;
+        }
         let subject = Subject {
             page: container.page,
             bbox: container.bbox,
@@ -106,6 +113,9 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     }
 
     for (index, item) in geometry.items.iter().enumerate() {
+        if item.kind == ItemKind::Link {
+            continue;
+        }
         let Some(bbox) = item.visible() else { continue };
         let tolerance = match (item.kind, item.font_size) {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
@@ -163,9 +173,9 @@ fn classify(
 ) -> Option<Classified> {
     let page = &geometry.pages[subject.page];
     let page_excess = subject.bbox.excess(&page.bounds());
-    let container =
-        subject.container.map(|c| &geometry.containers[c]).filter(|c| !c.clip);
-    let container_excess = container.map(|c| subject.bbox.excess(&c.bbox));
+    let bounded = bounded_container(geometry, subject.container);
+    let container_excess =
+        bounded.map(|c| subject.bbox.excess(&geometry.containers[c].bbox));
     let region_excess =
         subject.region.map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
 
@@ -181,13 +191,32 @@ fn classify(
         return Some((LINE_OVERFLOW, Anchor::Line(line), excess));
     }
     if exceeds_container {
-        let index = subject.container.unwrap();
+        let index = bounded?;
         return Some((CONTAINER_OVERFLOW, Anchor::Container(index), container_excess?));
     }
     if exceeds_page {
         return Some((PAGE_OVERFLOW, Anchor::Span(subject.span), page_excess));
     }
     Some((MARGIN_INTRUSION, Anchor::Span(subject.span), region_excess?))
+}
+
+/// The nearest container whose bounds the author can see or chose: a cell, a
+/// container with an explicit size, or one with a fill or stroke. Plain
+/// automatic containers may legitimately be exceeded, e.g. by hanging indents
+/// and list markers. Returns `None` if a clipping container comes first,
+/// since nothing beyond it is visible.
+fn bounded_container(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
+    while let Some(index) = cursor {
+        let container = &geometry.containers[index];
+        if container.clip {
+            return None;
+        }
+        if container.kind == "cell" || container.sized || container.visible {
+            return Some(index);
+        }
+        cursor = container.parent;
+    }
+    None
 }
 
 fn region_of(geometry: &Geometry, page: usize, bbox: &BBox) -> Option<usize> {
@@ -318,7 +347,7 @@ fn loose_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     geometry
         .lines
         .iter()
-        .filter(|line| line.justify && line.extra > 0.01)
+        .filter(|line| line.justify && line.extra >= LOOSE_EXTRA_PT)
         .map(|line| {
             let page = line.page + 1;
             let extra = (line.extra * 100.0).round() / 100.0;
@@ -334,7 +363,7 @@ fn loose_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             out.page = Some(page);
             out.bbox = Some(line.bbox.rounded());
             out.measured = Some(extra);
-            out.limit = Some(0.0);
+            out.limit = Some(LOOSE_EXTRA_PT);
             out.unit = Some("pt");
             out.hints.push(
                 "enable hyphenation, rephrase the paragraph, or widen the text column"

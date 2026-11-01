@@ -54,10 +54,19 @@ jobs:
       - name: Corpus report
         run: |
           cargo build --locked -q -p lgl
+          mkdir -p target/geom
           for f in corpus/*.typ; do
             echo "== $f"
-            ./target/debug/lgl check "$f" || echo "exit=$?"
+            name=$(basename "$f" .typ)
+            ./target/debug/lgl check "$f" --geometry "target/geom/$name.json" || echo "exit=$?"
           done
+      - name: Upload corpus geometry
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: corpus-geometry
+          path: target/geom
+          retention-days: 7
 
   typst-suite:
     name: Typst test suite (vendored)
