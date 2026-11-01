@@ -3,6 +3,7 @@ pub mod geom;
 pub mod overlap;
 pub mod resources;
 pub mod rules;
+pub mod spacing;
 pub mod typography;
 pub mod whitespace;
 pub mod world;
