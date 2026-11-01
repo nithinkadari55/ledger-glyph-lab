@@ -156,7 +156,11 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
     }
 }
 
-fn descends_from(geometry: &Geometry, mut cursor: Option<usize>, ancestor: usize) -> bool {
+fn descends_from(
+    geometry: &Geometry,
+    mut cursor: Option<usize>,
+    ancestor: usize,
+) -> bool {
     while let Some(index) = cursor {
         if index == ancestor {
             return true;
