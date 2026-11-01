@@ -20,6 +20,8 @@ struct Cli {
 enum Command {
     Check(CheckArgs),
     Fix(FixArgs),
+    /// Print the rule catalog as JSON.
+    Rules,
 }
 
 #[derive(clap::Args)]
@@ -62,6 +64,15 @@ fn main() -> ExitCode {
                 ExitCode::from(2)
             }
         },
+        Command::Rules => {
+            let catalog = serde_json::json!({
+                "rules": lgl::catalog::CATALOG,
+                "typst": lgl::catalog::TYPST_RULES,
+                "intent": { "allow-overlap": "label content with <allow-overlap> to exempt it from L006" },
+            });
+            println!("{}", serde_json::to_string_pretty(&catalog).unwrap());
+            ExitCode::SUCCESS
+        }
         Command::Fix(args) => match fix(args) {
             Ok(true) => ExitCode::SUCCESS,
             Ok(false) => ExitCode::from(1),

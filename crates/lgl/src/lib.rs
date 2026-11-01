@@ -1,3 +1,4 @@
+pub mod catalog;
 pub mod diag;
 pub mod fix;
 pub mod geom;
