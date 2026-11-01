@@ -1,4 +1,5 @@
 // expect: L014.stranded-heading
+// expect: L010.orphan
 #set page(paper: "a5", margin: 2cm)
 #set text(costs: (orphan: 0%, widow: 0%))
 #show heading: set block(sticky: false)

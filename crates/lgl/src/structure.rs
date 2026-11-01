@@ -309,3 +309,52 @@ fn lines_per_cell_len(geometry: &Geometry, cell: usize) -> usize {
         .filter(|line| enclosing_cell(geometry, line.container) == Some(cell))
         .count()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use typst::syntax::Span;
+
+    use super::*;
+    use crate::geom::{Element, PageBox};
+    use crate::world::WorldOptions;
+
+    fn element(name: &'static str, page: usize) -> Element {
+        let bbox = BBox { x0: 0.0, y0: 0.0, x1: 10.0, y1: 10.0 };
+        Element {
+            name,
+            label: None,
+            target: None,
+            parent: None,
+            boxes: vec![PageBox { page, bbox }],
+            span: Span::detached(),
+        }
+    }
+
+    fn world() -> LabWorld {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/ok-basic.typ");
+        LabWorld::new(&path, &WorldOptions::default()).unwrap()
+    }
+
+    #[test]
+    fn footnote_entry_on_later_page_is_reported() {
+        let geometry = Geometry {
+            elements: vec![element("footnote", 0), element("entry", 1)],
+            ..Geometry::default()
+        };
+        let out = footnote_pages(&world(), &geometry);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].rule, FOOTNOTE_PAGE);
+        assert_eq!(out[0].page, Some(1));
+    }
+
+    #[test]
+    fn footnote_entry_on_same_page_is_fine() {
+        let geometry = Geometry {
+            elements: vec![element("footnote", 2), element("entry", 2)],
+            ..Geometry::default()
+        };
+        assert!(footnote_pages(&world(), &geometry).is_empty());
+    }
+}
