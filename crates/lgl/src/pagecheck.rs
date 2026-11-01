@@ -226,9 +226,8 @@ fn line_length(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         LINE_LENGTH,
         Severity::Warning,
         format!(
-            "justified body lines hold about {median:.0} characters; {}-{} reads \
-             comfortably",
-            MIN_CHARS_PER_LINE, MAX_CHARS_PER_LINE
+            "justified body lines hold about {median:.0} characters; \
+             {MIN_CHARS_PER_LINE}-{MAX_CHARS_PER_LINE} reads comfortably"
         ),
     );
     diagnostic.loc = diag::resolve_span(world, line.span);

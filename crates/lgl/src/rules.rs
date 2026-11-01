@@ -330,10 +330,12 @@ fn to_diagnostic(
         (MARGINAL_OVERFLOW, _) => (
             Severity::Error,
             format!(
-                "header or footer content extends {amount}pt beyond the {} edge of \n                 its area on page {page}",
+                "header or footer content extends {amount}pt beyond the {} edge of \
+                 its area on page {page}",
                 finding.side
             ),
-            "shorten the header or footer, reduce its font size, or enlarge the page \n             margin that holds it",
+            "shorten the header or footer, reduce its font size, or enlarge the page \
+             margin that holds it",
             finding.span,
             finding.elem,
         ),
