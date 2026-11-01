@@ -123,7 +123,8 @@ fn gaps(geometry: &Geometry, blocks: &[Block]) -> Vec<Gap> {
     out
 }
 
-/// Whether visible content other than text lies between two blocks.
+/// Whether a shape or image lies between two blocks. Text in between would
+/// form a block itself, and descenders of the blocks may reach into the gap.
 fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool {
     let band = BBox {
         x0: above.bbox.x0.min(below.bbox.x0),
@@ -133,7 +134,7 @@ fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool 
     };
     geometry.items.iter().any(|item| {
         item.page == below.page
-            && item.kind != ItemKind::Link
+            && matches!(item.kind, ItemKind::Shape | ItemKind::Image)
             && item.visible().and_then(|b| b.intersect(&band)).is_some_and(|b| {
                 b.height() > MIN_DEVIATION_PT && b.width() > MIN_DEVIATION_PT
             })
@@ -148,11 +149,13 @@ fn overlaps_horizontally(a: &BBox, b: &BBox) -> bool {
 fn dominant(gaps: &[&Gap]) -> Option<f64> {
     let mut bins: HashMap<i64, Vec<f64>> = HashMap::new();
     for gap in gaps {
-        bins.entry((gap.size * 2.0).round() as i64).or_default().push(gap.size);
+        bins.entry((gap.size * 2.0).round() as i64)
+            .or_default()
+            .push(gap.size);
     }
-    let (_, sizes) = bins.into_iter().max_by(|a, b| {
-        a.1.len().cmp(&b.1.len()).then_with(|| b.0.cmp(&a.0))
-    })?;
+    let (_, sizes) = bins
+        .into_iter()
+        .max_by(|a, b| a.1.len().cmp(&b.1.len()).then_with(|| b.0.cmp(&a.0)))?;
     (sizes.len() * 2 > gaps.len()).then(|| sizes.iter().sum::<f64>() / sizes.len() as f64)
 }
 
