@@ -52,12 +52,16 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     edits: vec![set_named(world, &source, &call, "fit", "\"contain\"")?],
                 })
             }),
-            COLUMN_IMBALANCE => enclosing_call(&source, anchor, "columns").and_then(|call| {
-                Some(Fix {
-                    description: "balance the columns".into(),
-                    edits: vec![set_named(world, &source, &call, "balanced", "true")?],
+            COLUMN_IMBALANCE => {
+                enclosing_call(&source, anchor, "columns").and_then(|call| {
+                    Some(Fix {
+                        description: "balance the columns".into(),
+                        edits: vec![set_named(
+                            world, &source, &call, "balanced", "true",
+                        )?],
+                    })
                 })
-            }),
+            }
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
                 Some(Fix {
@@ -140,7 +144,11 @@ fn spacing_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
 }
 
 /// The nearest call of the given function that contains the span.
-fn enclosing_call<'a>(source: &'a Source, span: Span, name: &str) -> Option<LinkedNode<'a>> {
+fn enclosing_call<'a>(
+    source: &'a Source,
+    span: Span,
+    name: &str,
+) -> Option<LinkedNode<'a>> {
     let mut node = LinkedNode::new(source.root()).find(span)?;
     loop {
         if let Some(call) = ast::FuncCall::from_untyped(&node)

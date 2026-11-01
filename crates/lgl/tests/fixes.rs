@@ -93,13 +93,22 @@ fn distorted_image_keeps_aspect_ratio() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::copy(corpus("assets/tiny.png"), dir.join("tiny.png")).unwrap();
     let out = scratch("distorted-image.typ");
-    let options = WorldOptions { creation_timestamp: Some(0), ..WorldOptions::default() };
+    let options = WorldOptions {
+        creation_timestamp: Some(0),
+        ..WorldOptions::default()
+    };
     let (applied, _) = lgl::repair(&text, &out, &options, 5).unwrap();
     let world = LabWorld::new(&out, &options).unwrap();
-    let rules: Vec<String> =
-        lgl::check(&world, false).diagnostics.into_iter().map(|d| d.rule).collect();
+    let rules: Vec<String> = lgl::check(&world, false)
+        .diagnostics
+        .into_iter()
+        .map(|d| d.rule)
+        .collect();
     let fixed = std::fs::read_to_string(&out).unwrap();
     assert!(applied > 0, "no fix applied");
-    assert!(!rules.iter().any(|r| r.starts_with("L023")), "remaining: {rules:?}\n{fixed}");
+    assert!(
+        !rules.iter().any(|r| r.starts_with("L023")),
+        "remaining: {rules:?}\n{fixed}"
+    );
     assert!(fixed.contains("fit: \"contain\""), "{fixed}");
 }

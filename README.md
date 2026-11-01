@@ -1,29 +1,99 @@
 # ledger-glyph-lab
 
-Compiles Typst documents and reports layout defects as JSON lines, so an
-automated author can repair its source without looking at rendered pages.
+Compiles Typst documents, checks the finished page geometry against layout
+quality rules, and reports every defect as one JSON line with its exact source
+location, the measured value, the limit, and how to fix it. Mechanical defects
+come with machine-applicable edits. An automated author can repair its source
+from this output alone, without looking at rendered pages.
 
-## Layout
+## How it works
 
-- `vendor/typst`: Typst at commit `84cca406aafe7f830ed3f37f1cc6f0c8b6b65a03`
-  (Apache-2.0). See `vendor/typst/LICENSE` and `vendor/typst/NOTICE`.
-- `crates/lgl`: compiler driver, geometry extraction, rules, CLI.
-- `corpus`: regression documents. Each starts with `// expect: <rule>` lines or
-  `// expect-none`.
+- `vendor/typst` is Typst at commit `84cca406aafe7f830ed3f37f1cc6f0c8b6b65a03`
+  (Apache-2.0, see `vendor/typst/LICENSE` and `NOTICE`) with a small additive
+  patch: when `Library::probes` is enabled, layout records invisible probes for
+  page body, header, footer, background and foreground areas, for every box,
+  block and table cell, and for every committed paragraph line (measure,
+  natural width, overflow, justification, hyphenation, baseline). Exporters
+  ignore probes and they are off by default, so Typst's own test suite runs
+  unchanged in CI.
+- The patch also adds an opt-in baseline grid: `#set page(baseline-grid: 14pt)`
+  snaps the lines of top-level paragraphs to a common grid across columns and
+  pages.
+- `crates/lgl` compiles a document with probes on, extracts the geometry and
+  runs the rules.
 
 ## Usage
 
 ```sh
-cargo run --release -p lgl -- check doc.typ --pdf doc.pdf --geometry doc.json
+lgl check doc.typ --pdf doc.pdf --geometry doc.json   # report, PDF only if no errors
+lgl fix doc.typ --out doc.fixed.typ                   # apply mechanical fixes, then report
+lgl rules                                             # rule catalog as JSON
 ```
+
+Exit code: `0` no errors, `1` errors found, `2` invalid invocation.
 
 Each stdout line is one diagnostic:
 
 ```json
-{"v":1,"rule":"L001.page-overflow","severity":"error","message":"content extends 412.3pt beyond the right edge of page 1","loc":{"file":"doc.typ","line":3,"col":1,"end_line":3,"end_col":42},"elem":"box","page":1,"measured":412.3,"limit":0.5,"unit":"pt","hints":["..."]}
+{"v":1,"rule":"L002.container-overflow","severity":"error",
+ "message":"content extends 140.2pt beyond the bottom edge of its block (481.9pt x 56.7pt) on page 1",
+ "loc":{"file":"doc.typ","line":4,"col":4,"end_line":4,"end_col":14},
+ "elem":"block","page":1,"bbox":{"x0":56.8,"y0":243.3,"x1":244.8,"y1":253.5},
+ "measured":140.2,"limit":0.5,"unit":"pt",
+ "hints":["give the container more height (auto), reduce the content, or enable clip if cutting it off is intended"],
+ "fix":{"description":"let the height follow the content",
+        "edits":[{"loc":{"file":"doc.typ","line":3,"col":16,"end_line":3,"end_col":19},"replacement":"auto"}]}}
 ```
 
-Exit code: `0` no errors, `1` errors found, `2` invalid invocation.
+Typst's own errors and warnings are reported as `typst.compile.*` and
+`typst.pdf.*` with the same fields.
+
+## Rules
+
+Rules check the result, not the design: thresholds are either invariants or
+derived from the document's own dominant values, so documents can look very
+different and still pass. `lgl rules` prints the full catalog.
+
+| Rule | Checks | Autofix |
+|---|---|---|
+| L001 page-overflow | content beyond the page edge | yes |
+| L002 container-overflow | content beyond a cell or a sized/decorated box or block | yes |
+| L003 margin-intrusion | body content in the margin | yes |
+| L004 line-overflow | lines wider than their measure | |
+| L005 loose-line | letter-spaced justified lines | |
+| L006 overlap | text/text, image/text, image/image overlap | |
+| L007 page-underfill | large empty area at a page bottom, with its cause | yes |
+| L008 missing-glyph | characters no font can display | |
+| L009 image-resolution | raster images below 150 dpi | |
+| L010 orphan, L011 widow | single paragraph lines at page breaks | |
+| L012 hyphen-ladder, L013 hyphen-at-page-break | hyphenation quality | |
+| L014 stranded-heading | heading at a page end or followed by one line | |
+| L015 inconsistent-spacing | gaps that differ from the document's own norm | yes |
+| L016 figure-far-from-reference | figure more than a page from its first reference | |
+| L017 misaligned-numbers | numeric table columns not aligned | |
+| L018 marginal-overflow | header/footer content larger than its area | |
+| L019 column-imbalance | unbalanced columns | yes |
+| L020 line-length | lines too long or short to read | |
+| L021 empty-page, L025 near-empty-last-page | wasted pages | |
+| L022 text-too-small | text below 6pt outside math | yes |
+| L023 distorted-image | stretched images | yes |
+| L024 runt | last line holding a fragment | |
+| L026 split-figure | figure split across pages | |
+| L027 inconsistent-text-area | margins changing between pages | |
+| L028 footnote-on-other-page | footnote marker and text apart | |
+| L029 narrow-column | table columns too narrow to read | |
+| L030 off-baseline-grid | lines off a declared baseline grid | |
+
+Intended overlays such as watermarks are exempt from L006 when labelled
+`<allow-overlap>`.
+
+## Known limits
+
+- With a baseline grid, fractional spacing (`v(1fr)`) and bottom alignment can
+  still move lines off the grid; L030 reports such lines. Lines inside lists,
+  tables, figures, quotes and footnotes are not snapped.
+- Element attribution relies on Typst's introspection tags; plain inline text
+  without a paragraph is treated as running text.
 
 ## License
 
