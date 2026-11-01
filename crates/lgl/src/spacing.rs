@@ -142,7 +142,10 @@ fn something_between(geometry: &Geometry, above: &Block, below: &Block) -> bool 
             // Descenders of the block above only reach into the gap.
             ItemKind::Text => {
                 let middle = (bbox.y0 + bbox.y1) / 2.0;
-                band.y0 < middle && middle < band.y1 && bbox.x0 < band.x1 && band.x0 < bbox.x1
+                band.y0 < middle
+                    && middle < band.y1
+                    && bbox.x0 < band.x1
+                    && band.x0 < bbox.x1
             }
             _ => bbox.intersect(&band).is_some_and(|b| {
                 b.height() > MIN_DEVIATION_PT && b.width() > MIN_DEVIATION_PT
