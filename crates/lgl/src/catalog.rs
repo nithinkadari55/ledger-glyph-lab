@@ -374,6 +374,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L043.empty-column",
+        "warning",
+        "A page of a multi-column layout leaves whole columns empty, typically the last \
+         page where the text runs out in the first column.",
+        "any empty column",
+        "Balance the last page's columns, move content there, or change the page count.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -466,6 +475,7 @@ mod tests {
             boxes::TOUCHING_CELLS,
             structure::MIXED_PRECISION,
             typography::HYPHENATED_DISPLAY,
+            pagecheck::EMPTY_COLUMN,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

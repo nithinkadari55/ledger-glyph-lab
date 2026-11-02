@@ -7,6 +7,7 @@ use crate::world::LabWorld;
 pub const COLUMN_IMBALANCE: &str = "L019.column-imbalance";
 pub const LINE_LENGTH: &str = "L020.line-length";
 pub const EMPTY_PAGE: &str = "L021.empty-page";
+pub const EMPTY_COLUMN: &str = "L043.empty-column";
 
 /// How many lines the bottoms of side-by-side columns may differ.
 const MAX_COLUMN_DIFF_LINES: f64 = 3.0;
@@ -22,6 +23,54 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = empty_pages(geometry);
     out.extend(column_imbalance(world, geometry));
     out.extend(line_length(world, geometry));
+    out.extend(empty_columns(geometry));
+    out
+}
+
+/// Pages of a multi-column layout that leave whole columns empty, typically
+/// the last page, where the text runs out in the first column.
+fn empty_columns(geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for body in geometry.regions.iter().filter(|r| r.kind == "page-body") {
+        let width = body.bbox.width();
+        let used: Vec<(usize, &BBox)> = geometry
+            .items
+            .iter()
+            .filter(|item| item.page == body.page && item.kind != ItemKind::Link)
+            .filter_map(|item| item.column)
+            .map(|column| (column, &geometry.columns[column].bbox))
+            .filter(|(_, bbox)| bbox.width() < 0.75 * width)
+            .collect();
+        let Some((_, first)) = used.first() else { continue };
+        let expected = (width / first.width() + 0.05).floor() as usize;
+        let mut lefts: Vec<i64> = used.iter().map(|(_, b)| b.x0.round() as i64).collect();
+        lefts.sort_unstable();
+        lefts.dedup_by(|a, b| (*a - *b).abs() <= 2);
+        if lefts.len() >= expected {
+            continue;
+        }
+        let empty = expected - lefts.len();
+        let mut diagnostic = Diagnostic::new(
+            EMPTY_COLUMN,
+            Severity::Warning,
+            format!(
+                "page {} uses {} of its {expected} columns and leaves {empty} column(s) empty",
+                body.page + 1,
+                lefts.len()
+            ),
+        );
+        diagnostic.page = Some(body.page + 1);
+        diagnostic.bbox = Some(body.bbox.rounded());
+        diagnostic.measured = Some(lefts.len() as f64);
+        diagnostic.limit = Some(expected as f64);
+        diagnostic.unit = Some("columns");
+        diagnostic.hints.push(
+            "balance the columns of the last page (columns(.., balanced: true)), move \
+             a story or figure there, or change the page count so every column is used"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
     out
 }
 

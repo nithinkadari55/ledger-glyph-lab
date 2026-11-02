@@ -95,6 +95,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L040 touching-cells | text in neighbouring cells that touches | |
 | L041 mixed-precision | numbers in a column with different decimal places | |
 | L042 hyphenated-display-text | hyphenated titles, headings, pull quotes | |
+| L043 empty-column | pages of a multi-column layout with whole columns empty | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
