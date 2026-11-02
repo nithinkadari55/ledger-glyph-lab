@@ -396,9 +396,9 @@ pub const CATALOG: &[RuleInfo] = &[
         "L045.figure-too-close",
         "warning",
         "A figure or table is set off from the text above or below it by less than \
-         about three quarters of a blank line, so it and its caption read as part of \
-         the paragraph.",
-        "0.75 line pitch beyond the line spacing",
+         about a blank line, so it and its caption read as part of the paragraph \
+         (print convention is 1.5 to 2 lines).",
+        "one line pitch beyond the line spacing",
         "Give figures and tables about a blank line above and below.",
         false,
     ),
