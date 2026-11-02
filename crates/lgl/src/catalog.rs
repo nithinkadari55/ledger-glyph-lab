@@ -337,6 +337,26 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L039.hollow-box",
+        "error/warning",
+        "A box or block with fill or stroke is much taller than its content, usually \
+         from height: 100% or 1fr, leaving a large empty frame (or an empty continuation \
+         on the next page). Error when the empty part exceeds a quarter page or the box \
+         is empty. Label intended empty boxes <allow-empty>.",
+        "72pt empty and content under 40% of the height",
+        "Remove the fixed height so the box fits its content; size the grid row instead.",
+        false,
+    ),
+    rule(
+        "L040.touching-cells",
+        "error",
+        "Text in neighbouring grid or table cells on the same line touches or nearly \
+         touches, so label and value read as one word.",
+        "0.2em gap",
+        "Add column-gutter or inset to the grid or table.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",

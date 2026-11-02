@@ -1,3 +1,4 @@
+pub mod boxes;
 pub mod catalog;
 pub mod diag;
 pub mod fix;
@@ -86,6 +87,40 @@ pub fn check(world: &LabWorld, export_pdf: bool) -> Outcome {
     });
 
     Outcome { diagnostics, geometry: Some(geometry), pdf }
+}
+
+/// Parses the main file without compiling it and reports its syntax errors.
+/// This is fast enough to run after every edit.
+pub fn syntax(world: &LabWorld) -> Vec<Diagnostic> {
+    let Ok(source) = typst::World::source(world, typst::World::main(world)) else {
+        return Vec::new();
+    };
+    let (errors, _) = source.root().errors_and_warnings();
+    errors
+        .iter()
+        .map(|error| {
+            let mut out =
+                Diagnostic::new("typst.syntax.error", Severity::Error, error.message.as_str());
+            out.loc = diag::resolve(world, error.span);
+            out.hints = error.hints.iter().map(|hint| hint.v.to_string()).collect();
+            out
+        })
+        .collect()
+}
+
+/// The font families available to documents: the embedded fonts plus any in
+/// `font_dirs`, sorted by name.
+pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<String> {
+    let mut fonts = typst_kit::fonts::FontStore::new();
+    fonts.extend(typst_kit::fonts::embedded());
+    for dir in font_dirs {
+        fonts.extend(typst_kit::fonts::scan(dir));
+    }
+    let mut families: Vec<String> =
+        fonts.book().families().map(|(name, _)| name.to_string()).collect();
+    families.sort();
+    families.dedup();
+    families
 }
 
 /// Repeatedly applies the suggested fixes for the main file, starting from

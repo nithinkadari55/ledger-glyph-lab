@@ -43,6 +43,7 @@ pub fn run(
     out.extend(crate::quality::run(world, geometry));
     out.extend(crate::grid::run(world, geometry));
     out.extend(crate::rhythm::run(world, geometry));
+    out.extend(crate::boxes::run(world, geometry));
     out
 }
 
@@ -431,7 +432,9 @@ fn loose_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             out.limit = Some(LOOSE_EXTRA_PT);
             out.unit = Some("pt");
             out.hints.push(
-                "enable hyphenation, rephrase the paragraph, or widen the text column"
+                "enable hyphenation (set text(lang: ..., hyphenate: true)), widen the \
+                 text column, or set narrow columns ragged-right (par(justify: false)); \
+                 rewording the text is the last resort"
                     .into(),
             );
             out
