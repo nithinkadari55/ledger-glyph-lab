@@ -410,6 +410,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L047.low-contrast",
+        "error/warning",
+        "Text barely differs in lightness from the solid fill (or white page) beneath \
+         it, such as white text on a pale header row. Error below 1.5:1, where the text \
+         all but disappears. Text on images and gradients is not judged.",
+        "WCAG contrast ratio 3:1",
+        "Darken the text or lighten its background (or the reverse).",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -506,6 +516,7 @@ mod tests {
             composition::CENTERED_PARAGRAPH,
             composition::FIGURE_SPACING,
             composition::LOPSIDED_COLUMNS,
+            contrast::LOW_CONTRAST,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

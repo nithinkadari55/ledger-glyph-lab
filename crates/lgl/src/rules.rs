@@ -45,6 +45,7 @@ pub fn run(
     out.extend(crate::rhythm::run(world, geometry));
     out.extend(crate::boxes::run(world, geometry));
     out.extend(crate::composition::run(world, geometry));
+    out.extend(crate::contrast::run(world, geometry));
     out
 }
 

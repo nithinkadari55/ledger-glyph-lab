@@ -1,6 +1,7 @@
 pub mod boxes;
 pub mod catalog;
 pub mod composition;
+pub mod contrast;
 pub mod diag;
 pub mod fix;
 pub mod geom;

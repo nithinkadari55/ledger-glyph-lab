@@ -7,7 +7,7 @@ use typst::layout::{
 };
 use typst::model::RefElem;
 use typst::syntax::Span;
-use typst::visualize::ImageKind;
+use typst::visualize::{ImageKind, Paint};
 use typst_layout::PagedDocument;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -140,8 +140,24 @@ pub struct Item {
     pub missing: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pixels: Option<[u32; 2]>,
+    /// The solid fill of text or a shape as sRGB and alpha, from 0 to 1.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub color: Option<[f32; 4]>,
+    /// Whether a shape is filled with a gradient or tiling.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub patterned: bool,
     #[serde(skip)]
     pub span: Span,
+}
+
+fn solid(paint: &Paint) -> Option<[f32; 4]> {
+    match paint {
+        Paint::Solid(color) => {
+            let rgb = color.to_rgb();
+            Some([rgb.red, rgb.green, rgb.blue, rgb.alpha])
+        }
+        Paint::Gradient(_) | Paint::Tiling(_) => None,
+    }
 }
 
 impl Item {
@@ -376,13 +392,15 @@ impl Walker {
                         span,
                         Some(text.text.to_string()),
                         Some(text.size.to_pt()),
-                    ) && !missing.is_empty()
-                    {
-                        item.missing = Some(missing);
+                    ) {
+                        item.color = solid(&text.fill);
+                        if !missing.is_empty() {
+                            item.missing = Some(missing);
+                        }
                     }
                 }
                 FrameItem::Shape(shape, span) => {
-                    self.push(
+                    if let Some(item) = self.push(
                         ItemKind::Shape,
                         shape.bbox(true),
                         item_ts,
@@ -390,7 +408,11 @@ impl Walker {
                         *span,
                         None,
                         None,
-                    );
+                    ) && let Some(fill) = &shape.fill
+                    {
+                        item.color = solid(fill);
+                        item.patterned = item.color.is_none();
+                    }
                 }
                 FrameItem::Image(image, size, span) => {
                     if let Some(item) = self.push(
@@ -571,6 +593,8 @@ impl Walker {
             font_size,
             missing: None,
             pixels: None,
+            color: None,
+            patterned: false,
             span,
         });
         self.geometry.items.last_mut()

@@ -99,6 +99,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L044 centered-paragraph | wrapped running text centred across a wide measure | |
 | L045 figure-too-close | figures set off from text by barely more than the line spacing | |
 | L046 lopsided-columns | tables where one column wraps heavily beside a mostly empty one | |
+| L047 low-contrast | text barely distinguishable from the fill or page beneath it | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
