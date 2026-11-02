@@ -174,8 +174,9 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L019.column-imbalance",
         "warning",
-        "The last column ends far above the others on a non-final page.",
-        "3 lines",
+        "The last column ends far above the others: by more than 3 lines on a \
+         non-final page, or by more than a third of the column height on the last page.",
+        "3 lines; last page 1/3 of the column height",
         "Balance the columns (columns(.., balanced: true)).",
         true,
     ),

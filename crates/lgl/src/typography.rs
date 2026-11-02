@@ -206,13 +206,42 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
         }
         let Some(last) = element.boxes.last() else { continue };
         let page = last.page;
+        // In a multi-column layout only the heading's own column follows it;
+        // content in a later column of the page is a continuation.
+        let column = geometry
+            .items
+            .iter()
+            .filter(|i| i.page == page && descends_from(geometry, i.elem, index))
+            .filter_map(|i| i.column)
+            .last();
+        let in_column = |x0: f64, x1: f64, item_column: Option<usize>| match column {
+            None => true,
+            Some(c) => {
+                item_column.map_or_else(
+                    || {
+                        let bbox = &geometry.columns[c].bbox;
+                        x0 >= bbox.x0 - 1.0 && x1 <= bbox.x1 + 1.0
+                    },
+                    |k| k == c,
+                )
+            }
+        };
         let below = geometry.items.iter().any(|item| {
             item.page == page
                 && geometry.is_body(item.region)
                 && item.bbox.y0 >= last.bbox.y1
+                && in_column(item.bbox.x0, item.bbox.x1, item.column)
                 && !descends_from(geometry, item.elem, index)
         });
-        let continues = geometry.items.iter().any(|item| item.page > page);
+        let continues = geometry.items.iter().any(|item| {
+            item.page > page
+                || column.is_some_and(|c| {
+                    item.page == page
+                        && item.column.is_some_and(|k| {
+                            k != c && geometry.columns[k].bbox.x0 > geometry.columns[c].bbox.x0
+                        })
+                })
+        });
         if !continues {
             continue;
         }
@@ -223,6 +252,7 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
                 l.page == page
                     && geometry.is_body(l.region)
                     && l.bbox.y0 >= last.bbox.y1 - 0.5
+                    && in_column(l.bbox.x0, l.bbox.x1, None)
                     && !descends_from(geometry, l.elem, index)
             })
             .collect();
@@ -237,6 +267,7 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
                     item.page == page
                         && geometry.is_body(item.region)
                         && item.bbox.y0 > only.bbox.y1 + 0.5
+                        && in_column(item.bbox.x0, item.bbox.x1, item.column)
                 }) =>
             {
                 format!(

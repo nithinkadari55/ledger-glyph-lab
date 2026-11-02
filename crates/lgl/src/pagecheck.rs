@@ -12,6 +12,10 @@ pub const EMPTY_COLUMN: &str = "L043.empty-column";
 /// How many lines the bottoms of side-by-side columns may differ.
 const MAX_COLUMN_DIFF_LINES: f64 = 3.0;
 
+/// On the last page, the share of the column height by which the columns may
+/// differ before the page looks unfinished.
+const LAST_PAGE_COLUMN_SHARE: f64 = 1.0 / 3.0;
+
 /// Comfortable characters per line of body text. Convention.
 const MIN_CHARS_PER_LINE: f64 = 30.0;
 const MAX_CHARS_PER_LINE: f64 = 115.0;
@@ -153,9 +157,7 @@ fn pitch(lines: &[&Line]) -> Option<f64> {
 fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for (page, groups) in columns(geometry) {
-        if page + 1 == geometry.pages.len() {
-            continue;
-        }
+        let last_page = page + 1 == geometry.pages.len();
         let mut side_by_side: Vec<&Vec<&Line>> = groups
             .iter()
             .filter(|group| group.len() >= 2)
@@ -177,7 +179,15 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let highest = bottoms.iter().copied().fold(f64::NEG_INFINITY, f64::max);
         let last = *bottoms.last().unwrap();
         let diff = highest - last;
-        if diff <= MAX_COLUMN_DIFF_LINES * pitch {
+        // The text of the last page may simply run out, so only a severe
+        // imbalance is reported there.
+        let top = side_by_side.iter().map(|g| span(g).y0).fold(f64::INFINITY, f64::min);
+        let allowed = if last_page {
+            (LAST_PAGE_COLUMN_SHARE * (highest - top)).max(MAX_COLUMN_DIFF_LINES * pitch)
+        } else {
+            MAX_COLUMN_DIFF_LINES * pitch
+        };
+        if diff <= allowed {
             continue;
         }
         let shortest = side_by_side.last().unwrap();
@@ -197,7 +207,7 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.bbox =
             Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
         diagnostic.measured = Some(round1(diff));
-        diagnostic.limit = Some(round1(MAX_COLUMN_DIFF_LINES * pitch));
+        diagnostic.limit = Some(round1(allowed));
         diagnostic.unit = Some("pt");
         diagnostic
             .hints
