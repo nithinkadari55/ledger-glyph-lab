@@ -1,4 +1,5 @@
 // expect: L038.cramped-lines
+// expect: L052.lonely-title-word
 #set page(paper: "a4", margin: (x: 2.3cm, y: 2.4cm))
 #set text(size: 10.5pt)
 #block(width: 100%, below: 0.5em)[
