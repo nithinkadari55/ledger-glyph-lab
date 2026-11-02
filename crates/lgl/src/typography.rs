@@ -24,6 +24,77 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(uneven_leading(world, geometry));
     out.extend(hyphenated_display(world, geometry));
     out.extend(hyphenated_labels(world, geometry));
+    out.extend(lonely_title_words(world, geometry));
+    out
+}
+
+pub const LONELY_TITLE_WORD: &str = "L052.lonely-title-word";
+
+/// The number of words on a line.
+fn line_words(geometry: &Geometry, line: &Line) -> usize {
+    let b = &line.bbox;
+    let mut items: Vec<_> = geometry
+        .items
+        .iter()
+        .filter(|i| i.page == line.page && i.kind == crate::geom::ItemKind::Text)
+        .filter(|i| {
+            let cx = (i.bbox.x0 + i.bbox.x1) / 2.0;
+            let cy = (i.bbox.y0 + i.bbox.y1) / 2.0;
+            cy >= b.y0 && cy <= b.y1 && cx >= b.x0 - 1.0 && cx <= b.x1 + 1.0
+        })
+        .collect();
+    items.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+    let text: String = items.iter().filter_map(|i| i.text.as_deref()).collect();
+    text.split_whitespace().count()
+}
+
+/// Titles and headings whose last line holds a single word under a full line,
+/// as in "Moving Patient Records to the" followed by "Cloud".
+fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let lines = &geometry.lines;
+    for index in 1..lines.len() {
+        let (above, last) = (&lines[index - 1], &lines[index]);
+        let step = last.bbox.y1 - above.bbox.y1;
+        if above.page != last.page
+            || above.container != last.container
+            || above.hyphenated
+            || step <= 0.0
+            || step > 2.0 * above.bbox.height()
+        {
+            continue;
+        }
+        // Only the last line of a block counts.
+        if let Some(next) = lines.get(index + 1)
+            && next.page == last.page
+            && next.container == last.container
+            && next.bbox.y1 > last.bbox.y1
+            && next.bbox.y1 - last.bbox.y1 <= 2.0 * last.bbox.height()
+        {
+            continue;
+        }
+        let Some(size) = crate::spacing::line_size(geometry, last) else { continue };
+        if size < DISPLAY_TEXT_PT
+            || line_words(geometry, last) != 1
+            || line_words(geometry, above) < 3
+        {
+            continue;
+        }
+        let mut diagnostic = line_diagnostic(
+            world,
+            LONELY_TITLE_WORD,
+            last,
+            format!(
+                "the last line of {}pt display text on page {} holds a single word",
+                round1(size),
+                last.page + 1
+            ),
+            "balance the lines of the title: insert a line break earlier (\\ or \
+             linebreak()), narrow its block, or reword it",
+        );
+        diagnostic.elem = last.elem.map(|e| geometry.elements[e].name.into());
+        out.push(diagnostic);
+    }
     out
 }
 

@@ -461,6 +461,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L052.lonely-title-word",
+        "warning",
+        "The last line of a title or other display text (14pt or larger) holds a single \
+         word below a line of three or more.",
+        "one word",
+        "Balance the title's lines with an earlier line break, a narrower block or new \
+         wording.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -562,6 +572,7 @@ mod tests {
             marks::BROKEN_ADDRESS,
             marks::LINE_THROUGH_TEXT,
             typography::HYPHENATED_LABEL,
+            typography::LONELY_TITLE_WORD,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
