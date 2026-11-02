@@ -96,20 +96,6 @@ fn malformed_numbers(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-#[cfg(test)]
-mod tests {
-    use super::malformed_number;
-
-    #[test]
-    fn grouping_is_checked() {
-        for good in ["1,234.56", "933.88", "1.234,56", "12,345,678.9", "0.5", "1,5"] {
-            assert!(!malformed_number(good), "{good}");
-        }
-        for bad in ["93,3.88", "1,23.4", "1,2345.6", "12.34,567.8", "1.2.3,4"] {
-            assert!(malformed_number(bad), "{bad}");
-        }
-    }
-}
 
 /// The first HTML entity or Markdown emphasis marker in text, such as
 /// "&nbsp;" or "**bold**", which Typst prints literally.
@@ -429,4 +415,19 @@ fn excerpt(text: Option<&str>) -> String {
     let mut chars = text.chars();
     let head: String = chars.by_ref().take(24).collect();
     if chars.next().is_some() { format!("{head}…") } else { head }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::malformed_number;
+
+    #[test]
+    fn grouping_is_checked() {
+        for good in ["1,234.56", "933.88", "1.234,56", "12,345,678.9", "0.5", "1,5"] {
+            assert!(!malformed_number(good), "{good}");
+        }
+        for bad in ["93,3.88", "1,23.4", "1,2345.6", "12.34,567.8", "1.2.3,4"] {
+            assert!(malformed_number(bad), "{bad}");
+        }
+    }
 }
