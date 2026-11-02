@@ -73,7 +73,7 @@ fn main() {
 
 #align(center)[#rotate(90deg, reflow: true)[Rotated]]
 
-#columns(2)[
+#columns(2, balanced: true)[
   #lorem(120)
 ]
 

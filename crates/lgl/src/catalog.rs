@@ -383,6 +383,24 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L044.centered-paragraph",
+        "warning",
+        "Running text below display size wraps across a wide measure and is centred, so \
+         its lines start at different places.",
+        "measure over 60% of the text area",
+        "Align running text left or justify it; centre only single lines.",
+        false,
+    ),
+    rule(
+        "L045.figure-too-close",
+        "warning",
+        "A figure is set off from the text above or below it by barely more than the \
+         line spacing, so its caption reads as part of the paragraph.",
+        "0.3em beyond the line pitch",
+        "Give figures at least paragraph spacing above and below.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -476,6 +494,8 @@ mod tests {
             structure::MIXED_PRECISION,
             typography::HYPHENATED_DISPLAY,
             pagecheck::EMPTY_COLUMN,
+            composition::CENTERED_PARAGRAPH,
+            composition::FIGURE_SPACING,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

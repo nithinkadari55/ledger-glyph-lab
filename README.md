@@ -96,6 +96,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L041 mixed-precision | numbers in a column with different decimal places | |
 | L042 hyphenated-display-text | hyphenated titles, headings, pull quotes | |
 | L043 empty-column | pages of a multi-column layout with whole columns empty | |
+| L044 centered-paragraph | wrapped running text centred across a wide measure | |
+| L045 figure-too-close | figures set off from text by barely more than the line spacing | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
