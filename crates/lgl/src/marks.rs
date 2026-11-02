@@ -118,8 +118,9 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let continues = rest.chars().next().is_some_and(char::is_alphanumeric);
         // A manual line break after an address is no split: the next word
         // would have fit on the line.
-        let forced = first_word_width(geometry, next, rest)
-            .is_some_and(|width| line.natural + MANUAL_BREAK_MARGIN * width < line.available);
+        let forced = first_word_width(geometry, next, rest).is_some_and(|width| {
+            line.natural + MANUAL_BREAK_MARGIN * width < line.available
+        });
         // The next line may simply start another address.
         let fresh = rest.starts_with("www.")
             || rest.contains("://")
