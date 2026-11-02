@@ -3,8 +3,8 @@
 #set text(size: 10pt)
 #set par(justify: false)
 #show heading: set block(sticky: false)
-#lorem(400)
+#block(width: 100%, height: 685pt, fill: luma(240))
 
 = Inside the new lab
 
-#lorem(300)
+#lorem(250)
