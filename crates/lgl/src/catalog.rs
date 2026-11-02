@@ -501,6 +501,24 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L056.unseparated-terms",
+        "warning",
+        "The entries of a term list wrap but are set as close as their own lines, so \
+         without markers one entry runs into the next.",
+        "0.25em more than the line pitch",
+        "Set terms(tight: false) or terms(spacing: ..), or set descriptions below terms.",
+        false,
+    ),
+    rule(
+        "L057.sparse-bar-chart",
+        "warning",
+        "The bars of a chart (standing on an axis line) are far apart: the gap between \
+         bar groups is wider than 1.5 times a group, so the chart looks empty.",
+        "gap 1.5x the group width",
+        "Widen the bars or narrow the chart, especially with few categories.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -606,6 +624,8 @@ mod tests {
             marks::MARKUP_LEAK,
             composition::TITLE_PROXIMITY,
             composition::PARAGRAPH_SPACING,
+            composition::UNSEPARATED_TERMS,
+            composition::SPARSE_BARS,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

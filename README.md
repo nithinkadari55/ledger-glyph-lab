@@ -108,6 +108,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L053 markup-in-text | HTML entities or Markdown markers printed literally | |
 | L054 title-too-close | text closer to a title than the title's own lines | |
 | L055 paragraph-spacing | paragraphs barely further apart than their lines | |
+| L056 unseparated-terms | wrapped term-list entries set as close as their lines | |
+| L057 sparse-bar-chart | bar charts whose bar groups stand far apart | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

@@ -24,6 +24,9 @@ const MIN_FILLED_SHARE: f64 = 0.4;
 /// page height, or when it has no content at all.
 const ERROR_PAGE_SHARE: f64 = 0.25;
 
+/// The thickest side stripe or rule that counts as decoration.
+const MAX_STRIPE_PT: f64 = 6.0;
+
 /// Text in neighbouring cells must be separated by at least this fraction of
 /// the font size (about a word space).
 const MIN_CELL_GAP_EM: f64 = 0.2;
@@ -53,6 +56,14 @@ fn is_frame(bbox: &BBox, frame: &BBox) -> bool {
     bbox.width() * bbox.height() >= 0.8 * frame.width() * frame.height()
 }
 
+/// Whether `bbox` is a decorative stripe or rule along a whole side of the
+/// frame, such as the accent bar of a pull quote. It stretches with the box,
+/// so it does not show how much content the box holds.
+fn is_stripe(bbox: &BBox, frame: &BBox) -> bool {
+    (bbox.width() <= MAX_STRIPE_PT && bbox.height() >= 0.9 * frame.height())
+        || (bbox.height() <= MAX_STRIPE_PT && bbox.width() >= 0.9 * frame.width())
+}
+
 fn hollow_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut content: Vec<Option<BBox>> = vec![None; geometry.containers.len()];
     for item in &geometry.items {
@@ -63,7 +74,9 @@ fn hollow_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let mut cursor = item.container;
         while let Some(index) = cursor {
             let container = &geometry.containers[index];
-            if item.kind != ItemKind::Shape || !is_frame(&visible, &container.bbox) {
+            if item.kind != ItemKind::Shape
+                || !(is_frame(&visible, &container.bbox) || is_stripe(&visible, &container.bbox))
+            {
                 content[index] = Some(match content[index] {
                     Some(existing) => existing.union(&visible),
                     None => visible,

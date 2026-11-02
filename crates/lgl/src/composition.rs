@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diag::{self, Diagnostic, Severity};
-use crate::geom::{Geometry, ItemKind, Line, round1};
+use crate::geom::{BBox, Geometry, ItemKind, Line, round1};
 use crate::structure::enclosing_cell;
 use crate::world::LabWorld;
 
@@ -44,6 +44,174 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(lopsided_columns(world, geometry));
     out.extend(title_proximity(world, geometry));
     out.extend(paragraph_spacing(world, geometry));
+    out.extend(unseparated_terms(world, geometry));
+    out.extend(sparse_bars(world, geometry));
+    out
+}
+
+pub const UNSEPARATED_TERMS: &str = "L056.unseparated-terms";
+pub const SPARSE_BARS: &str = "L057.sparse-bar-chart";
+
+/// Entries of an unmarked term list need this much more space between them
+/// than between their own lines once they wrap.
+const MIN_ENTRY_GAP_EM: f64 = 0.25;
+
+/// The gap between bar groups of a chart, relative to a group's width, above
+/// which the bars float apart. Charting convention keeps it below about 1.
+const MAX_BAR_GAP_RATIO: f64 = 1.5;
+
+/// The term list entry (a direct child of a terms element) holding content.
+fn term_entry(geometry: &Geometry, mut cursor: Option<usize>) -> Option<(usize, usize)> {
+    while let Some(index) = cursor {
+        let parent = geometry.elements[index].parent;
+        if let Some(list) = parent
+            && geometry.elements[list].name == "terms"
+        {
+            return Some((list, index));
+        }
+        cursor = parent;
+    }
+    None
+}
+
+/// Term lists whose entries wrap but are set as close as their own lines, so
+/// that, without markers, one entry runs into the next.
+fn unseparated_terms(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut lists: BTreeMap<usize, Vec<(usize, &Line)>> = BTreeMap::new();
+    for line in &geometry.lines {
+        if let Some((list, entry)) = term_entry(geometry, line.elem) {
+            lists.entry(list).or_default().push((entry, line));
+        }
+    }
+    let mut out = Vec::new();
+    for (list, lines) in lists {
+        let mut within = Vec::new();
+        let mut between = Vec::new();
+        for pair in lines.windows(2) {
+            let ((ea, a), (eb, b)) = (pair[0], pair[1]);
+            let distance = baseline(b) - baseline(a);
+            if a.page != b.page || distance <= 0.0 {
+                continue;
+            }
+            if ea == eb { within.push(distance) } else { between.push(distance) }
+        }
+        if within.len() < 2 || between.len() < 2 {
+            continue;
+        }
+        within.sort_by(f64::total_cmp);
+        between.sort_by(f64::total_cmp);
+        let (pitch, gap) = (within[within.len() / 2], between[between.len() / 2]);
+        let Some(size) = crate::spacing::line_size(geometry, lines[0].1) else { continue };
+        if gap - pitch >= MIN_ENTRY_GAP_EM * size {
+            continue;
+        }
+        let first = lines[0].1;
+        let mut diagnostic = Diagnostic::new(
+            UNSEPARATED_TERMS,
+            Severity::Warning,
+            format!(
+                "the entries of a term list on page {} wrap but are set {}pt apart, as \
+                 close as their own lines ({}pt), so they run together",
+                first.page + 1,
+                round1(gap),
+                round1(pitch)
+            ),
+        );
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(geometry.elements[list].span, Some(list)));
+        diagnostic.page = Some(first.page + 1);
+        diagnostic.measured = Some(round1(gap - pitch));
+        diagnostic.limit = Some(round1(MIN_ENTRY_GAP_EM * size));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "separate the entries: set terms(tight: false) or terms(spacing: 0.8em), or \
+             set each description below its term"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// Bar charts whose bars stand far apart on their axis: the gap between bar
+/// groups is much wider than the groups themselves.
+fn sparse_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let shapes: Vec<&crate::geom::Item> =
+        geometry.items.iter().filter(|i| i.kind == ItemKind::Shape).collect();
+    let mut rows: BTreeMap<(usize, i64), Vec<&crate::geom::Item>> = BTreeMap::new();
+    for shape in &shapes {
+        let b = &shape.bbox;
+        if shape.color.is_some() && b.height() >= 4.0 && b.width() >= 2.0 {
+            rows.entry((shape.page, (b.y1 * 2.0).round() as i64)).or_default().push(shape);
+        }
+    }
+    let mut out = Vec::new();
+    for ((page, bottom), mut bars) in rows {
+        if bars.len() < 3 {
+            continue;
+        }
+        bars.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+        let x0 = bars[0].bbox.x0;
+        let x1 = bars.iter().map(|b| b.bbox.x1).fold(f64::NEG_INFINITY, f64::max);
+        if bars.iter().any(|b| b.bbox.width() > 0.25 * (x1 - x0)) {
+            continue;
+        }
+        // Only bars standing on an axis line form a chart.
+        let y = bottom as f64 / 2.0;
+        let on_axis = shapes.iter().any(|a| {
+            a.page == page
+                && a.bbox.height() < 1.5
+                && ((a.bbox.y0 + a.bbox.y1) / 2.0 - y).abs() < 2.0
+                && a.bbox.x0 <= x0 + 1.0
+                && a.bbox.x1 >= x1 - 1.0
+        });
+        if !on_axis {
+            continue;
+        }
+        let mut groups: Vec<BBox> = vec![bars[0].bbox];
+        for pair in bars.windows(2) {
+            let (a, b) = (&pair[0].bbox, &pair[1].bbox);
+            let gap = b.x0 - a.x1;
+            if gap < 0.25 * (a.width() + b.width()) {
+                let last = groups.last_mut().unwrap();
+                *last = last.union(b);
+            } else {
+                groups.push(*b);
+            }
+        }
+        if groups.len() < 2 {
+            continue;
+        }
+        let width = groups.iter().map(BBox::width).sum::<f64>() / groups.len() as f64;
+        let gap = groups.windows(2).map(|g| g[1].x0 - g[0].x1).fold(0.0, f64::max);
+        let ratio = gap / width;
+        if ratio <= MAX_BAR_GAP_RATIO {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            SPARSE_BARS,
+            Severity::Warning,
+            format!(
+                "the bars of a chart on page {} stand {}pt apart, {}x the width of a bar \
+                 group ({}pt), so the chart looks empty",
+                page + 1,
+                round1(gap),
+                round1(ratio),
+                round1(width)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(bars[0].span, bars[0].elem));
+        diagnostic.page = Some(page + 1);
+        diagnostic.bbox = Some(BBox { x0, x1, ..groups[0] }.rounded());
+        diagnostic.measured = Some(round1(ratio));
+        diagnostic.limit = Some(MAX_BAR_GAP_RATIO);
+        diagnostic.hints.push(
+            "widen the bars or narrow the chart so that the gaps between groups are no \
+             wider than the groups, especially with few categories"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
     out
 }
 
