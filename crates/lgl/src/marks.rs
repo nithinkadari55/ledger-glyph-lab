@@ -76,7 +76,9 @@ fn splits_phone(text: &str, rest: &str) -> bool {
             && w.chars().all(|c| c.is_ascii_digit() || "+()-./".contains(c))
     };
     let words: Vec<&str> = text.split_whitespace().collect();
-    let Some(start) = words.iter().rposition(|w| w.starts_with('+')) else { return false };
+    let Some(start) = words.iter().rposition(|w| w.starts_with('+')) else {
+        return false;
+    };
     words.len() - start <= 4 && words[start..].iter().all(|w| numeric(w)) && numeric(rest)
 }
 

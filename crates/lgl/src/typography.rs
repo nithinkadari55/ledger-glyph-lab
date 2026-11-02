@@ -131,7 +131,8 @@ fn hyphenated_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
         let Some(line) = block.iter().find(|l| l.hyphenated) else { continue };
         // Large text is reported by L042.
-        if crate::spacing::line_size(geometry, line).is_some_and(|s| s >= DISPLAY_TEXT_PT) {
+        if crate::spacing::line_size(geometry, line).is_some_and(|s| s >= DISPLAY_TEXT_PT)
+        {
             continue;
         }
         let mut diagnostic = line_diagnostic(
