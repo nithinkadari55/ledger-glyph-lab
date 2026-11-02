@@ -177,9 +177,34 @@ fn row_baselines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
 
+    // Cells that hold graphics besides their own fill, like the bars of a
+    // chart drawn as a grid, place their labels by design.
+    let mut graphic_cells = std::collections::BTreeSet::new();
+    for item in &geometry.items {
+        if !matches!(item.kind, ItemKind::Shape | ItemKind::Image) {
+            continue;
+        }
+        let Some(cell) = enclosing_cell(geometry, item.container) else { continue };
+        let area = |b: &BBox| b.width() * b.height();
+        // The fill or stroke of an inline box (a code chip) is part of text.
+        if let Some(own) = item.container
+            && own != cell
+            && geometry.containers[own].kind == "box"
+            && area(&item.bbox) >= 0.8 * area(&geometry.containers[own].bbox)
+        {
+            continue;
+        }
+        if area(&item.bbox) < 0.8 * area(&geometry.containers[cell].bbox) {
+            graphic_cells.insert(cell);
+        }
+    }
+
     let mut rows: BTreeMap<(usize, i64), Vec<(f64, &Line)>> = BTreeMap::new();
     for (cell, lines) in &lines_per_cell {
         let [line] = lines.as_slice() else { continue };
+        if graphic_cells.contains(cell) {
+            continue;
+        }
         let container = &geometry.containers[*cell];
         let key = (container.page, (container.bbox.y0 * 2.0).round() as i64);
         rows.entry(key)
