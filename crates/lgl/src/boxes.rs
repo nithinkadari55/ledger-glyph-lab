@@ -38,6 +38,236 @@ const OVERLAP_SLACK_EM: f64 = 0.25;
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = hollow_boxes(world, geometry);
     out.extend(touching_cells(world, geometry));
+    out.extend(cell_padding(world, geometry));
+    out.extend(double_rules(world, geometry));
+    out.extend(box_padding(world, geometry));
+    out
+}
+
+pub const CELL_PADDING: &str = "L059.tight-cell-padding";
+pub const DOUBLE_RULE: &str = "L060.double-rule";
+pub const BOX_PADDING: &str = "L061.tight-box-padding";
+
+/// Text in a table cell needs this much clear space to the row rules above
+/// and below its ink (about half of Typst's default cell inset). Closer than
+/// 0.08em is reported by L050 instead.
+const MIN_CELL_CLEAR_EM: f64 = 0.2;
+
+/// Two parallel rules of this distance with nothing between them read as a
+/// doubled separator; closer pairs are a deliberate double line.
+const DOUBLE_RULE_GAP_PT: std::ops::RangeInclusive<f64> = 3.0..=36.0;
+
+/// Text in a filled box needs this much clear space to the top and bottom
+/// edges of the fill.
+const MIN_BOX_CLEAR_EM: f64 = 0.25;
+
+/// A thin horizontal rule: a shape at most 1.5pt tall and 20pt wide.
+fn horizontal_rule(item: &crate::geom::Item) -> bool {
+    item.kind == ItemKind::Shape && item.bbox.height() < 1.5 && item.bbox.width() >= 20.0
+}
+
+fn nonblank_text(item: &crate::geom::Item) -> bool {
+    item.kind == ItemKind::Text
+        && item.font_size.is_some()
+        && item.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+}
+
+/// Tables whose rows are ruled so tightly that text nearly touches the rules.
+fn cell_padding(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let rules: Vec<&crate::geom::Item> =
+        geometry.items.iter().filter(|i| horizontal_rule(i)).collect();
+    // The tightest text per table, keyed by the cell's parent container.
+    let mut tables: BTreeMap<(usize, Option<usize>), (f64, f64, &crate::geom::Item)> =
+        BTreeMap::new();
+    for text in geometry.items.iter().filter(|i| nonblank_text(i)) {
+        let Some(cell) = enclosing_cell(geometry, text.container) else { continue };
+        let size = text.font_size.unwrap_or(10.0);
+        let t = &text.bbox;
+        for rule in rules.iter().filter(|r| r.page == text.page) {
+            let r = &rule.bbox;
+            let overlap = r.x1.min(t.x1) - r.x0.max(t.x0);
+            if overlap < 0.2 * t.width() {
+                continue;
+            }
+            for clear in [r.y0 - t.y1, t.y0 - r.y1] {
+                if !(0.08 * size..MIN_CELL_CLEAR_EM * size).contains(&clear) {
+                    continue;
+                }
+                let key = (text.page, geometry.containers[cell].parent);
+                let entry = tables.entry(key).or_insert((clear, size, text));
+                if clear / size < entry.0 / entry.1 {
+                    *entry = (clear, size, text);
+                }
+            }
+        }
+    }
+    tables
+        .into_iter()
+        .map(|((page, _), (clear, size, text))| {
+            let mut diagnostic = Diagnostic::new(
+                CELL_PADDING,
+                Severity::Warning,
+                format!(
+                    "text in a table on page {} sits only {}pt from a row rule, too \
+                     tight for {}pt text",
+                    page + 1,
+                    round1(clear),
+                    round1(size)
+                ),
+            );
+            diagnostic.loc =
+                diag::resolve_span(world, geometry.span_for(text.span, text.elem));
+            diagnostic.page = Some(page + 1);
+            diagnostic.bbox = text.visible().map(|b| b.rounded());
+            diagnostic.measured = Some(round1(clear));
+            diagnostic.limit = Some(round1(MIN_CELL_CLEAR_EM * size));
+            diagnostic.unit = Some("pt");
+            diagnostic.hints.push(
+                "increase the table's vertical inset (e.g. inset: (x: 6pt, y: 5pt)) so \
+                 text keeps clear of the row rules"
+                    .into(),
+            );
+            diagnostic
+        })
+        .collect()
+}
+
+/// Two parallel horizontal rules of the same length with nothing between
+/// them, such as a section's closing rule followed by the next section's
+/// opening rule.
+fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let rules: Vec<&crate::geom::Item> =
+        geometry.items.iter().filter(|i| horizontal_rule(i)).collect();
+    let mut out = Vec::new();
+    for a in &rules {
+        for b in &rules {
+            let (ra, rb) = (&a.bbox, &b.bbox);
+            if a.page != b.page || rb.y0 <= ra.y1 {
+                continue;
+            }
+            let gap = rb.y0 - ra.y1;
+            let overlap = ra.x1.min(rb.x1) - ra.x0.max(rb.x0);
+            let (wa, wb) = (ra.width(), rb.width());
+            if !DOUBLE_RULE_GAP_PT.contains(&gap)
+                || overlap < 0.9 * wa.min(wb)
+                || (wa - wb).abs() > 0.1 * wa.max(wb)
+            {
+                continue;
+            }
+            let band = BBox { x0: ra.x0.max(rb.x0), y0: ra.y1, x1: ra.x1.min(rb.x1), y1: rb.y0 };
+            let empty = !geometry.items.iter().any(|i| {
+                i.page == a.page
+                    && !std::ptr::eq(i, *a)
+                    && !std::ptr::eq(i, *b)
+                    && i.kind != ItemKind::Link
+                    && i.bbox.y0 < band.y1
+                    && i.bbox.y1 > band.y0
+                    && i.bbox.x0 < band.x1
+                    && i.bbox.x1 > band.x0
+            });
+            if !empty {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                DOUBLE_RULE,
+                Severity::Warning,
+                format!(
+                    "two rules on page {} run {}pt apart with nothing between them, so \
+                     the separator is doubled",
+                    a.page + 1,
+                    round1(gap)
+                ),
+            );
+            diagnostic.loc = diag::resolve_span(world, geometry.span_for(b.span, b.elem));
+            diagnostic.page = Some(a.page + 1);
+            diagnostic.bbox = Some(ra.union(rb).rounded());
+            diagnostic.measured = Some(round1(gap));
+            diagnostic.unit = Some("pt");
+            diagnostic.hints.push(
+                "keep one of the two rules: drop the closing rule of the previous \
+                 section or the opening rule (or top border) of the next"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
+    out
+}
+
+/// Filled boxes whose text nearly touches the top or bottom edge of the fill.
+fn box_padding(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for container in &geometry.containers {
+        if container.kind != "block" || !container.visible {
+            continue;
+        }
+        let frame = &container.bbox;
+        // Only a fill shows every edge; a border on one side does not.
+        let filled = geometry.items.iter().any(|i| {
+            i.page == container.page
+                && i.kind == ItemKind::Shape
+                && i.color.is_some()
+                && is_frame(&i.bbox, frame)
+        });
+        if !filled {
+            continue;
+        }
+        let inside: Vec<&crate::geom::Item> = geometry
+            .items
+            .iter()
+            .filter(|i| {
+                nonblank_text(i)
+                    && i.page == container.page
+                    && i.bbox.x0 >= frame.x0 - 1.0
+                    && i.bbox.x1 <= frame.x1 + 1.0
+                    && i.bbox.y0 >= frame.y0 - 1.0
+                    && i.bbox.y1 <= frame.y1 + 1.0
+            })
+            .collect();
+        let Some(largest) = inside.iter().filter_map(|i| i.font_size).max_by(f64::total_cmp)
+        else {
+            continue;
+        };
+        if frame.height() < 2.0 * largest {
+            continue;
+        }
+        let top = inside.iter().min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+        let bottom = inside.iter().max_by(|a, b| a.bbox.y1.total_cmp(&b.bbox.y1));
+        let sides = [
+            ("top", top, top.map(|t| t.bbox.y0 - frame.y0)),
+            ("bottom", bottom, bottom.map(|t| frame.y1 - t.bbox.y1)),
+        ];
+        for (side, text, clear) in sides {
+            let (Some(text), Some(clear)) = (text, clear) else { continue };
+            let size = text.font_size.unwrap_or(10.0);
+            if clear >= MIN_BOX_CLEAR_EM * size {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                BOX_PADDING,
+                Severity::Warning,
+                format!(
+                    "{}pt text sits only {}pt from the {side} edge of its filled box on \
+                     page {}",
+                    round1(size),
+                    round1(clear.max(0.0)),
+                    container.page + 1
+                ),
+            );
+            diagnostic.loc = diag::resolve_span(world, container.span);
+            diagnostic.page = Some(container.page + 1);
+            diagnostic.bbox = Some(frame.rounded());
+            diagnostic.measured = Some(round1(clear));
+            diagnostic.limit = Some(round1(MIN_BOX_CLEAR_EM * size));
+            diagnostic.unit = Some("pt");
+            diagnostic.hints.push(
+                "increase the box's inset on that side, scaled to its largest text \
+                 (e.g. inset: (top: 0.5em, ..))"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
     out
 }
 

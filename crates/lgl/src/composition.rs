@@ -33,10 +33,10 @@ const CENTERED_SIDE_SHARE: f64 = 0.1;
 /// Display text (titles) may be centred over several lines.
 const DISPLAY_TEXT_PT: f64 = 14.0;
 
-/// A figure must be set off from the surrounding text by at least this much
-/// more than the text's own line pitch, or its caption reads as part of the
-/// paragraph.
-const MIN_FIGURE_EXTRA_EM: f64 = 0.3;
+/// A figure or table must be set off from the surrounding text by at least
+/// a blank line: this many line pitches more than the text's own line
+/// spacing. Less, and it reads as part of the paragraph.
+const MIN_FIGURE_EXTRA_LINES: f64 = 1.0;
 
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = centered_paragraphs(world, geometry);
@@ -673,9 +673,10 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                         Some(first) => first.bbox.y1 - line.bbox.y1 - pitch,
                         None => frame.y0 - line.bbox.y1 - 0.25 * size,
                     };
-                if extra < MIN_FIGURE_EXTRA_EM * size && extra > -size {
+                let limit = MIN_FIGURE_EXTRA_LINES * pitch;
+                if extra < limit && extra > -size {
                     out.push(spacing_diagnostic(
-                        world, geometry, index, page, "above", extra, size,
+                        world, geometry, index, page, "above", extra, limit,
                     ));
                 }
             }
@@ -692,9 +693,10 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                         Some(last) => line.bbox.y1 - last.bbox.y1 - pitch,
                         None => line.bbox.y0 - frame.y1,
                     };
-                if extra < MIN_FIGURE_EXTRA_EM * size && extra > -size {
+                let limit = MIN_FIGURE_EXTRA_LINES * pitch;
+                if extra < limit && extra > -size {
                     out.push(spacing_diagnostic(
-                        world, geometry, index, page, "below", extra, size,
+                        world, geometry, index, page, "below", extra, limit,
                     ));
                 }
             }
@@ -710,17 +712,19 @@ fn spacing_diagnostic(
     page: usize,
     side: &'static str,
     extra: f64,
-    size: f64,
+    limit: f64,
 ) -> Diagnostic {
     let element = &geometry.elements[figure];
     let mut diagnostic = Diagnostic::new(
         FIGURE_SPACING,
         Severity::Warning,
         format!(
-            "a figure on page {} is set off from the text {side} it by only {}pt more \
-             than the line spacing, so it reads as part of the paragraph",
+            "a figure or table on page {} is set off from the text {side} it by only {}pt \
+             more than the line spacing; it needs about a blank line ({}pt) or it reads \
+             as part of the paragraph",
             page + 1,
-            round1(extra.max(0.0))
+            round1(extra.max(0.0)),
+            round1(limit)
         ),
     );
     diagnostic.loc = diag::resolve_span(world, element.span);
@@ -728,11 +732,11 @@ fn spacing_diagnostic(
     diagnostic.label = element.label.clone();
     diagnostic.page = Some(page + 1);
     diagnostic.measured = Some(round1(extra));
-    diagnostic.limit = Some(round1(MIN_FIGURE_EXTRA_EM * size));
+    diagnostic.limit = Some(round1(limit));
     diagnostic.unit = Some("pt");
     diagnostic.hints.push(
-        "give figures at least paragraph spacing (show figure: set block(above: 1.2em, \
-         below: 1.2em)) instead of reducing it to save space"
+        "give figures and tables about a blank line above and below (show figure: set \
+         block(above: 2em, below: 2em)) instead of reducing it to save space"
             .into(),
     );
     diagnostic

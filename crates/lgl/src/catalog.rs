@@ -395,10 +395,10 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L045.figure-too-close",
         "warning",
-        "A figure is set off from the text above or below it by barely more than the \
-         line spacing, so its caption reads as part of the paragraph.",
-        "0.3em beyond the line pitch",
-        "Give figures at least paragraph spacing above and below.",
+        "A figure or table is set off from the text above or below it by less than a \
+         blank line, so it and its caption read as part of the paragraph.",
+        "one line pitch beyond the line spacing",
+        "Give figures and tables about a blank line above and below.",
         false,
     ),
     rule(
@@ -528,6 +528,35 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L059.tight-cell-padding",
+        "warning",
+        "Text in a table cell keeps less than 0.2em of clear space to the row rule \
+         above or below it (about half of Typst's default inset). Reported once per \
+         table.",
+        "0.2em",
+        "Increase the table's vertical inset.",
+        false,
+    ),
+    rule(
+        "L060.double-rule",
+        "warning",
+        "Two parallel horizontal rules of the same length run 3 to 36pt apart with \
+         nothing between them, so a separator is doubled (a section's closing rule and \
+         the next section's opening rule or top border).",
+        "any",
+        "Keep one of the two rules.",
+        false,
+    ),
+    rule(
+        "L061.tight-box-padding",
+        "warning",
+        "Text in a filled box sits closer than 0.25em of its own size to the top or \
+         bottom edge of the fill.",
+        "0.25em",
+        "Increase the box's inset on that side, scaled to its largest text.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -636,6 +665,9 @@ mod tests {
             composition::UNSEPARATED_TERMS,
             composition::SPARSE_BARS,
             marks::MALFORMED_NUMBER,
+            boxes::CELL_PADDING,
+            boxes::DOUBLE_RULE,
+            boxes::BOX_PADDING,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

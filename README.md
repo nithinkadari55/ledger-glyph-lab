@@ -111,6 +111,9 @@ different and still pass. `lgl rules` prints the full catalog.
 | L056 unseparated-terms | wrapped term-list entries set as close as their lines | |
 | L057 sparse-bar-chart | bar charts whose bar groups stand far apart | |
 | L058 malformed-number | numbers with wrong digit grouping, such as 93,3.88 | |
+| L059 tight-cell-padding | table text nearly touching row rules | |
+| L060 double-rule | doubled separators: two rules with nothing between | |
+| L061 tight-box-padding | text crowding the top or bottom of a filled box | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
