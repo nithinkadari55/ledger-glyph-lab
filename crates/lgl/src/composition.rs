@@ -91,7 +91,8 @@ fn lopsided_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     continue;
                 }
                 let fill = line.natural / line.available;
-                if fill >= MAX_ROOMY_FILL || line.available - line.natural < MIN_SLACK_PT {
+                if fill >= MAX_ROOMY_FILL || line.available - line.natural < MIN_SLACK_PT
+                {
                     continue;
                 }
                 let key = (
