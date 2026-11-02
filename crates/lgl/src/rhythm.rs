@@ -411,9 +411,12 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if clearance >= MIN_CLEARANCE_EM * size {
                 continue;
             }
+            // Lines that overlap in their typical extent collide; lines with a
+            // little space left are merely tight.
+            let severity = if clearance < 0.0 { Severity::Error } else { Severity::Warning };
             let mut diagnostic = Diagnostic::new(
                 CRAMPED,
-                Severity::Error,
+                severity,
                 format!(
                     "a line on page {} nearly touches the line above it: their baselines \
                      are {}pt apart, which leaves {}pt of clear space for {}pt and {}pt text",

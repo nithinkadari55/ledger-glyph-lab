@@ -6,7 +6,7 @@
   columns: (1fr, auto),
   align: (left + top, right + top),
   [
-    #text(18pt, weight: "bold")[Northwind Studio] \
+    #block(below: 0.9em)[#text(18pt, weight: "bold")[Northwind Studio]]
     12 Harbour Road \
     Port City 4410
   ],

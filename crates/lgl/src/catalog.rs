@@ -327,9 +327,11 @@ pub const CATALOG: &[RuleInfo] = &[
     ),
     rule(
         "L038.cramped-lines",
-        "error",
-        "The ink of a line nearly touches the line below it (too little leading, or too \
-         little space around a title or heading).",
+        "error/warning",
+        "Two stacked lines nearly touch: their baseline distance leaves too little room \
+         for a typical 0.25em descent and 0.75em ascent (too little leading for large \
+         text, or too little space around a title). Error when they collide, warning \
+         when tight.",
         "clear space of 0.1em of the larger text size",
         "Give large text more leading in its own size, or more space between blocks.",
         false,
