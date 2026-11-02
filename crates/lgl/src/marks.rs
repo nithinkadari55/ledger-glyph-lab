@@ -5,6 +5,10 @@ use crate::world::LabWorld;
 pub const BROKEN_ADDRESS: &str = "L049.broken-address";
 pub const LINE_THROUGH_TEXT: &str = "L050.line-through-text";
 
+/// The next word must fit with this much to spare before a line end counts
+/// as a manual break; word widths are estimated, so near misses are wraps.
+const MANUAL_BREAK_MARGIN: f64 = 1.3;
+
 /// A shape thinner than this in one direction is a line: a rule, a tick, a
 /// gridline.
 const MAX_LINE_THICKNESS_PT: f64 = 1.5;
@@ -115,7 +119,7 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         // A manual line break after an address is no split: the next word
         // would have fit on the line.
         let forced = first_word_width(geometry, next, rest)
-            .is_some_and(|width| line.natural + width < line.available);
+            .is_some_and(|width| line.natural + MANUAL_BREAK_MARGIN * width < line.available);
         // The next line may simply start another address.
         let fresh = rest.starts_with("www.")
             || rest.contains("://")
