@@ -308,7 +308,9 @@ fn lines_per_cell_len(geometry: &Geometry, cell: usize) -> usize {
     geometry
         .lines
         .iter()
-        .filter(|line| is_wrapped(line) && enclosing_cell(geometry, line.container) == Some(cell))
+        .filter(|line| {
+            is_wrapped(line) && enclosing_cell(geometry, line.container) == Some(cell)
+        })
         .count()
 }
 

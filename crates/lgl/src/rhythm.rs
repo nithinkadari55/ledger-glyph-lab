@@ -387,7 +387,10 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             });
         if let Some((ink, size)) = ink {
             let baseline = line.bbox.y0 + line.baseline;
-            by_page.entry(line.page).or_default().push(Row { line, ink, size, baseline });
+            by_page
+                .entry(line.page)
+                .or_default()
+                .push(Row { line, ink, size, baseline });
         }
     }
 
@@ -413,7 +416,8 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             }
             // Lines that overlap in their typical extent collide; lines with a
             // little space left are merely tight.
-            let severity = if clearance < 0.0 { Severity::Error } else { Severity::Warning };
+            let severity =
+                if clearance < 0.0 { Severity::Error } else { Severity::Warning };
             let mut diagnostic = Diagnostic::new(
                 CRAMPED,
                 severity,
@@ -448,7 +452,9 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// Whether a line belongs to content labelled as an intended overlay.
 fn allowed_overlay(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
     while let Some(index) = cursor {
-        if geometry.elements[index].label.as_deref() == Some(crate::overlap::ALLOW_OVERLAP) {
+        if geometry.elements[index].label.as_deref()
+            == Some(crate::overlap::ALLOW_OVERLAP)
+        {
             return true;
         }
         cursor = geometry.elements[index].parent;
