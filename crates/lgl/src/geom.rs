@@ -277,6 +277,22 @@ pub struct Geometry {
 
 impl Geometry {
     /// Whether a region is a page body, as opposed to a header or footer.
+    /// The span to report for content: its own, or, for text produced by code
+    /// (whose span is detached), the nearest enclosing element's.
+    pub fn span_for(&self, span: Span, mut elem: Option<usize>) -> Span {
+        if !span.is_detached() {
+            return span;
+        }
+        while let Some(index) = elem {
+            let element = &self.elements[index];
+            if !element.span.is_detached() {
+                return element.span;
+            }
+            elem = element.parent;
+        }
+        span
+    }
+
     pub fn is_body(&self, region: Option<usize>) -> bool {
         region.is_some_and(|r| self.regions[r].kind == "page-body")
     }

@@ -235,7 +235,7 @@ fn centered_paragraphs(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic>
                 round1(line.available)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, line.span);
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(line.span, line.elem));
         diagnostic.elem = line.elem.map(|e| geometry.elements[e].name.into());
         diagnostic.page = Some(line.page + 1);
         diagnostic.bbox = Some(above.bbox.union(&line.bbox).rounded());

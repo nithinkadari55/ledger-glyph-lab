@@ -58,7 +58,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 hex(background)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, item.span);
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         diagnostic.page = Some(item.page + 1);
         diagnostic.bbox = Some(bbox.rounded());
         diagnostic.measured = Some(round1(ratio));

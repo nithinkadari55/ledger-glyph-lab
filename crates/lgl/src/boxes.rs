@@ -222,7 +222,7 @@ fn touching_cells(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     excerpt(b.text.as_deref())
                 ),
             );
-            out.loc = diag::resolve_span(world, b.span);
+            out.loc = diag::resolve_span(world, geometry.span_for(b.span, b.elem));
             out.page = Some(a.page + 1);
             out.bbox = Some(a.bbox.union(&b.bbox).rounded());
             out.measured = Some(round1(gap));
