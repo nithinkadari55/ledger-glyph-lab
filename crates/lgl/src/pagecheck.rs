@@ -158,6 +158,11 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for (page, groups) in columns(geometry) {
         let last_page = page + 1 == geometry.pages.len();
+        // On the last page only real column flow is judged: side-by-side
+        // blocks of a grid (a sidebar and a main column) may end anywhere.
+        if last_page && geometry.columns.iter().filter(|c| c.page == page).count() < 2 {
+            continue;
+        }
         let mut side_by_side: Vec<&Vec<&Line>> = groups
             .iter()
             .filter(|group| group.len() >= 2)
