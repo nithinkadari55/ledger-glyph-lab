@@ -12,6 +12,16 @@ const MAX_LINE_THICKNESS_PT: f64 = 1.5;
 /// How far into a text run a line must reach before it reads as crossing it.
 const MIN_CROSSING_SHARE: f64 = 0.2;
 
+/// A horizontal line closer than this to the ink of text (its descenders or
+/// its tops) touches it when printed.
+const MIN_LINE_CLEARANCE_EM: f64 = 0.08;
+
+#[derive(Clone, Copy, PartialEq)]
+enum Contact {
+    Through,
+    Touching,
+}
+
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = broken_addresses(world, geometry);
     out.extend(lines_through_text(world, geometry));
@@ -119,15 +129,18 @@ fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
                 continue;
             }
             let Some(bbox) = text.visible() else { continue };
-            if !crosses(&line, &bbox, vertical) || !reported.insert(text_index) {
+            let size = text.font_size.unwrap_or(10.0);
+            let Some(contact) = contact(&line, &bbox, vertical, size) else { continue };
+            if !reported.insert(text_index) {
                 continue;
             }
             let mut diagnostic = Diagnostic::new(
                 LINE_THROUGH_TEXT,
                 Severity::Warning,
                 format!(
-                    "a {} line runs through the text \"{}\" on page {}",
+                    "a {} line {} the text \"{}\" on page {}",
                     if vertical { "vertical" } else { "horizontal" },
+                    if contact == Contact::Through { "runs through" } else { "touches" },
                     excerpt(text.text.as_deref()),
                     text.page + 1
                 ),
@@ -155,19 +168,30 @@ fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
     out
 }
 
-/// Whether a thin line crosses into a text box, rather than touching its
-/// edge or passing beside it.
-fn crosses(line: &BBox, text: &BBox, vertical: bool) -> bool {
-    let Some(shared) = line.intersect(text) else { return false };
+/// How a thin line meets the ink box of a text run: crossing into it, or
+/// running along its top or bottom edge without clearance.
+fn contact(line: &BBox, text: &BBox, vertical: bool, size: f64) -> Option<Contact> {
     if vertical {
-        line.x0 > text.x0 + 0.5
+        let shared = line.intersect(text)?;
+        let through = line.x0 > text.x0 + 0.5
             && line.x1 < text.x1 - 0.5
-            && shared.height() > MIN_CROSSING_SHARE * text.height()
-    } else {
-        line.y0 > text.y0 + MIN_CROSSING_SHARE * text.height()
-            && line.y1 < text.y1 - MIN_CROSSING_SHARE * text.height()
-            && shared.width() > MIN_CROSSING_SHARE * text.width()
+            && shared.height() > MIN_CROSSING_SHARE * text.height();
+        return through.then_some(Contact::Through);
     }
+    let overlap = line.x1.min(text.x1) - line.x0.max(text.x0);
+    if overlap <= MIN_CROSSING_SHARE * text.width() {
+        return None;
+    }
+    if line.y0 > text.y0 + MIN_CROSSING_SHARE * text.height()
+        && line.y1 < text.y1 - MIN_CROSSING_SHARE * text.height()
+    {
+        return Some(Contact::Through);
+    }
+    let clearance = MIN_LINE_CLEARANCE_EM * size;
+    let below = line.y0 - text.y1;
+    let above = text.y0 - line.y1;
+    ((-0.5..clearance).contains(&below) || (-0.5..clearance).contains(&above))
+        .then_some(Contact::Touching)
 }
 
 fn excerpt(text: Option<&str>) -> String {
