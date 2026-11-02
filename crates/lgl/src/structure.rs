@@ -228,9 +228,9 @@ fn mixed_precision(
     diagnostic.elem = Some("cell".into());
     diagnostic.page = Some(page + 1);
     diagnostic.bbox = Some(column.rounded());
-    diagnostic.hints.push(format!(
-        "write every number in the column with {common} decimal place(s)"
-    ));
+    diagnostic
+        .hints
+        .push(format!("write every number in the column with {common} decimal place(s)"));
     Some(diagnostic)
 }
 
