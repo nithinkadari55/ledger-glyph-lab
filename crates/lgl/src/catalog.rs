@@ -442,9 +442,11 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L050.line-through-text",
         "warning",
-        "A thin line (rule, tick, gridline) runs through text. Underline, strike, \
-         overline, highlight and content labelled <allow-overlap> are exempt.",
-        "a fifth of the text height or width",
+        "A thin line (rule, tick, gridline) runs through text, or a horizontal line \
+         touches its ink, such as a heading rule set right under the descenders. \
+         Underline, strike, overline, highlight and content labelled <allow-overlap> \
+         are exempt.",
+        "a fifth of the text height or width; 0.08em clearance",
         "End lines before labels, move the text, or give labels a background.",
         false,
     ),
