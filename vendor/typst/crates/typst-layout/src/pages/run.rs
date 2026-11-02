@@ -8,7 +8,7 @@ use typst_library::introspection::{
     Counter, CounterDisplayElem, CounterKey, Introspector, Locator, LocatorLink,
 };
 use typst_library::layout::{
-    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, FrameItem,
+    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, FrameItem, GridPhase,
     HAlignment, Length, OuterVAlignment, PageElem, Paper, Point, Probe, Region,
     RegionKind, RegionProbe, Regions, Rel, Sides, Size, VAlignment,
 };
@@ -184,14 +184,21 @@ fn layout_page_run_impl(
         (header.as_ref().unwrap_or(&None), footer.as_ref().unwrap_or(&numbering_marginal))
     };
 
-    // Layout the children.
+    // Layout the children. With a baseline grid, the grid starts at the top
+    // of the text area on every page.
     let area = size - margin.sum_by_axis();
+    let grid = styles
+        .resolve(PageElem::baseline_grid)
+        .filter(|pitch| *pitch > Abs::zero());
+    let mut regions = Regions::repeat(area, area.map(Abs::is_finite));
+    regions.grid = grid.map(|pitch| GridPhase::new(pitch, Abs::zero()));
+    regions.grid_next = regions.grid;
     let fragment = layout_flow(
         &mut engine,
         children,
         &mut locator,
         styles,
-        Regions::repeat(area, area.map(Abs::is_finite)),
+        regions,
         ColumnOptions {
             count: styles.get(PageElem::columns),
             balanced: styles.get(ColumnsElem::balanced),
@@ -202,9 +209,6 @@ fn layout_page_run_impl(
     )?;
 
     let probes = engine.library.probes;
-    let grid = styles
-        .resolve(PageElem::baseline_grid)
-        .filter(|pitch| *pitch > Abs::zero());
 
     // Layouts a single marginal.
     let mut layout_marginal = |content: &Option<Content>, area, align| {

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{Geometry, Line, round1};
+use crate::typography::paragraph_of;
 use crate::world::LabWorld;
 
 pub const OFF_GRID: &str = "L030.off-baseline-grid";
@@ -15,7 +16,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let Some(region) = line.region.map(|r| &geometry.regions[r]) else { continue };
         let Some(pitch) = region.grid else { continue };
         if region.kind != "page-body"
-            || line.container.is_some()
+            || in_unsnapped_container(geometry, line.container)
             || !is_running_text(geometry, line)
         {
             continue;
@@ -63,20 +64,33 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// Elements whose content is laid out in a nested flow, which is not snapped
 /// to the grid.
-const NESTED: &[&str] =
-    &["entry", "list", "enum", "terms", "table", "grid", "figure", "quote", "outline"];
+const NESTED: &[&str] = &["entry", "list", "enum", "terms", "table", "grid", "outline"];
 
-/// Lines of top-level paragraphs.
+/// Lines of paragraphs (or of plain inline text) outside of nested flows that
+/// are not snapped to the grid.
 fn is_running_text(geometry: &Geometry, line: &Line) -> bool {
+    if line.elem.is_some() && paragraph_of(geometry, line.elem).is_none() {
+        return false;
+    }
     let mut cursor = line.elem;
-    let mut first = true;
     while let Some(index) = cursor {
-        let name = geometry.elements[index].name;
-        if NESTED.contains(&name) || (first && name != "par") {
+        if NESTED.contains(&geometry.elements[index].name) {
             return false;
         }
-        first = false;
         cursor = geometry.elements[index].parent;
     }
     true
+}
+
+/// Whether a line sits inside an inline box or a table/grid cell, whose
+/// content is not snapped to the grid.
+fn in_unsnapped_container(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        let container = &geometry.containers[index];
+        if container.kind == "box" || container.kind == "cell" {
+            return true;
+        }
+        cursor = container.parent;
+    }
+    false
 }

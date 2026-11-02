@@ -3,6 +3,7 @@ pub mod diag;
 pub mod fix;
 pub mod geom;
 pub mod grid;
+pub mod lint;
 pub mod overlap;
 pub mod pagecheck;
 pub mod quality;
@@ -36,6 +37,9 @@ impl Outcome {
 
 pub fn check(world: &LabWorld, export_pdf: bool) -> Outcome {
     let mut diagnostics = Vec::new();
+    if let Ok(source) = typst::World::source(world, typst::World::main(world)) {
+        diagnostics.extend(lint::run(world, &source));
+    }
     let compiled = typst::compile::<PagedDocument>(world);
     diagnostics.extend(
         compiled

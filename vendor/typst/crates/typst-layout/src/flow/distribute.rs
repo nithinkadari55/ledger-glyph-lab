@@ -385,26 +385,17 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     /// its baseline lands on the next line of the baseline grid. Zero if there
     /// is no grid or the baseline is already on a grid line.
     fn grid_pad(&self, baseline: Abs) -> Abs {
-        let Some(pitch) = self.composer.config.baseline_grid else {
-            return Abs::zero();
-        };
-        let pitch = pitch.to_pt();
-        let rest = (self.used.y + baseline).to_pt().rem_euclid(pitch);
-        let epsilon = (1e-5 * pitch).max(1e-3);
-        if rest <= epsilon || pitch - rest <= epsilon {
-            Abs::zero()
-        } else {
-            Abs::pt(pitch - rest)
-        }
+        self.regions.grid.map_or(Abs::zero(), |grid| grid.pad(self.used.y + baseline))
     }
 
     /// Processes an unbreakable block.
     fn single(&mut self, single: &'b SingleChild<'a>) -> Result<(), Stop> {
         // Lay out the block.
-        let frame = single.layout(
-            self.composer.engine,
-            Region::new(self.regions.base(), self.regions.expand),
-        )?;
+        let region = Region {
+            grid: self.regions.grid.map(|grid| grid.shifted(self.used.y)),
+            ..Region::new(self.regions.base(), self.regions.expand)
+        };
+        let frame = single.layout(self.composer.engine, region)?;
 
         // Handle fractionally sized blocks.
         if let Some(fr) = single.fr {
@@ -432,6 +423,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     /// Processes a breakable block.
     fn multi(&mut self, multi: &'b MultiChild<'a>) -> Result<(), Stop> {
         let mut pod = self.regions;
+        pod.grid = pod.grid.map(|grid| grid.shifted(self.used.y));
 
         // For column balancing, reduce the region size for layout.
         if let Some(lim) = self.target {
@@ -684,6 +676,12 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         let size = region.expand.select(region.size, self.used.min(region.size));
         let free = size.y - self.used.y;
 
+        // With a baseline grid, distributed free space is rounded down to whole
+        // grid steps so that the lines after it stay on the grid. The
+        // remainder stays unused at the end of the region.
+        let grid = self.regions.grid;
+        let snap = |amount: Abs| grid.map_or(amount, |grid| grid.floor(amount));
+
         let mut output = Frame::soft(size);
         let mut ruler = FixedAlignment::Start;
         let mut offset = Abs::zero();
@@ -694,7 +692,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         for item in self.items {
             match item {
                 Item::Tag(tag) => {
-                    let y = offset + ruler.position(free);
+                    let y = offset + snap(ruler.position(free));
                     let pos = Point::with_y(y);
                     output.push(pos, FrameItem::Tag(tag.clone()));
                 }
@@ -708,14 +706,16 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                         let x = single.align.x.position(size.x - frame.width());
                         let pos = Point::new(x, offset);
                         output.push_frame(pos, frame);
+                        offset += length;
+                    } else {
+                        offset += snap(length);
                     }
-                    offset += length;
                 }
                 Item::Frame(frame, align) => {
                     ruler = ruler.max(align.y);
 
                     let x = align.x.position(size.x - frame.width());
-                    let y = offset + ruler.position(free);
+                    let y = offset + snap(ruler.position(free));
                     let pos = Point::new(x, y);
                     offset += frame.height();
 
@@ -737,7 +737,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                     let x = placed.align_x.position(size.x - frame.width());
                     let y = match placed.align_y.unwrap_or_default() {
                         Some(align) => align.position(size.y - frame.height()),
-                        _ => offset + ruler.position(free),
+                        _ => offset + snap(ruler.position(free)),
                     };
 
                     let pos = Point::new(x, y)

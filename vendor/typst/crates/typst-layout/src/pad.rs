@@ -23,7 +23,10 @@ pub fn layout_pad(
     );
 
     let mut backlog = vec![];
-    let pod = regions.map(&mut backlog, |size| shrink(size, &padding));
+    let mut pod = regions.map(&mut backlog, |size| shrink(size, &padding));
+    let top = padding.top.relative_to(regions.base().y);
+    pod.grid = pod.grid.map(|g| g.shifted(top));
+    pod.grid_next = pod.grid_next.map(|g| g.shifted(top));
 
     // Layout child into padded regions.
     let mut fragment = crate::layout_fragment(engine, &elem.body, locator, styles, pod)?;

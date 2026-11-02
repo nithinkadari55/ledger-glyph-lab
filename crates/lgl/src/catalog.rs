@@ -325,6 +325,39 @@ pub const CATALOG: &[RuleInfo] = &[
         "Shorten the lines or use a smaller code size.",
         false,
     ),
+    rule(
+        "S001.negative-spacing",
+        "warning",
+        "Source lint: negative h() or v() spacing of at least 0.5em.",
+        "from 0.5em or 5pt",
+        "Remove the negative spacing and let layout place the content.",
+        false,
+    ),
+    rule(
+        "S002.absolute-placement",
+        "warning",
+        "Source lint: place() without float, or move(), outside page backgrounds, \
+         headers and footers.",
+        "any, unless labelled <allow-overlap>",
+        "Keep content in the flow or use place(float: true).",
+        false,
+    ),
+    rule(
+        "S003.transform-without-reflow",
+        "warning",
+        "Source lint: rotate(), scale() or skew() without reflow: true.",
+        "any",
+        "Add reflow: true.",
+        true,
+    ),
+    rule(
+        "S004.disabled-protection",
+        "warning",
+        "Source lint: rules that disable orphan/widow costs or sticky headings.",
+        "any",
+        "Remove the rule and keep Typst's defaults.",
+        false,
+    ),
 ];
 
 /// Typst's own diagnostics are reported with these rule names.
@@ -380,6 +413,10 @@ mod tests {
             rhythm::ROW_BASELINES,
             rhythm::EQUATION_NUMBER,
             rhythm::WRAPPED_CODE,
+            lint::NEGATIVE_SPACING,
+            lint::ABSOLUTE_PLACEMENT,
+            lint::NO_REFLOW,
+            lint::DISABLED_PROTECTION,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");

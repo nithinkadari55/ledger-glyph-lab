@@ -6,6 +6,7 @@ use typst::syntax::ast::{self, AstNode};
 use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::diag::{Diagnostic, SourceLoc};
+use crate::lint::NO_REFLOW;
 use crate::pagecheck::COLUMN_IMBALANCE;
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
@@ -62,6 +63,12 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     })
                 })
             }
+            NO_REFLOW => call_at(&source, anchor, &["rotate", "scale", "skew"]).and_then(|call| {
+                Some(Fix {
+                    description: "reserve space for the transformed content".into(),
+                    edits: vec![set_named(world, &source, &call, "reflow", "true")?],
+                })
+            }),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
                 Some(Fix {

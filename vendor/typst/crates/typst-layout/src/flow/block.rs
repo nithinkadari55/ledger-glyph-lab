@@ -29,7 +29,8 @@ pub fn layout_single_block(
     let inset = elem.inset.resolve(styles).unwrap_or_default();
 
     // Build the pod regions.
-    let pod = unbreakable_pod(&width.into(), &height, &inset, styles, region.size);
+    let mut pod = unbreakable_pod(&width.into(), &height, &inset, styles, region.size);
+    pod.grid = region.grid.map(|g| g.shifted(inset.top.relative_to(region.size.y)));
 
     // Layout the body.
     let body = elem.body.get_ref(styles);
@@ -381,7 +382,18 @@ fn breakable_pod<'a>(
         *height != Sizing::Auto && size.y.is_finite(),
     );
 
-    Regions { size, full, backlog, last, expand }
+    // The content starts below the top inset, which moves it relative to a
+    // baseline grid.
+    let top = inset.top.relative_to(base.y);
+    Regions {
+        size,
+        full,
+        backlog,
+        last,
+        expand,
+        grid: regions.grid.map(|g| g.shifted(top)),
+        grid_next: regions.grid_next.map(|g| g.shifted(top)),
+    }
 }
 
 /// Distribute a fixed height spread over existing regions into a new first

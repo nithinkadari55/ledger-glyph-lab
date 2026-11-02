@@ -207,6 +207,7 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
             // insertions.
             let mut pod = regions;
             pod.size.y -= self.page_insertions.height();
+            pod.grid = pod.grid.map(|grid| grid.shifted(self.page_insertions.top_size));
 
             match self.page_contents(locator.relayout(), pod) {
                 Ok(frame) => break frame,
@@ -372,6 +373,7 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
             // insertions.
             let mut pod = regions;
             pod.size.y -= self.column_insertions.height();
+            pod.grid = pod.grid.map(|grid| grid.shifted(self.column_insertions.top_size));
 
             // For column balancing, only consider space taken by floats, not footnotes
             let float_height = self.column_insertions.float_height();

@@ -588,6 +588,8 @@ impl MultiSpill<'_, '_> {
             full: self.full,
             backlog: &backlog,
             last: regions.last,
+            grid: regions.grid,
+            grid_next: regions.grid_next,
         };
 
         // Extract the not-yet-processed frames.

@@ -1,4 +1,5 @@
 // expect: L014.stranded-heading
+// expect: S004.disabled-protection
 // expect: L010.orphan
 #set page(paper: "a5", margin: 2cm)
 #set text(costs: (orphan: 0%, widow: 0%))

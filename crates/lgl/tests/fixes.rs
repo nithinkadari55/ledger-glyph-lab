@@ -112,3 +112,11 @@ fn distorted_image_keeps_aspect_ratio() {
     );
     assert!(fixed.contains("fit: \"contain\""), "{fixed}");
 }
+
+#[test]
+fn transforms_get_reflow() {
+    let (rules, applied, text) = rules_after_repair("transform-without-reflow.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(!rules.iter().any(|r| r.starts_with("S003")), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("reflow: true"), "{text}");
+}

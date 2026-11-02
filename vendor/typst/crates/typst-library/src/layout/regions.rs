@@ -10,12 +10,14 @@ pub struct Region {
     /// Whether elements should expand to fill the regions instead of shrinking
     /// to fit the content.
     pub expand: Axes<bool>,
+    /// Where the region sits relative to a baseline grid, if there is one.
+    pub grid: Option<GridPhase>,
 }
 
 impl Region {
     /// Create a new region.
     pub fn new(size: Size, expand: Axes<bool>) -> Self {
-        Self { size, expand }
+        Self { size, expand, grid: None }
     }
 }
 
@@ -27,6 +29,8 @@ impl From<Region> for Regions<'_> {
             full: region.size.y,
             backlog: &[],
             last: None,
+            grid: region.grid,
+            grid_next: region.grid,
         }
     }
 }
@@ -52,6 +56,10 @@ pub struct Regions<'a> {
     /// The height of the final region that is repeated once the backlog is
     /// drained. The width is the same for all regions.
     pub last: Option<Abs>,
+    /// Where the first region sits relative to a baseline grid, if any.
+    pub grid: Option<GridPhase>,
+    /// Where the followup regions sit relative to the baseline grid.
+    pub grid_next: Option<GridPhase>,
 }
 
 impl Regions<'_> {
@@ -63,6 +71,8 @@ impl Regions<'_> {
             backlog: &[],
             last: Some(size.y),
             expand,
+            grid: None,
+            grid_next: None,
         }
     }
 
@@ -91,6 +101,8 @@ impl Regions<'_> {
             backlog,
             last: self.last.map(|y| f(Size::new(x, y)).y),
             expand: self.expand,
+            grid: self.grid,
+            grid_next: self.grid_next,
         }
     }
 
@@ -123,6 +135,7 @@ impl Regions<'_> {
         {
             self.size.y = height;
             self.full = height;
+            self.grid = self.grid_next;
         }
     }
 
@@ -155,5 +168,49 @@ impl Debug for Regions<'_> {
             list.entry(&(..));
         }
         list.finish()
+    }
+}
+
+/// Where a region sits relative to a baseline grid.
+#[derive(Debug, Copy, Clone, PartialEq, Hash)]
+pub struct GridPhase {
+    /// The distance between grid lines.
+    pub pitch: Abs,
+    /// How far the top of the region lies below the nearest grid line above
+    /// it, in `[0, pitch)`.
+    pub offset: Abs,
+}
+
+impl GridPhase {
+    /// Create a phase, reducing the offset into `[0, pitch)`.
+    pub fn new(pitch: Abs, offset: Abs) -> Self {
+        let offset = Abs::pt(offset.to_pt().rem_euclid(pitch.to_pt()));
+        Self { pitch, offset }
+    }
+
+    /// The phase of a region that starts `amount` further down.
+    pub fn shifted(self, amount: Abs) -> Self {
+        Self::new(self.pitch, self.offset + amount)
+    }
+
+    /// How far a point at `y` below the region's top must move down to land
+    /// on the next grid line. Zero if it is already on one.
+    pub fn pad(self, y: Abs) -> Abs {
+        let pitch = self.pitch.to_pt();
+        let rest = (self.offset + y).to_pt().rem_euclid(pitch);
+        let epsilon = (1e-5 * pitch).max(1e-3);
+        if rest <= epsilon || pitch - rest <= epsilon {
+            Abs::zero()
+        } else {
+            Abs::pt(pitch - rest)
+        }
+    }
+
+    /// The largest multiple of the pitch that is at most `amount`.
+    pub fn floor(self, amount: Abs) -> Abs {
+        if amount <= Abs::zero() {
+            return amount;
+        }
+        self.pitch * (amount.to_pt() / self.pitch.to_pt()).floor()
     }
 }
