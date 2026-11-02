@@ -1381,6 +1381,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "ecow",
+ "libm",
  "serde",
  "serde_json",
  "typst",

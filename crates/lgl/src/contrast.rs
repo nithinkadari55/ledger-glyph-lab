@@ -26,6 +26,12 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         {
             continue;
         }
+        // Watermarks and other page decorations are faint on purpose.
+        if item.region.is_some_and(|r| {
+            matches!(geometry.regions[r].kind, "background" | "foreground")
+        }) {
+            continue;
+        }
         let (Some(color), Some(bbox)) = (item.color, item.visible()) else { continue };
         let Some(background) = background(geometry, index) else { continue };
         let foreground = blend(color, background);
@@ -101,7 +107,7 @@ fn blend(color: [f32; 4], under: [f64; 3]) -> [f64; 3] {
 
 fn luminance(rgb: [f64; 3]) -> f64 {
     let linear = |c: f64| {
-        if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+        if c <= 0.04045 { c / 12.92 } else { libm::pow((c + 0.055) / 1.055, 2.4) }
     };
     0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
 }
