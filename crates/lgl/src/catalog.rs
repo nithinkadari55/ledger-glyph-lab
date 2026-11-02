@@ -395,9 +395,10 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L045.figure-too-close",
         "warning",
-        "A figure or table is set off from the text above or below it by less than a \
-         blank line, so it and its caption read as part of the paragraph.",
-        "one line pitch beyond the line spacing",
+        "A figure or table is set off from the text above or below it by less than \
+         about three quarters of a blank line, so it and its caption read as part of \
+         the paragraph.",
+        "0.75 line pitch beyond the line spacing",
         "Give figures and tables about a blank line above and below.",
         false,
     ),
@@ -530,10 +531,10 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L059.tight-cell-padding",
         "warning",
-        "Text in a table cell keeps less than 0.2em of clear space to the row rule \
-         above or below it (about half of Typst's default inset). Reported once per \
-         table.",
-        "0.2em",
+        "Text in a table cell keeps less than 0.15em of clear space to the row rule \
+         above or below it (Typst's default inset leaves about 0.2em). Reported once \
+         per table.",
+        "0.15em",
         "Increase the table's vertical inset.",
         false,
     ),
