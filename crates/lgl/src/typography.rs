@@ -23,6 +23,61 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     stranded_headings(world, geometry, &mut out);
     out.extend(uneven_leading(world, geometry));
     out.extend(hyphenated_display(world, geometry));
+    out.extend(hyphenated_labels(world, geometry));
+    out
+}
+
+pub const HYPHENATED_LABEL: &str = "L051.hyphenated-label";
+
+/// A text block of at most this many lines in a measure narrower than
+/// `MAX_LABEL_MEASURE_PT` is a label: chart labels, stat captions, narrow
+/// table cells. Breaking one of its words reads as a mistake.
+const MAX_LABEL_LINES: usize = 3;
+const MAX_LABEL_MEASURE_PT: f64 = 120.0;
+
+fn hyphenated_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let same_block = |a: &Line, b: &Line| {
+        a.page == b.page
+            && a.container == b.container
+            && (a.bbox.x0 - b.bbox.x0).abs() < 1.0
+            && (a.available - b.available).abs() < 1.0
+    };
+    let lines = &geometry.lines;
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < lines.len() {
+        let mut end = start + 1;
+        while end < lines.len() && same_block(&lines[start], &lines[end]) {
+            end += 1;
+        }
+        let block = &lines[start..end];
+        start = end;
+        if block.len() > MAX_LABEL_LINES || block[0].available >= MAX_LABEL_MEASURE_PT {
+            continue;
+        }
+        let Some(line) = block.iter().find(|l| l.hyphenated) else { continue };
+        // Large text is reported by L042.
+        if crate::spacing::line_size(geometry, line).is_some_and(|s| s >= DISPLAY_TEXT_PT) {
+            continue;
+        }
+        let mut diagnostic = line_diagnostic(
+            world,
+            HYPHENATED_LABEL,
+            line,
+            format!(
+                "a {}-line label {}pt wide on page {} breaks a word with a hyphen",
+                block.len(),
+                round1(line.available),
+                line.page + 1
+            ),
+            "widen the label's column, shorten the label, or set text(hyphenate: false) \
+             for labels so their words stay whole",
+        );
+        diagnostic.measured = Some(round1(line.available));
+        diagnostic.limit = Some(MAX_LABEL_MEASURE_PT);
+        diagnostic.unit = Some("pt");
+        out.push(diagnostic);
+    }
     out
 }
 

@@ -434,8 +434,9 @@ pub const CATALOG: &[RuleInfo] = &[
         "L049.broken-address",
         "warning",
         "A web or email address wraps onto the next line without a hyphen, such as \
-         \"www.example.\" followed by \"com\".",
-        "any split address",
+         \"www.example.\" followed by \"com\", or an international phone number is split \
+         across lines.",
+        "any split address or number",
         "Keep the address on one line: shorten the text around it or wrap it in box().",
         false,
     ),
@@ -448,6 +449,15 @@ pub const CATALOG: &[RuleInfo] = &[
          are exempt.",
         "a fifth of the text height or width; 0.08em clearance",
         "End lines before labels, move the text, or give labels a background.",
+        false,
+    ),
+    rule(
+        "L051.hyphenated-label",
+        "warning",
+        "A short label (at most 3 lines in a measure under 120pt, such as a chart label, \
+         a stat caption or a narrow cell) breaks a word with a hyphen.",
+        "any hyphen",
+        "Widen the label's column, shorten it, or turn hyphenation off for labels.",
         false,
     ),
     rule(
@@ -551,6 +561,7 @@ mod tests {
             structure::RAGGED_COLUMN,
             marks::BROKEN_ADDRESS,
             marks::LINE_THROUGH_TEXT,
+            typography::HYPHENATED_LABEL,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

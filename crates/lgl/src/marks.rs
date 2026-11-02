@@ -68,8 +68,21 @@ fn is_address(token: &str) -> bool {
     token.contains('@') || token.contains("www.") || token.contains("://")
 }
 
+/// Whether the end of a line is the start of an international phone number
+/// that the next line continues, as in "+49 40 5550" followed by "1200".
+fn splits_phone(text: &str, rest: &str) -> bool {
+    let numeric = |w: &str| {
+        w.chars().any(|c| c.is_ascii_digit())
+            && w.chars().all(|c| c.is_ascii_digit() || "+()-./".contains(c))
+    };
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let Some(start) = words.iter().rposition(|w| w.starts_with('+')) else { return false };
+    words.len() - start <= 4 && words[start..].iter().all(|w| numeric(w)) && numeric(rest)
+}
+
 /// Web and email addresses that wrap onto the next line without a hyphen,
-/// such as "www.example." followed by "com".
+/// such as "www.example." followed by "com", and phone numbers split across
+/// lines.
 fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for pair in geometry.lines.windows(2) {
@@ -103,20 +116,28 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let fresh = rest.starts_with("www.")
             || rest.contains("://")
             || (rest.contains('@') && !token.contains('@'));
-        if text.ends_with(char::is_whitespace)
-            || forced
-            || fresh
-            || !ends
-            || !continues
-            || !is_address(token)
-        {
+        let address = !text.ends_with(char::is_whitespace)
+            && !fresh
+            && ends
+            && continues
+            && is_address(token);
+        let phone = splits_phone(&text, rest);
+        if forced || !(address || phone) {
             continue;
         }
+        let what = if address { "address" } else { "phone number" };
+        let shown = if address {
+            format!("{token}{rest}")
+        } else {
+            let words: Vec<&str> = text.split_whitespace().collect();
+            let start = words.iter().rposition(|w| w.starts_with('+')).unwrap_or(0);
+            format!("{} {rest}", words[start..].join(" "))
+        };
         let mut diagnostic = Diagnostic::new(
             BROKEN_ADDRESS,
             Severity::Warning,
             format!(
-                "the address \"{token}{rest}\" on page {} is split across two lines",
+                "the {what} \"{shown}\" on page {} is split across two lines",
                 line.page + 1
             ),
         );
@@ -125,8 +146,8 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.page = Some(line.page + 1);
         diagnostic.bbox = Some(line.bbox.union(&next.bbox).rounded());
         diagnostic.hints.push(
-            "keep the address on one line: shorten the surrounding text, give it its own \
-             line, or wrap it in box() so it cannot break"
+            "keep the address or number on one line: shorten the surrounding text, give \
+             it its own line, or wrap it in box() so it cannot break"
                 .into(),
         );
         out.push(diagnostic);
