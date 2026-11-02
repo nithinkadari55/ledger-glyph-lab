@@ -29,8 +29,13 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// element such as an equation or a link that starts at or before them.
 pub fn paragraph_of(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
     while let Some(index) = cursor {
-        if geometry.elements[index].name == "par" {
-            return Some(index);
+        match geometry.elements[index].name {
+            "par" => return Some(index),
+            // Footnote entries are laid out in their own area. Typst nests them
+            // under the paragraph that holds the marker, but their lines are
+            // not part of it.
+            "entry" => return None,
+            _ => {}
         }
         cursor = geometry.elements[index].parent;
     }

@@ -248,7 +248,9 @@ fn has_ancestor(geometry: &Geometry, mut cursor: Option<usize>, name: &str) -> b
 fn narrow_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut lines_per_cell: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
     for (index, line) in geometry.lines.iter().enumerate() {
-        if let Some(cell) = enclosing_cell(geometry, line.container) {
+        if is_wrapped(line)
+            && let Some(cell) = enclosing_cell(geometry, line.container)
+        {
             lines_per_cell.entry(cell).or_default().push(index);
         }
     }
@@ -306,8 +308,14 @@ fn lines_per_cell_len(geometry: &Geometry, cell: usize) -> usize {
     geometry
         .lines
         .iter()
-        .filter(|line| enclosing_cell(geometry, line.container) == Some(cell))
+        .filter(|line| is_wrapped(line) && enclosing_cell(geometry, line.container) == Some(cell))
         .count()
+}
+
+/// Whether a line was filled by wrapping text, as opposed to a short line such
+/// as one of several stacked labels.
+fn is_wrapped(line: &crate::geom::Line) -> bool {
+    line.natural >= 0.6 * line.available
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@ use typst::syntax::Span;
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{BBox, Geometry, ItemKind, round1};
+use crate::typography::paragraph_of;
 use crate::world::LabWorld;
 
 pub const SPACING: &str = "L015.inconsistent-spacing";
@@ -62,11 +63,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 fn blocks(geometry: &Geometry) -> Vec<Block> {
     let mut out: Vec<(Option<usize>, Block)> = Vec::new();
     for line in &geometry.lines {
-        let Some(elem) = line.elem else { continue };
-        let name = geometry.elements[elem].name;
-        if name != "par" && name != "heading" {
-            continue;
-        }
+        let Some((name, elem)) = owner(geometry, line.elem) else { continue };
         if let Some((last_elem, block)) = out.last_mut()
             && *last_elem == Some(elem)
             && block.page == line.page
@@ -76,10 +73,13 @@ fn blocks(geometry: &Geometry) -> Vec<Block> {
             continue;
         }
         let context = context(geometry, elem);
+        let size = line_size(geometry, line)
+            .map(|size| format!(" ({size:.1}pt)"))
+            .unwrap_or_default();
         out.push((
             Some(elem),
             Block {
-                role: format!("{name}{context}"),
+                role: format!("{name}{size}{context}"),
                 page: line.page,
                 bbox: line.bbox,
                 span: geometry.elements[elem].span,
@@ -87,6 +87,41 @@ fn blocks(geometry: &Geometry) -> Vec<Block> {
         ));
     }
     out.into_iter().map(|(_, block)| block).collect()
+}
+
+/// The paragraph or heading a line belongs to.
+fn owner(geometry: &Geometry, elem: Option<usize>) -> Option<(&'static str, usize)> {
+    if let Some(par) = paragraph_of(geometry, elem) {
+        return Some(("par", par));
+    }
+    let mut cursor = elem;
+    while let Some(index) = cursor {
+        if geometry.elements[index].name == "heading" {
+            return Some(("heading", index));
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    None
+}
+
+/// The largest text size on a line. Paragraphs set in different sizes play
+/// different roles (a title is not body text), so their spacing differs.
+fn line_size(geometry: &Geometry, line: &crate::geom::Line) -> Option<f64> {
+    geometry
+        .items
+        .iter()
+        .filter(|item| {
+            let middle = (item.bbox.y0 + item.bbox.y1) / 2.0;
+            item.page == line.page
+                && item.kind == ItemKind::Text
+                && line.bbox.y0 <= middle
+                && middle <= line.bbox.y1
+                && item.bbox.x0 < line.bbox.x1
+                && line.bbox.x0 < item.bbox.x1
+        })
+        .filter_map(|item| item.font_size)
+        .reduce(f64::max)
+        .map(|size| (size * 2.0).round() / 2.0)
 }
 
 fn context(geometry: &Geometry, elem: usize) -> String {

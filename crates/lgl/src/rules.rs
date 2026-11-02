@@ -136,11 +136,20 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             _ => TOLERANCE_PT,
         };
         let element = item.elem.map(|e| &geometry.elements[e]);
+        // A container's own fill and stroke belong to it, and a stroke is
+        // centred on its edge, so they are checked against the parent.
+        let mut container = item.container;
+        if item.kind == ItemKind::Shape
+            && let Some(own) = container
+            && geometry.containers[own].span == item.span
+        {
+            container = geometry.containers[own].parent;
+        }
         let subject = Subject {
             page: item.page,
             bbox,
             tolerance,
-            container: item.container,
+            container,
             region: item.region,
             column: item.column,
             span: item.span,
