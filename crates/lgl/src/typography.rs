@@ -64,16 +64,19 @@ fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
         {
             continue;
         }
-        // Only the last line of a block counts.
+        let Some(size) = crate::spacing::line_size(geometry, last) else { continue };
+        // Only the last line of a block counts; text of another size below
+        // (a byline, the body) starts a new block.
         if let Some(next) = lines.get(index + 1)
             && next.page == last.page
             && next.container == last.container
             && next.bbox.y1 > last.bbox.y1
             && next.bbox.y1 - last.bbox.y1 <= 2.0 * last.bbox.height()
+            && crate::spacing::line_size(geometry, next)
+                .is_some_and(|next_size| (next_size - size).abs() < 0.1 * size)
         {
             continue;
         }
-        let Some(size) = crate::spacing::line_size(geometry, last) else { continue };
         if size < DISPLAY_TEXT_PT
             || line_words(geometry, last) != 1
             || line_words(geometry, above) < 3
