@@ -280,10 +280,15 @@ mod tests {
         assert!(rules_for("#place(center)[x] <allow-overlap>").is_empty());
         assert!(rules_for("#set page(background: place(center)[x])").is_empty());
         assert!(
-            rules_for("#box(width: 40pt, height: 40pt)[#place(center, circle(radius: 5pt))]")
-                .is_empty()
+            rules_for(
+                "#box(width: 40pt, height: 40pt)[#place(center, circle(radius: 5pt))]"
+            )
+            .is_empty()
         );
-        assert_eq!(rules_for("#box(width: 40pt)[#place(center)[x]]"), [ABSOLUTE_PLACEMENT]);
+        assert_eq!(
+            rules_for("#box(width: 40pt)[#place(center)[x]]"),
+            [ABSOLUTE_PLACEMENT]
+        );
     }
 
     #[test]
