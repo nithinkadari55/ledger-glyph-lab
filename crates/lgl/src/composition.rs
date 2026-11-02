@@ -667,7 +667,11 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .max_by(|a, b| a.bbox.y1.total_cmp(&b.bbox.y1));
             if let Some(line) = before {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
-                let pitch = pitch(geometry, line).unwrap_or(1.3 * size);
+                // A single-line paragraph has no pitch of its own; the nearest
+                // line of its block may lie across the figure.
+                let pitch = pitch(geometry, line)
+                    .filter(|p| *p <= 2.0 * size)
+                    .unwrap_or(1.3 * size);
                 let extra =
                     match inner.first().filter(|f| f.bbox.y0 <= frame.y0 + 0.5 * size) {
                         Some(first) => first.bbox.y1 - line.bbox.y1 - pitch,
@@ -687,7 +691,11 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
             if let Some(line) = after {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
-                let pitch = pitch(geometry, line).unwrap_or(1.3 * size);
+                // A single-line paragraph has no pitch of its own; the nearest
+                // line of its block may lie across the figure.
+                let pitch = pitch(geometry, line)
+                    .filter(|p| *p <= 2.0 * size)
+                    .unwrap_or(1.3 * size);
                 let extra =
                     match inner.last().filter(|l| l.bbox.y1 >= frame.y1 - 0.5 * size) {
                         Some(last) => line.bbox.y1 - last.bbox.y1 - pitch,
