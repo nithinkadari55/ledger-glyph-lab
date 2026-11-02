@@ -216,15 +216,13 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
             .next_back();
         let in_column = |x0: f64, x1: f64, item_column: Option<usize>| match column {
             None => true,
-            Some(c) => {
-                item_column.map_or_else(
-                    || {
-                        let bbox = &geometry.columns[c].bbox;
-                        x0 >= bbox.x0 - 1.0 && x1 <= bbox.x1 + 1.0
-                    },
-                    |k| k == c,
-                )
-            }
+            Some(c) => item_column.map_or_else(
+                || {
+                    let bbox = &geometry.columns[c].bbox;
+                    x0 >= bbox.x0 - 1.0 && x1 <= bbox.x1 + 1.0
+                },
+                |k| k == c,
+            ),
         };
         let below = geometry.items.iter().any(|item| {
             item.page == page
@@ -238,7 +236,9 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
                 || column.is_some_and(|c| {
                     item.page == page
                         && item.column.is_some_and(|k| {
-                            k != c && geometry.columns[k].bbox.x0 > geometry.columns[c].bbox.x0
+                            k != c
+                                && geometry.columns[k].bbox.x0
+                                    > geometry.columns[c].bbox.x0
                         })
                 })
         });

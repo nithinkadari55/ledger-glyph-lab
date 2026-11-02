@@ -53,7 +53,8 @@ struct TextCell {
 }
 
 fn spread(values: impl Iterator<Item = f64> + Clone) -> f64 {
-    values.clone().fold(f64::NEG_INFINITY, f64::max) - values.fold(f64::INFINITY, f64::min)
+    values.clone().fold(f64::NEG_INFINITY, f64::max)
+        - values.fold(f64::INFINITY, f64::min)
 }
 
 /// Table columns of text whose cells share neither a left nor a right edge.

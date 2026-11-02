@@ -74,7 +74,9 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// Whether the content is labelled as an intended overlay.
 fn overlay(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
     while let Some(index) = cursor {
-        if geometry.elements[index].label.as_deref() == Some(crate::overlap::ALLOW_OVERLAP) {
+        if geometry.elements[index].label.as_deref()
+            == Some(crate::overlap::ALLOW_OVERLAP)
+        {
             return true;
         }
         cursor = geometry.elements[index].parent;
@@ -96,7 +98,9 @@ fn background(geometry: &Geometry, text: usize) -> Option<[f64; 3]> {
         if below.kind != ItemKind::Image && below.color.is_none() && !below.patterned {
             continue;
         }
-        let Some(cover) = below.visible().and_then(|b| b.intersect(&bbox)) else { continue };
+        let Some(cover) = below.visible().and_then(|b| b.intersect(&bbox)) else {
+            continue;
+        };
         if cover.width() * cover.height() < MIN_COVER * area {
             continue;
         }
