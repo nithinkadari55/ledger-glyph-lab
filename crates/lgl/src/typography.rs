@@ -213,7 +213,7 @@ fn stranded_headings(world: &LabWorld, geometry: &Geometry, out: &mut Vec<Diagno
             .iter()
             .filter(|i| i.page == page && descends_from(geometry, i.elem, index))
             .filter_map(|i| i.column)
-            .last();
+            .next_back();
         let in_column = |x0: f64, x1: f64, item_column: Option<usize>| match column {
             None => true,
             Some(c) => {
