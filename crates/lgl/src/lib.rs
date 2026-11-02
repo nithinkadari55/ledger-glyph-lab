@@ -7,6 +7,7 @@ pub mod fix;
 pub mod geom;
 pub mod grid;
 pub mod lint;
+pub mod marks;
 pub mod overlap;
 pub mod pagecheck;
 pub mod quality;

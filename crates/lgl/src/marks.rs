@@ -1,0 +1,178 @@
+use crate::diag::{self, Diagnostic, Severity};
+use crate::geom::{BBox, Geometry, ItemKind, Line, round1};
+use crate::world::LabWorld;
+
+pub const BROKEN_ADDRESS: &str = "L049.broken-address";
+pub const LINE_THROUGH_TEXT: &str = "L050.line-through-text";
+
+/// A shape thinner than this in one direction is a line: a rule, a tick, a
+/// gridline.
+const MAX_LINE_THICKNESS_PT: f64 = 1.5;
+
+/// How far into a text run a line must reach before it reads as crossing it.
+const MIN_CROSSING_SHARE: f64 = 0.2;
+
+pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = broken_addresses(world, geometry);
+    out.extend(lines_through_text(world, geometry));
+    out
+}
+
+/// The text of a line, from left to right.
+fn line_text(geometry: &Geometry, line: &Line) -> String {
+    let b = &line.bbox;
+    let mut items: Vec<_> = geometry
+        .items
+        .iter()
+        .filter(|i| i.page == line.page && i.kind == ItemKind::Text)
+        .filter(|i| {
+            let cx = (i.bbox.x0 + i.bbox.x1) / 2.0;
+            let cy = (i.bbox.y0 + i.bbox.y1) / 2.0;
+            cy >= b.y0 && cy <= b.y1 && cx >= b.x0 - 1.0 && cx <= b.x1 + 1.0
+        })
+        .collect();
+    items.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+    items.iter().filter_map(|i| i.text.as_deref()).collect()
+}
+
+/// Whether a run of text without spaces is a web or email address.
+fn is_address(token: &str) -> bool {
+    token.contains('@') || token.contains("www.") || token.contains("://")
+}
+
+/// Web and email addresses that wrap onto the next line without a hyphen,
+/// such as "www.example." followed by "com".
+fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for pair in geometry.lines.windows(2) {
+        let (line, next) = (&pair[0], &pair[1]);
+        if line.page != next.page
+            || line.container != next.container
+            || line.elem != next.elem
+            || line.hyphenated
+            || next.bbox.y1 <= line.bbox.y1
+        {
+            continue;
+        }
+        let text = line_text(geometry, line);
+        let following = line_text(geometry, next);
+        let Some(token) = text.split_whitespace().last() else { continue };
+        let Some(rest) = following.split_whitespace().next() else { continue };
+        let ends = token.chars().last().is_some_and(|c| c.is_alphanumeric() || ".@/_-".contains(c));
+        let continues = rest.chars().next().is_some_and(char::is_alphanumeric);
+        if text.ends_with(char::is_whitespace) || !ends || !continues || !is_address(token) {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            BROKEN_ADDRESS,
+            Severity::Warning,
+            format!(
+                "the address \"{token}{rest}\" on page {} is split across two lines",
+                line.page + 1
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(line.span, line.elem));
+        diagnostic.page = Some(line.page + 1);
+        diagnostic.bbox = Some(line.bbox.union(&next.bbox).rounded());
+        diagnostic.hints.push(
+            "keep the address on one line: shorten the surrounding text, give it its own \
+             line, or wrap it in box() so it cannot break"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+fn decorated(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        let element = &geometry.elements[index];
+        if matches!(element.name, "underline" | "strike" | "overline" | "highlight")
+            || element.label.as_deref() == Some(crate::overlap::ALLOW_OVERLAP)
+        {
+            return true;
+        }
+        cursor = element.parent;
+    }
+    false
+}
+
+/// Thin lines (rules, ticks, gridlines) that run through text.
+fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let mut reported = std::collections::BTreeSet::new();
+    for (index, shape) in geometry.items.iter().enumerate() {
+        if shape.kind != ItemKind::Shape || decorated(geometry, shape.elem) {
+            continue;
+        }
+        let Some(line) = shape.visible() else { continue };
+        let vertical = line.width() < MAX_LINE_THICKNESS_PT;
+        if !vertical && line.height() >= MAX_LINE_THICKNESS_PT {
+            continue;
+        }
+        for (text_index, text) in geometry.items.iter().enumerate() {
+            if text.kind != ItemKind::Text
+                || text.page != shape.page
+                || text.text.as_deref().is_none_or(|t| t.trim().is_empty())
+                || decorated(geometry, text.elem)
+            {
+                continue;
+            }
+            let Some(bbox) = text.visible() else { continue };
+            if !crosses(&line, &bbox, vertical) || !reported.insert(text_index) {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                LINE_THROUGH_TEXT,
+                Severity::Warning,
+                format!(
+                    "a {} line runs through the text \"{}\" on page {}",
+                    if vertical { "vertical" } else { "horizontal" },
+                    excerpt(text.text.as_deref()),
+                    text.page + 1
+                ),
+            );
+            diagnostic.loc = diag::resolve_span(
+                world,
+                geometry.span_for(geometry.items[index].span, shape.elem),
+            );
+            diagnostic.page = Some(text.page + 1);
+            diagnostic.bbox = Some(bbox.union(&line).rounded());
+            diagnostic.measured = Some(round1(if vertical {
+                line.height().min(bbox.height())
+            } else {
+                line.width().min(bbox.width())
+            }));
+            diagnostic.unit = Some("pt");
+            diagnostic.hints.push(
+                "move the line or the text so they do not cross: end gridlines and ticks \
+                 before labels, or give labels a background"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
+    out
+}
+
+/// Whether a thin line crosses into a text box, rather than touching its
+/// edge or passing beside it.
+fn crosses(line: &BBox, text: &BBox, vertical: bool) -> bool {
+    let Some(shared) = line.intersect(text) else { return false };
+    if vertical {
+        line.x0 > text.x0 + 0.5
+            && line.x1 < text.x1 - 0.5
+            && shared.height() > MIN_CROSSING_SHARE * text.height()
+    } else {
+        line.y0 > text.y0 + MIN_CROSSING_SHARE * text.height()
+            && line.y1 < text.y1 - MIN_CROSSING_SHARE * text.height()
+            && shared.width() > MIN_CROSSING_SHARE * text.width()
+    }
+}
+
+fn excerpt(text: Option<&str>) -> String {
+    let text = text.unwrap_or_default().trim();
+    let mut chars = text.chars();
+    let head: String = chars.by_ref().take(24).collect();
+    if chars.next().is_some() { format!("{head}…") } else { head }
+}

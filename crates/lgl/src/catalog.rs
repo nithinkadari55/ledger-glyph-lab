@@ -431,6 +431,24 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L049.broken-address",
+        "warning",
+        "A web or email address wraps onto the next line without a hyphen, such as \
+         \"www.example.\" followed by \"com\".",
+        "any split address",
+        "Keep the address on one line: shorten the text around it or wrap it in box().",
+        false,
+    ),
+    rule(
+        "L050.line-through-text",
+        "warning",
+        "A thin line (rule, tick, gridline) runs through text. Underline, strike, \
+         overline, highlight and content labelled <allow-overlap> are exempt.",
+        "a fifth of the text height or width",
+        "End lines before labels, move the text, or give labels a background.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -529,6 +547,8 @@ mod tests {
             composition::LOPSIDED_COLUMNS,
             contrast::LOW_CONTRAST,
             structure::RAGGED_COLUMN,
+            marks::BROKEN_ADDRESS,
+            marks::LINE_THROUGH_TEXT,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
