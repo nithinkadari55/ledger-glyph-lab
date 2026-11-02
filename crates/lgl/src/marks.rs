@@ -52,15 +52,17 @@ fn line_text(geometry: &Geometry, line: &Line) -> String {
         .collect()
 }
 
-/// The approximate width of the first word of a line, measured on the text
-/// item that holds it.
+/// The approximate width the first word of a line would need at the end of
+/// the previous line, measured on the text item that holds it.
 fn first_word_width(geometry: &Geometry, line: &Line, word: &str) -> Option<f64> {
     let item = line_items(geometry, line)
         .into_iter()
         .find(|i| i.text.as_deref().is_some_and(|t| !t.trim().is_empty()))?;
     let chars = item.text.as_deref()?.trim_start().chars().count().max(1);
     let share = (word.chars().count() as f64 / chars as f64).min(1.0);
-    Some(item.bbox.width() * share)
+    // Including the word space before it.
+    let space = item.font_size.unwrap_or(10.0) / 3.0;
+    Some(item.bbox.width() * share + space)
 }
 
 /// Whether a run of text without spaces is a web or email address.
