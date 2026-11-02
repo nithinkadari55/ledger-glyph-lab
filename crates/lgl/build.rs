@@ -10,11 +10,9 @@ fn collect(dir: &Path, out: &mut Vec<PathBuf>) {
         let path = entry.path();
         if path.is_dir() {
             collect(&path, out);
-        } else if path
-            .extension()
-            .and_then(|e| e.to_str())
-            .is_some_and(|e| e.eq_ignore_ascii_case("ttf") || e.eq_ignore_ascii_case("otf"))
-        {
+        } else if path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+            e.eq_ignore_ascii_case("ttf") || e.eq_ignore_ascii_case("otf")
+        }) {
             out.push(path);
         }
     }
