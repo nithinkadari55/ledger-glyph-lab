@@ -421,7 +421,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "S002.absolute-placement",
         "warning",
         "Source lint: place() without float, or move(), outside page backgrounds, \
-         headers and footers.",
+         headers, footers and fixed-size boxes or shapes (small drawing areas).",
         "any, unless labelled <allow-overlap>",
         "Keep content in the flow or use place(float: true).",
         false,

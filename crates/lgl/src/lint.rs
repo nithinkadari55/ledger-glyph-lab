@@ -67,7 +67,9 @@ fn check_call(
                 ));
             }
         }
-        "place" | "move" if !allowed(node) && !in_page_setting(node) => {
+        "place" | "move"
+            if !allowed(node) && !in_page_setting(node) && !in_sized_container(node) =>
+        {
             if name == "place" && named_bool(call, "float") == Some(true) {
                 return;
             }
@@ -199,6 +201,34 @@ fn in_page_setting(node: &LinkedNode) -> bool {
     false
 }
 
+/// Whether the node is inside a box or shape of fixed size: a small drawing
+/// area in which absolute placement cannot reach other content. Content that
+/// leaves the area is reported by L002.
+fn in_sized_container(node: &LinkedNode) -> bool {
+    let named = |call: ast::FuncCall, name: &str| {
+        call.args()
+            .items()
+            .any(|arg| matches!(arg, ast::Arg::Named(n) if n.name().get() == name))
+    };
+    let mut cursor = node.parent();
+    while let Some(parent) = cursor {
+        if let Some(call) = ast::FuncCall::from_untyped(parent)
+            && let ast::Expr::Ident(ident) = call.callee()
+            && matches!(
+                ident.get().as_str(),
+                "box" | "block" | "rect" | "square" | "circle" | "ellipse"
+            )
+            && ((named(call, "width") && named(call, "height"))
+                || named(call, "size")
+                || named(call, "radius"))
+        {
+            return true;
+        }
+        cursor = parent.parent();
+    }
+    false
+}
+
 /// Whether the node is inside a show rule whose selector mentions headings.
 fn in_heading_show_rule(node: &LinkedNode) -> bool {
     let mut cursor = node.parent();
@@ -249,6 +279,11 @@ mod tests {
         assert!(rules_for("#place(top, float: true)[x]").is_empty());
         assert!(rules_for("#place(center)[x] <allow-overlap>").is_empty());
         assert!(rules_for("#set page(background: place(center)[x])").is_empty());
+        assert!(
+            rules_for("#box(width: 40pt, height: 40pt)[#place(center, circle(radius: 5pt))]")
+                .is_empty()
+        );
+        assert_eq!(rules_for("#box(width: 40pt)[#place(center)[x]]"), [ABSOLUTE_PLACEMENT]);
     }
 
     #[test]
