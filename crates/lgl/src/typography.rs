@@ -17,6 +17,9 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         breaks(world, &lines, &mut out);
         hyphen_ladder(world, &lines, &mut out);
     }
+    for lines in cell_texts(geometry) {
+        hyphen_ladder(world, &lines, &mut out);
+    }
     stranded_headings(world, geometry, &mut out);
     out.extend(uneven_leading(world, geometry));
     out.extend(hyphenated_display(world, geometry));
@@ -90,6 +93,29 @@ fn paragraphs(geometry: &Geometry) -> Vec<Vec<&Line>> {
         if current != Some(elem) {
             out.push(Vec::new());
             current = Some(elem);
+        }
+        out.last_mut().unwrap().push(line);
+    }
+    out
+}
+
+/// Text set directly in a table or grid cell has no paragraph element; its
+/// lines are grouped by the cell instead.
+fn cell_texts(geometry: &Geometry) -> Vec<Vec<&Line>> {
+    let mut out: Vec<Vec<&Line>> = Vec::new();
+    let mut current = None;
+    for line in &geometry.lines {
+        let cell = line
+            .elem
+            .filter(|_| paragraph_of(geometry, line.elem).is_none())
+            .filter(|e| geometry.elements[*e].name == "cell");
+        let Some(cell) = cell else {
+            current = None;
+            continue;
+        };
+        if current != Some(cell) {
+            out.push(Vec::new());
+            current = Some(cell);
         }
         out.last_mut().unwrap().push(line);
     }
