@@ -73,7 +73,8 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for k in 2..lines.len() {
         let (first, last, next) = (&lines[k - 2], &lines[k - 1], &lines[k]);
-        let (Some(a), Some(size), Some(next_size)) = (sizes[k - 2], sizes[k - 1], sizes[k])
+        let (Some(a), Some(size), Some(next_size)) =
+            (sizes[k - 2], sizes[k - 1], sizes[k])
         else {
             continue;
         };
@@ -111,7 +112,8 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 round1(inside)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(next.span, next.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(next.span, next.elem));
         diagnostic.page = Some(next.page + 1);
         diagnostic.bbox = Some(last.bbox.union(&next.bbox).rounded());
         diagnostic.measured = Some(round1(after));

@@ -43,7 +43,8 @@ fn leaked_markup(text: &str) -> Option<&str> {
         let tail = &rest[start + 1..];
         let end = tail.find(';')?;
         let name = &tail[..end];
-        let named = (2..=8).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphabetic());
+        let named = (2..=8).contains(&name.len())
+            && name.chars().all(|c| c.is_ascii_alphabetic());
         let numeric = name.len() > 1
             && name.starts_with('#')
             && name[1..].chars().all(|c| c.is_ascii_alphanumeric());
@@ -76,7 +77,8 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 item.page + 1
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         diagnostic.page = Some(item.page + 1);
         diagnostic.bbox = item.visible().map(|b| b.rounded());
         diagnostic.hints.push(
