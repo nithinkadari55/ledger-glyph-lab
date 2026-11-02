@@ -64,7 +64,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// Elements whose content is laid out in a nested flow, which is not snapped
 /// to the grid.
-const NESTED: &[&str] = &["entry", "list", "enum", "terms", "table", "grid", "outline"];
+const NESTED: &[&str] = &["entry", "outline"];
 
 /// Lines of paragraphs (or of plain inline text) outside of nested flows that
 /// are not snapped to the grid.
@@ -82,12 +82,12 @@ fn is_running_text(geometry: &Geometry, line: &Line) -> bool {
     true
 }
 
-/// Whether a line sits inside an inline box or a table/grid cell, whose
-/// content is not snapped to the grid.
+/// Whether a line sits inside an inline box, whose content is not snapped to
+/// the grid.
 fn in_unsnapped_container(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
     while let Some(index) = cursor {
         let container = &geometry.containers[index];
-        if container.kind == "box" || container.kind == "cell" {
+        if container.kind == "box" {
             return true;
         }
         cursor = container.parent;

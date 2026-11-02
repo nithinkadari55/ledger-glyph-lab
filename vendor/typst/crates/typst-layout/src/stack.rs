@@ -243,10 +243,21 @@ impl<'a> StackLayouter<'a> {
             block,
             self.locator.next(&block.span()),
             styles,
-            self.regions,
+            self.child_regions(),
         )?;
 
         self.layout_fragment(align, fragment)
+    }
+
+    /// The regions for the next child. In a top-to-bottom stack, the child
+    /// starts below the children before it, which moves it relative to a
+    /// baseline grid.
+    fn child_regions(&self) -> Regions<'a> {
+        let mut regions = self.regions;
+        if self.dir == Dir::TTB {
+            regions.grid = regions.grid.map(|grid| grid.shifted(self.used.main));
+        }
+        regions
     }
 
     /// Layout a child with a custom layouter procedure.
@@ -262,7 +273,7 @@ impl<'a> StackLayouter<'a> {
 
         let align = styles.get(AlignElem::alignment).resolve(styles);
 
-        let fragment = layouter(engine, styles, self.regions)?;
+        let fragment = layouter(engine, styles, self.child_regions())?;
 
         self.layout_fragment(align, fragment)
     }

@@ -102,14 +102,14 @@ Intended overlays such as watermarks are exempt from L006 when labelled
 
 `#set page(baseline-grid: 15pt)` snaps every paragraph line to a grid that
 starts at the top of the text area of each page. The grid phase is carried
-through the layout: below floats, into blocks, quotes, figures and padding (with
-their insets), and across page breaks. Fractional spacing (`v(1fr)`) and
+through the layout: below floats, into blocks, quotes, figures, padding, lists,
+stacks and table cells (with their insets), and across page breaks. Fractional spacing (`v(1fr)`) and
 vertical alignment are rounded to whole grid steps. Choose a pitch at least as
 large as the natural line pitch, or lines skip grid lines (L033 reports this).
 
 ## Known limits
 
-- Lines inside inline boxes, table and grid cells, lists and footnotes are not
+- Lines inside inline boxes, footnotes and rowspanning table cells are not
   snapped to the baseline grid; text after them returns to the grid.
 - Element attribution relies on Typst's introspection tags; plain inline text
   without a paragraph is treated as running text.

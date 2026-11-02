@@ -1296,7 +1296,7 @@ impl<'a> GridLayouter<'a> {
             let backlog =
                 measurement_data.backlog.unwrap_or(&measurement_data.custom_backlog);
 
-            let pod = if !breakable {
+            let mut pod = if !breakable {
                 // Force cell to fit into a single region when the row is
                 // unbreakable, even when it is a breakable rowspan, as a best
                 // effort.
@@ -1323,6 +1323,7 @@ impl<'a> GridLayouter<'a> {
 
                 pod
             };
+            self.set_cell_grid(&mut pod);
 
             let locator = self.cell_locator(parent, disambiguator);
             let frames = layout_cell(
@@ -1491,6 +1492,7 @@ impl<'a> GridLayouter<'a> {
                     let width = self.cell_spanned_width(cell, x);
                     let size = Size::new(width, height);
                     let mut pod: Regions = Region::new(size, Axes::splat(true)).into();
+                    self.set_cell_grid(&mut pod);
                     if self.grid.rows[y] == Sizing::Auto
                         && self.unbreakable_rows_left == 0
                     {
@@ -1525,6 +1527,14 @@ impl<'a> GridLayouter<'a> {
         Ok(output)
     }
 
+    /// Moves the regions of a cell to the baseline grid phase of the row
+    /// that is laid out next.
+    fn set_cell_grid(&self, pod: &mut Regions) {
+        let used = self.current.initial.y - self.regions.size.y;
+        pod.grid = self.regions.grid.map(|grid| grid.shifted(used));
+        pod.grid_next = self.regions.grid_next;
+    }
+
     /// Layout a row spanning multiple regions.
     fn layout_multi_row(
         &mut self,
@@ -1544,6 +1554,7 @@ impl<'a> GridLayouter<'a> {
         let mut pod: Regions = Region::new(size, Axes::splat(true)).into();
         pod.full = self.regions.full;
         pod.backlog = &heights[1..];
+        self.set_cell_grid(&mut pod);
 
         // Layout the row.
         let mut offset = Point::zero();

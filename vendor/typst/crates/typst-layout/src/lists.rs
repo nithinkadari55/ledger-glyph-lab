@@ -548,6 +548,7 @@ impl<'a> ItemLayouter<'a> {
             // iterations.
             let mut regions = self.body_regions;
             regions.size.y += diff;
+            regions.grid = regions.grid.map(|grid| grid.shifted(-diff));
             *body_fragment = self.layout_body(regions, engine)?;
 
             self.body_offset.y = -diff;

@@ -53,7 +53,7 @@ checked.
 | H45 | row baselines aligned | L035 |
 | H46 | left edges of same-role blocks align | not checked: indents, lists and quotes make roles ambiguous without author intent |
 | H47 | centred/end-aligned items symmetric | violated only through overflow: L001-L003, L032 |
-| H48 | baselines align across columns | baseline grid + L030 |
+| H48 | baselines align across columns | baseline grid (page.baseline-grid) + L030 |
 | H49 | inline objects on the baseline | not checked: depends on the author's declared box baseline |
 | H50 | image aspect ratio preserved | L023 |
 | H51 | image resolution floor | L009 |
