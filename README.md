@@ -106,6 +106,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L051 hyphenated-label | short labels (chart labels, narrow cells) that break a word | |
 | L052 lonely-title-word | titles whose last line holds a single word | |
 | L053 markup-in-text | HTML entities or Markdown markers printed literally | |
+| L054 title-too-close | text closer to a title than the title's own lines | |
+| L055 paragraph-spacing | paragraphs barely further apart than their lines | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

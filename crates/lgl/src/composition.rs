@@ -42,7 +42,176 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = centered_paragraphs(world, geometry);
     out.extend(figure_spacing(world, geometry));
     out.extend(lopsided_columns(world, geometry));
+    out.extend(title_proximity(world, geometry));
+    out.extend(paragraph_spacing(world, geometry));
     out
+}
+
+pub const TITLE_PROXIMITY: &str = "L054.title-too-close";
+pub const PARAGRAPH_SPACING: &str = "L055.paragraph-spacing";
+
+/// Text at least this large is display text: titles and headlines.
+const DISPLAY_PT: f64 = 14.0;
+
+/// Paragraphs without a first-line indent need at least this much more space
+/// between them than between their lines (Typst's default is about 0.55em).
+const MIN_PARAGRAPH_GAP_EM: f64 = 0.5;
+
+/// Body text sizes for which paragraph spacing is judged.
+const BODY_PT: std::ops::RangeInclusive<f64> = 8.0..=13.0;
+
+fn baseline(line: &Line) -> f64 {
+    line.bbox.y0 + line.baseline
+}
+
+/// Text that follows a multi-line title or headline closer than the title's
+/// own lines are to each other, so it reads as part of the title.
+fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let lines = &geometry.lines;
+    let sizes: Vec<Option<f64>> =
+        lines.iter().map(|l| crate::spacing::line_size(geometry, l)).collect();
+    let mut out = Vec::new();
+    for k in 2..lines.len() {
+        let (first, last, next) = (&lines[k - 2], &lines[k - 1], &lines[k]);
+        let (Some(a), Some(size), Some(next_size)) = (sizes[k - 2], sizes[k - 1], sizes[k])
+        else {
+            continue;
+        };
+        if first.page != last.page
+            || last.page != next.page
+            || size < DISPLAY_PT
+            || (a - size).abs() > 0.1
+            || next_size >= size / 1.15
+            || next.bbox.x0 >= last.bbox.x1
+            || last.bbox.x0 >= next.bbox.x1
+        {
+            continue;
+        }
+        let within = baseline(last) - baseline(first);
+        let below = baseline(next) - baseline(last);
+        if within <= 0.0 || below <= 0.0 || within > 2.0 * size {
+            continue;
+        }
+        // Clear space between the title's lines, and between its last line
+        // and the next text (descent 0.25em, ascent 0.75em).
+        let inside = within - size;
+        let after = below - 0.25 * size - 0.75 * next_size;
+        if after >= inside - 0.5 {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            TITLE_PROXIMITY,
+            Severity::Warning,
+            format!(
+                "the text below a {}pt title on page {} starts {}pt under it, closer than \
+                 the title's own lines ({}pt apart), so it reads as part of the title",
+                round1(size),
+                next.page + 1,
+                round1(after.max(0.0)),
+                round1(inside)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(next.span, next.elem));
+        diagnostic.page = Some(next.page + 1);
+        diagnostic.bbox = Some(last.bbox.union(&next.bbox).rounded());
+        diagnostic.measured = Some(round1(after));
+        diagnostic.limit = Some(round1(inside));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "leave more space below the title than between its lines, e.g. \
+             block(below: 0.8em) around the title or v(..) before the text that follows"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// Body paragraphs set so close that they run together: barely more space
+/// between paragraphs than between lines, and no first-line indent.
+fn paragraph_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let lines = &geometry.lines;
+    let excluded = |cursor| {
+        ["cell", "list", "enum", "terms", "entry", "figure", "quote", "heading"]
+            .iter()
+            .any(|name| within_named(geometry, cursor, name))
+    };
+    let mut pitches = Vec::new();
+    let mut gaps: Vec<(f64, f64, &Line)> = Vec::new();
+    for pair in lines.windows(2) {
+        let (a, b) = (&pair[0], &pair[1]);
+        if a.page != b.page
+            || a.container != b.container
+            || (a.bbox.x0 - b.bbox.x0).abs() > 0.5
+            || !geometry.is_body(a.region)
+            || excluded(a.elem)
+            || excluded(b.elem)
+        {
+            continue;
+        }
+        let (Some(pa), Some(pb)) = (
+            crate::typography::paragraph_of(geometry, a.elem),
+            crate::typography::paragraph_of(geometry, b.elem),
+        ) else {
+            continue;
+        };
+        let (Some(sa), Some(sb)) = (
+            crate::spacing::line_size(geometry, a),
+            crate::spacing::line_size(geometry, b),
+        ) else {
+            continue;
+        };
+        if (sa - sb).abs() > 0.1 || !BODY_PT.contains(&sa) {
+            continue;
+        }
+        let distance = baseline(b) - baseline(a);
+        if distance <= 0.0 {
+            continue;
+        }
+        if pa == pb {
+            pitches.push(distance);
+        } else {
+            gaps.push((distance, sa, b));
+        }
+    }
+    if pitches.len() < 5 || gaps.is_empty() {
+        return Vec::new();
+    }
+    let median = |values: &mut Vec<f64>| {
+        values.sort_by(f64::total_cmp);
+        values[values.len() / 2]
+    };
+    let pitch = median(&mut pitches);
+    let mut extras: Vec<f64> = gaps.iter().map(|(d, ..)| d - pitch).collect();
+    let extra = median(&mut extras);
+    let (_, size, line) = gaps[0];
+    let limit = MIN_PARAGRAPH_GAP_EM * size;
+    if extra >= limit {
+        return Vec::new();
+    }
+    let mut diagnostic = Diagnostic::new(
+        PARAGRAPH_SPACING,
+        Severity::Warning,
+        format!(
+            "paragraphs are set only {}pt further apart than their lines ({}pt), so they \
+             run together; without a first-line indent they need at least {}pt",
+            round1(extra.max(0.0)),
+            round1(pitch),
+            round1(limit)
+        ),
+    );
+    diagnostic.loc = diag::resolve_span(world, geometry.span_for(line.span, line.elem));
+    diagnostic.page = Some(line.page + 1);
+    diagnostic.measured = Some(round1(extra));
+    diagnostic.limit = Some(round1(limit));
+    diagnostic.unit = Some("pt");
+    diagnostic.hints.push(
+        "set par(spacing: ..) at least 0.5em larger than par(leading: ..) (Typst's \
+         default is spacing 1.2em with leading 0.65em), or indent first lines; to meet a \
+         page count, tighten the wording instead of the spacing"
+            .into(),
+    );
+    vec![diagnostic]
 }
 
 /// A table cell and its lines.

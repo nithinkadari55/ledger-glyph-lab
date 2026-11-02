@@ -481,6 +481,26 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L054.title-too-close",
+        "warning",
+        "Text below a multi-line title or headline (14pt or larger) starts closer to it \
+         than the title's own lines are to each other, so it reads as part of the title.",
+        "the clear space between the title's lines, less 0.5pt",
+        "Leave more space below the title than between its lines.",
+        false,
+    ),
+    rule(
+        "L055.paragraph-spacing",
+        "warning",
+        "Body paragraphs without a first-line indent are set barely further apart than \
+         their lines, so they run together (typically after spacing was squeezed to meet \
+         a page count).",
+        "0.5em more than the line pitch",
+        "Set par(spacing) at least 0.5em above par(leading), or indent first lines; cut \
+         words rather than spacing to meet a page count.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -584,6 +604,8 @@ mod tests {
             typography::HYPHENATED_LABEL,
             typography::LONELY_TITLE_WORD,
             marks::MARKUP_LEAK,
+            composition::TITLE_PROXIMITY,
+            composition::PARAGRAPH_SPACING,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
