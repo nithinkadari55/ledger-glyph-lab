@@ -28,8 +28,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-/// The text of a line, from left to right.
-fn line_text(geometry: &Geometry, line: &Line) -> String {
+/// The text items of a line, from left to right.
+fn line_items<'a>(geometry: &'a Geometry, line: &Line) -> Vec<&'a crate::geom::Item> {
     let b = &line.bbox;
     let mut items: Vec<_> = geometry
         .items
@@ -42,7 +42,22 @@ fn line_text(geometry: &Geometry, line: &Line) -> String {
         })
         .collect();
     items.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
-    items.iter().filter_map(|i| i.text.as_deref()).collect()
+    items
+}
+
+fn line_text(geometry: &Geometry, line: &Line) -> String {
+    line_items(geometry, line).iter().filter_map(|i| i.text.as_deref()).collect()
+}
+
+/// The approximate width of the first word of a line, measured on the text
+/// item that holds it.
+fn first_word_width(geometry: &Geometry, line: &Line, word: &str) -> Option<f64> {
+    let item = line_items(geometry, line)
+        .into_iter()
+        .find(|i| i.text.as_deref().is_some_and(|t| !t.trim().is_empty()))?;
+    let chars = item.text.as_deref()?.trim_start().chars().count().max(1);
+    let share = (word.chars().count() as f64 / chars as f64).min(1.0);
+    Some(item.bbox.width() * share)
 }
 
 /// Whether a run of text without spaces is a web or email address.
@@ -77,7 +92,17 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .last()
             .is_some_and(|c| c.is_alphanumeric() || ".@/_-".contains(c));
         let continues = rest.chars().next().is_some_and(char::is_alphanumeric);
+        // A manual line break after an address is no split: the next word
+        // would have fit on the line.
+        let forced = first_word_width(geometry, next, rest)
+            .is_some_and(|width| line.natural + width < line.available);
+        // The next line may simply start another address.
+        let fresh = rest.starts_with("www.")
+            || rest.contains("://")
+            || (rest.contains('@') && !token.contains('@'));
         if text.ends_with(char::is_whitespace)
+            || forced
+            || fresh
             || !ends
             || !continues
             || !is_address(token)
