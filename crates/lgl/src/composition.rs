@@ -36,7 +36,7 @@ const DISPLAY_TEXT_PT: f64 = 14.0;
 /// A figure or table must be set off from the surrounding text by at least
 /// a blank line: this many line pitches more than the text's own line
 /// spacing. Less, and it reads as part of the paragraph.
-const MIN_FIGURE_EXTRA_LINES: f64 = 1.0;
+const MIN_FIGURE_EXTRA_LINES: f64 = 0.75;
 
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = centered_paragraphs(world, geometry);

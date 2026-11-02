@@ -1,4 +1,5 @@
 // expect-none
+#show figure: set block(above: 2em, below: 2em)
 #import "@preview/cetz:0.4.2"
 #set page(paper: "a5", margin: 2cm)
 #set text(lang: "en")

@@ -1,4 +1,5 @@
 // expect-none
+#show figure: set block(above: 2em, below: 2em)
 #set document(title: "Quarterly Operations Report")
 #set page(
   paper: "a4",

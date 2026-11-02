@@ -114,6 +114,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L059 tight-cell-padding | table text nearly touching row rules | |
 | L060 double-rule | doubled separators: two rules with nothing between | |
 | L061 tight-box-padding | text crowding the top or bottom of a filled box | |
+| L062 dangling-separator | separator rules at the top or bottom of a column | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

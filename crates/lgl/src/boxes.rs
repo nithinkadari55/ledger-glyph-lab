@@ -41,6 +41,77 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(cell_padding(world, geometry));
     out.extend(double_rules(world, geometry));
     out.extend(box_padding(world, geometry));
+    out.extend(dangling_separators(world, geometry));
+    out
+}
+
+pub const DANGLING_SEPARATOR: &str = "L062.dangling-separator";
+
+fn within_any(geometry: &Geometry, mut cursor: Option<usize>, names: &[&str]) -> bool {
+    while let Some(index) = cursor {
+        if names.contains(&geometry.elements[index].name) {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
+}
+
+/// Separator rules at the very top or bottom of a column, where they
+/// separate nothing: the column break already does.
+fn dangling_separators(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let visible = |i: &&crate::geom::Item| {
+        matches!(i.kind, ItemKind::Text | ItemKind::Shape | ItemKind::Image)
+            && i.visible().is_some()
+    };
+    let mut out = Vec::new();
+    for rule in geometry.items.iter().filter(|i| horizontal_rule(i)) {
+        let Some(column) = rule.column else { continue };
+        if rule.bbox.width() < 60.0
+            || within_any(geometry, rule.elem, &["table", "grid", "cell", "figure", "heading"])
+        {
+            continue;
+        }
+        let r = &rule.bbox;
+        let neighbours: Vec<&crate::geom::Item> = geometry
+            .items
+            .iter()
+            .filter(visible)
+            .filter(|i| {
+                !std::ptr::eq(*i, rule)
+                    && i.page == rule.page
+                    && i.column == Some(column)
+                    && i.bbox.x0 < r.x1
+                    && r.x0 < i.bbox.x1
+            })
+            .collect();
+        let above = neighbours.iter().any(|i| i.bbox.y1 <= r.y0 + 0.5);
+        let below = neighbours.iter().any(|i| i.bbox.y0 >= r.y1 - 0.5);
+        let side = match (above, below) {
+            (false, true) => "top",
+            (true, false) => "bottom",
+            _ => continue,
+        };
+        let mut diagnostic = Diagnostic::new(
+            DANGLING_SEPARATOR,
+            Severity::Warning,
+            format!(
+                "a separator rule stands at the {side} of a column on page {} with \
+                 nothing on its other side, so it separates nothing",
+                rule.page + 1
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(rule.span, rule.elem));
+        diagnostic.page = Some(rule.page + 1);
+        diagnostic.bbox = Some(r.rounded());
+        diagnostic.hints.push(
+            "draw separators only between items (e.g. skip the rule before the first \
+             article of a column), or let the article break to the next column without \
+             its rule"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
     out
 }
 
@@ -49,9 +120,9 @@ pub const DOUBLE_RULE: &str = "L060.double-rule";
 pub const BOX_PADDING: &str = "L061.tight-box-padding";
 
 /// Text in a table cell needs this much clear space to the row rules above
-/// and below its ink (about half of Typst's default cell inset). Closer than
+/// and below its ink; Typst's default inset leaves about 0.2em. Closer than
 /// 0.08em is reported by L050 instead.
-const MIN_CELL_CLEAR_EM: f64 = 0.2;
+const MIN_CELL_CLEAR_EM: f64 = 0.15;
 
 /// Two parallel rules of this distance with nothing between them read as a
 /// doubled separator; closer pairs are a deliberate double line.

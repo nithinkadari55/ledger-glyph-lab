@@ -557,6 +557,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L062.dangling-separator",
+        "warning",
+        "A separator rule stands at the very top or bottom of a column with nothing on \
+         its other side, so it separates nothing (tables, figures and headings are \
+         exempt).",
+        "any",
+        "Draw separators only between items.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -668,6 +678,7 @@ mod tests {
             boxes::CELL_PADDING,
             boxes::DOUBLE_RULE,
             boxes::BOX_PADDING,
+            boxes::DANGLING_SEPARATOR,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

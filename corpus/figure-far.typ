@@ -1,4 +1,5 @@
 // expect: L016.figure-far-from-reference
+#show figure: set block(above: 2em, below: 2em)
 #set page(paper: "a5", margin: 2cm)
 See @chart for the trend.
 

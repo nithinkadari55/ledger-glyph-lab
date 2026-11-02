@@ -1,4 +1,5 @@
 // expect: L005.loose-line
+#show figure: set block(above: 2em, below: 2em)
 // expect: L044.centered-paragraph
 #set page(paper: "a4", margin: (x: 1.8cm, y: 2.2cm), columns: 2)
 #set columns(gutter: 1.2em)

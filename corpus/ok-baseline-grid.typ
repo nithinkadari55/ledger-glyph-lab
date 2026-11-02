@@ -1,4 +1,5 @@
 // expect-none
+#show figure: set block(above: 2em, below: 2em)
 #set page(paper: "a5", margin: 2cm, baseline-grid: 15pt)
 #set par(justify: false)
 #set heading(numbering: "1.")

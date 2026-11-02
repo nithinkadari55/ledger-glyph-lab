@@ -1,4 +1,5 @@
 // expect-none
+#show figure: set block(above: 2em, below: 2em)
 #set page(paper: "us-letter", margin: 1in, numbering: "1")
 #set text(size: 11pt, lang: "en")
 #set par(justify: true)
