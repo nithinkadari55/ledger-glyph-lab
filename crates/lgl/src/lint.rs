@@ -88,7 +88,9 @@ fn check_call(
                 world,
                 node,
                 NO_REFLOW,
-                format!("{name}() without reflow: true does not reserve space for its result"),
+                format!(
+                    "{name}() without reflow: true does not reserve space for its result"
+                ),
                 "add reflow: true so that surrounding content makes room",
             );
             diagnostic.anchor = Some(node.span());

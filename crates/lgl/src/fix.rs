@@ -63,12 +63,14 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     })
                 })
             }
-            NO_REFLOW => call_at(&source, anchor, &["rotate", "scale", "skew"]).and_then(|call| {
-                Some(Fix {
-                    description: "reserve space for the transformed content".into(),
-                    edits: vec![set_named(world, &source, &call, "reflow", "true")?],
+            NO_REFLOW => {
+                call_at(&source, anchor, &["rotate", "scale", "skew"]).and_then(|call| {
+                    Some(Fix {
+                        description: "reserve space for the transformed content".into(),
+                        edits: vec![set_named(world, &source, &call, "reflow", "true")?],
+                    })
                 })
-            }),
+            }
             DISABLED_PROTECTION => protection_fix(world, &source, anchor),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
@@ -134,7 +136,8 @@ fn protection_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix
         return None;
     }
     let parent = node.parent()?;
-    let target = if ast::ShowRule::from_untyped(parent).is_some() { parent } else { &node };
+    let target =
+        if ast::ShowRule::from_untyped(parent).is_some() { parent } else { &node };
     let mut start = target.range().start;
     if let Some(hash) = target.prev_sibling_with_trivia()
         && hash.kind() == SyntaxKind::Hash

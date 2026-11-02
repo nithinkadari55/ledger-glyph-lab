@@ -8,9 +8,9 @@ use typst_library::introspection::{
     Counter, CounterDisplayElem, CounterKey, Introspector, Locator, LocatorLink,
 };
 use typst_library::layout::{
-    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, FrameItem, GridPhase,
-    HAlignment, Length, OuterVAlignment, PageElem, Paper, Point, Probe, Region,
-    RegionKind, RegionProbe, Regions, Rel, Sides, Size, VAlignment,
+    Abs, AlignElem, Alignment, Axes, Binding, ColumnsElem, Dir, Frame, FrameItem,
+    GridPhase, HAlignment, Length, OuterVAlignment, PageElem, Paper, Point, Probe,
+    Region, RegionKind, RegionProbe, Regions, Rel, Sides, Size, VAlignment,
 };
 use typst_library::model::{ArtifactKind, Numbering};
 use typst_library::routines::Pair;

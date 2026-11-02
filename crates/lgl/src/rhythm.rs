@@ -36,7 +36,10 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 }
 
 /// The text items whose middle lies within a line's box.
-fn items_on<'a>(geometry: &'a Geometry, line: &'a Line) -> impl Iterator<Item = &'a Item> {
+fn items_on<'a>(
+    geometry: &'a Geometry,
+    line: &'a Line,
+) -> impl Iterator<Item = &'a Item> {
     geometry.items.iter().filter(move |item| {
         let middle = (item.bbox.y0 + item.bbox.y1) / 2.0;
         item.page == line.page
@@ -68,7 +71,8 @@ fn leading(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         {
             continue;
         }
-        let Some(size) = median(items_on(geometry, a).filter_map(|i| i.font_size).collect())
+        let Some(size) =
+            median(items_on(geometry, a).filter_map(|i| i.font_size).collect())
         else {
             continue;
         };
@@ -152,9 +156,8 @@ fn top_gaps(geometry: &Geometry) -> Vec<Diagnostic> {
             out.measured = Some(round1(offset));
             out.limit = Some(round1(usual + MAX_EXTRA_TOP_PT));
             out.unit = Some("pt");
-            out.hints.push(
-                "remove manual vertical space (v) at the start of the page".into(),
-            );
+            out.hints
+                .push("remove manual vertical space (v) at the start of the page".into());
             out
         })
         .collect()
@@ -173,7 +176,9 @@ fn row_baselines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let [line] = lines.as_slice() else { continue };
         let container = &geometry.containers[*cell];
         let key = (container.page, (container.bbox.y0 * 2.0).round() as i64);
-        rows.entry(key).or_default().push((line.bbox.y0 + line.baseline, line));
+        rows.entry(key)
+            .or_default()
+            .push((line.bbox.y0 + line.baseline, line));
     }
 
     let mut out = Vec::new();
@@ -215,10 +220,16 @@ fn is_number(text: &str) -> bool {
     text.len() >= 3
         && text.starts_with('(')
         && text.ends_with(')')
-        && text[1..text.len() - 1].chars().all(|c| c.is_ascii_digit() || c == '.')
+        && text[1..text.len() - 1]
+            .chars()
+            .all(|c| c.is_ascii_digit() || c == '.')
 }
 
-fn descends_from(geometry: &Geometry, mut cursor: Option<usize>, ancestor: usize) -> bool {
+fn descends_from(
+    geometry: &Geometry,
+    mut cursor: Option<usize>,
+    ancestor: usize,
+) -> bool {
     while let Some(index) = cursor {
         if index == ancestor {
             return true;
@@ -237,7 +248,9 @@ fn equation_numbers(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let items: Vec<&Item> = geometry
             .items
             .iter()
-            .filter(|i| i.kind == ItemKind::Text && descends_from(geometry, i.elem, index))
+            .filter(|i| {
+                i.kind == ItemKind::Text && descends_from(geometry, i.elem, index)
+            })
             .collect();
         let Some(number) = items
             .iter()

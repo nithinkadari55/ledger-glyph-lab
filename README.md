@@ -83,15 +83,34 @@ different and still pass. `lgl rules` prints the full catalog.
 | L028 footnote-on-other-page | footnote marker and text apart | |
 | L029 narrow-column | table columns too narrow to read | |
 | L030 off-baseline-grid | lines off a declared baseline grid | |
+| L031 uneven-line-spacing | one line pushed down by tall inline content | |
+| L032 column-overflow | content running into the gutter or next column | |
+| L033 leading-ratio | line pitch too tight or loose for the font size | |
+| L034 top-gap | a page starting much deeper than the others | |
+| L035 row-baselines | single-line cells of a row on different baselines | |
+| L036 equation-number-gap | equation number touching its equation | |
+| L037 wrapped-code | code lines that wrap | |
+| S001 negative-spacing | source: large negative h()/v() | |
+| S002 absolute-placement | source: place() without float, move() | |
+| S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
+| S004 disabled-protection | source: orphan/widow costs or sticky headings disabled | yes |
 
 Intended overlays such as watermarks are exempt from L006 when labelled
 `<allow-overlap>`.
 
+## Baseline grid
+
+`#set page(baseline-grid: 15pt)` snaps every paragraph line to a grid that
+starts at the top of the text area of each page. The grid phase is carried
+through the layout: below floats, into blocks, quotes, figures and padding (with
+their insets), and across page breaks. Fractional spacing (`v(1fr)`) and
+vertical alignment are rounded to whole grid steps. Choose a pitch at least as
+large as the natural line pitch, or lines skip grid lines (L033 reports this).
+
 ## Known limits
 
-- With a baseline grid, fractional spacing (`v(1fr)`) and bottom alignment can
-  still move lines off the grid; L030 reports such lines. Lines inside lists,
-  tables, figures, quotes and footnotes are not snapped.
+- Lines inside inline boxes, table and grid cells, lists and footnotes are not
+  snapped to the baseline grid; text after them returns to the grid.
 - Element attribution relies on Typst's introspection tags; plain inline text
   without a paragraph is treated as running text.
 

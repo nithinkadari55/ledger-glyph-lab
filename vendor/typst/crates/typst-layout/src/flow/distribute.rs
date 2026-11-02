@@ -385,7 +385,9 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     /// its baseline lands on the next line of the baseline grid. Zero if there
     /// is no grid or the baseline is already on a grid line.
     fn grid_pad(&self, baseline: Abs) -> Abs {
-        self.regions.grid.map_or(Abs::zero(), |grid| grid.pad(self.used.y + baseline))
+        self.regions
+            .grid
+            .map_or(Abs::zero(), |grid| grid.pad(self.used.y + baseline))
     }
 
     /// Processes an unbreakable block.
