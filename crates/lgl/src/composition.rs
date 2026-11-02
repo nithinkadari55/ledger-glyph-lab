@@ -101,7 +101,9 @@ fn unseparated_terms(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         within.sort_by(f64::total_cmp);
         between.sort_by(f64::total_cmp);
         let (pitch, gap) = (within[within.len() / 2], between[between.len() / 2]);
-        let Some(size) = crate::spacing::line_size(geometry, lines[0].1) else { continue };
+        let Some(size) = crate::spacing::line_size(geometry, lines[0].1) else {
+            continue;
+        };
         if gap - pitch >= MIN_ENTRY_GAP_EM * size {
             continue;
         }
@@ -117,8 +119,10 @@ fn unseparated_terms(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 round1(pitch)
             ),
         );
-        diagnostic.loc =
-            diag::resolve_span(world, geometry.span_for(geometry.elements[list].span, Some(list)));
+        diagnostic.loc = diag::resolve_span(
+            world,
+            geometry.span_for(geometry.elements[list].span, Some(list)),
+        );
         diagnostic.page = Some(first.page + 1);
         diagnostic.measured = Some(round1(gap - pitch));
         diagnostic.limit = Some(round1(MIN_ENTRY_GAP_EM * size));
@@ -142,7 +146,9 @@ fn sparse_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     for shape in &shapes {
         let b = &shape.bbox;
         if shape.color.is_some() && b.height() >= 4.0 && b.width() >= 2.0 {
-            rows.entry((shape.page, (b.y1 * 2.0).round() as i64)).or_default().push(shape);
+            rows.entry((shape.page, (b.y1 * 2.0).round() as i64))
+                .or_default()
+                .push(shape);
         }
     }
     let mut out = Vec::new();
@@ -200,7 +206,8 @@ fn sparse_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 round1(width)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(bars[0].span, bars[0].elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(bars[0].span, bars[0].elem));
         diagnostic.page = Some(page + 1);
         diagnostic.bbox = Some(BBox { x0, x1, ..groups[0] }.rounded());
         diagnostic.measured = Some(round1(ratio));

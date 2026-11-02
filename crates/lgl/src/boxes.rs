@@ -75,7 +75,8 @@ fn hollow_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         while let Some(index) = cursor {
             let container = &geometry.containers[index];
             if item.kind != ItemKind::Shape
-                || !(is_frame(&visible, &container.bbox) || is_stripe(&visible, &container.bbox))
+                || !(is_frame(&visible, &container.bbox)
+                    || is_stripe(&visible, &container.bbox))
             {
                 content[index] = Some(match content[index] {
                     Some(existing) => existing.union(&visible),

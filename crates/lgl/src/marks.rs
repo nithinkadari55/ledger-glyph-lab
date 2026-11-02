@@ -96,7 +96,6 @@ fn malformed_numbers(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-
 /// The first HTML entity or Markdown emphasis marker in text, such as
 /// "&nbsp;" or "**bold**", which Typst prints literally.
 fn leaked_markup(text: &str) -> Option<&str> {
