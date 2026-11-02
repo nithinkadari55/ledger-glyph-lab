@@ -89,7 +89,16 @@ struct NumericCell {
     left: f64,
     right: f64,
     item: usize,
+    cell: usize,
     decimals: Option<usize>,
+    unit: String,
+}
+
+/// The unit or currency signs of a number, such as `%` or `£`. Numbers that
+/// share one measure the same quantity, so they share a precision; a column
+/// of bare numbers may list different quantities (a specification table).
+fn unit(text: &str) -> String {
+    text.chars().filter(|c| "%$€£¥".contains(*c)).collect()
 }
 
 /// Digits after the decimal point, or `None` when the text has several points
@@ -146,7 +155,9 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             left,
             right,
             item,
+            cell,
             decimals: decimals(&text),
+            unit: unit(&text),
         });
     }
 
@@ -202,6 +213,9 @@ fn mixed_precision(
     page: usize,
     cells: &[NumericCell],
 ) -> Option<Diagnostic> {
+    if cells[0].unit.is_empty() || cells.iter().any(|c| c.unit != cells[0].unit) {
+        return None;
+    }
     let mut counts: BTreeMap<usize, usize> = BTreeMap::new();
     for decimals in cells.iter().filter_map(|c| c.decimals) {
         *counts.entry(decimals).or_default() += 1;
@@ -224,7 +238,8 @@ fn mixed_precision(
             places.join(" and ")
         ),
     );
-    diagnostic.loc = diag::resolve_span(world, item.span);
+    diagnostic.loc = diag::resolve_span(world, item.span)
+        .or_else(|| diag::resolve_span(world, geometry.containers[odd.cell].span));
     diagnostic.elem = Some("cell".into());
     diagnostic.page = Some(page + 1);
     diagnostic.bbox = Some(column.rounded());
