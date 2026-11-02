@@ -270,9 +270,59 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L031.uneven-line-spacing",
         "warning",
-        "A line in a paragraph sits much further below the previous one than usual, \n         typically because of tall inline content.",
+        "A line in a paragraph sits much further below the previous one than usual, \
+         typically because of tall inline content.",
         "25% above the paragraph's median pitch, plus 1pt",
         "Move tall inline content into a display block, or reduce it.",
+        false,
+    ),
+    rule(
+        "L032.column-overflow",
+        "error",
+        "Content extends beyond its column into the gutter or the next column.",
+        "0.5pt (text: 0.35em)",
+        "Use relative or fractional widths inside columns, or span columns with \
+         place(scope: \"parent\", float: true).",
+        false,
+    ),
+    rule(
+        "L033.leading-ratio",
+        "warning",
+        "Running text lines are too close or too far apart for their font size.",
+        "line pitch / font size within 1.1-1.8 (median)",
+        "Adjust par(leading: ..).",
+        false,
+    ),
+    rule(
+        "L034.top-gap",
+        "warning",
+        "Content on a page starts much deeper than on the other pages.",
+        "12pt deeper than the median page (first page exempt)",
+        "Remove manual vertical space at the start of the page.",
+        false,
+    ),
+    rule(
+        "L035.row-baselines",
+        "warning",
+        "Single-line cells of a table row have different baselines.",
+        "0.5pt",
+        "Use the same text size and vertical alignment within a row.",
+        false,
+    ),
+    rule(
+        "L036.equation-number-gap",
+        "warning",
+        "A display equation's number touches or overlaps the equation.",
+        "0.5em (error when overlapping)",
+        "Split the equation over several lines or shorten it.",
+        false,
+    ),
+    rule(
+        "L037.wrapped-code",
+        "warning",
+        "Lines of a code block are too long and wrap.",
+        "any wrapped line",
+        "Shorten the lines or use a smaller code size.",
         false,
     ),
 ];
@@ -324,11 +374,26 @@ mod tests {
             quality::PAGE_FRAME,
             grid::OFF_GRID,
             typography::UNEVEN_LEADING,
+            rules::COLUMN_OVERFLOW,
+            rhythm::LEADING,
+            rhythm::TOP_GAP,
+            rhythm::ROW_BASELINES,
+            rhythm::EQUATION_NUMBER,
+            rhythm::WRAPPED_CODE,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");
         }
         assert_eq!(used.len(), CATALOG.len(), "catalog lists unused rules");
+    }
+
+    #[test]
+    fn texts_are_single_line() {
+        for rule in CATALOG {
+            for text in [rule.checks, rule.threshold, rule.repair] {
+                assert!(!text.contains('\n'), "{}: {text:?}", rule.id);
+            }
+        }
     }
 
     #[test]

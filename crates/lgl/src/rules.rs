@@ -11,6 +11,7 @@ pub const PAGE_OVERFLOW: &str = "L001.page-overflow";
 pub const CONTAINER_OVERFLOW: &str = "L002.container-overflow";
 pub const MARGIN_INTRUSION: &str = "L003.margin-intrusion";
 pub const MARGINAL_OVERFLOW: &str = "L018.marginal-overflow";
+pub const COLUMN_OVERFLOW: &str = "L032.column-overflow";
 pub const LINE_OVERFLOW: &str = "L004.line-overflow";
 pub const LOOSE_LINE: &str = "L005.loose-line";
 
@@ -41,6 +42,7 @@ pub fn run(
     out.extend(crate::pagecheck::run(world, geometry));
     out.extend(crate::quality::run(world, geometry));
     out.extend(crate::grid::run(world, geometry));
+    out.extend(crate::rhythm::run(world, geometry));
     out
 }
 
@@ -69,6 +71,7 @@ struct Subject {
     tolerance: f64,
     container: Option<usize>,
     region: Option<usize>,
+    column: Option<usize>,
     span: Span,
     elem: Option<String>,
     label: Option<String>,
@@ -112,6 +115,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             tolerance: TOLERANCE_PT,
             container: container.parent,
             region: container.region,
+            column: container.column,
             span: container.span,
             elem: Some(container.kind.to_string()),
             label: container.elem.and_then(|e| geometry.elements[e].label.clone()),
@@ -138,6 +142,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             tolerance,
             container: item.container,
             region: item.region,
+            column: item.column,
             span: item.span,
             elem: element.map(|e| e.name.to_string()),
             label: element.and_then(|e| e.label.clone()),
@@ -192,7 +197,13 @@ fn classify(
     let exceeds_container = container_excess.is_some_and(|e| e.0 > subject.tolerance);
     let exceeds_page = page_excess.0 > TOLERANCE_PT;
     let exceeds_region = region_excess.is_some_and(|e| e.0 > subject.tolerance);
-    if !exceeds_container && !exceeds_page && !exceeds_region {
+    let column_excess = subject.column.map(|c| {
+        let column = &geometry.columns[c].bbox;
+        let (left, right) = (column.x0 - subject.bbox.x0, subject.bbox.x1 - column.x1);
+        if left > right { (left, "left") } else { (right, "right") }
+    });
+    let exceeds_column = column_excess.is_some_and(|e| e.0 > subject.tolerance);
+    if !exceeds_container && !exceeds_page && !exceeds_region && !exceeds_column {
         return None;
     }
 
@@ -210,6 +221,9 @@ fn classify(
     }
     if exceeds_page {
         return Some((PAGE_OVERFLOW, Anchor::Span(subject.span), page_excess));
+    }
+    if exceeds_column {
+        return Some((COLUMN_OVERFLOW, Anchor::Span(subject.span), column_excess?));
     }
     let rule = if geometry.is_body(subject.region) {
         MARGIN_INTRUSION
@@ -326,6 +340,19 @@ fn to_diagnostic(
                 }
                 _ => "let the content break across pages, or reduce its height",
             },
+            finding.span,
+            finding.elem,
+        ),
+        (COLUMN_OVERFLOW, _) => (
+            Severity::Error,
+            format!(
+                "content extends {amount}pt beyond the {} edge of its column on page \
+                 {page}, into the gutter or the next column",
+                finding.side
+            ),
+            "keep the content within the column width: use relative (%) or \
+             fractional (fr) sizes, let it wrap, or place it across columns with \
+             place(scope: \"parent\", float: true)",
             finding.span,
             finding.elem,
         ),

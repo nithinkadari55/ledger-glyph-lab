@@ -7,6 +7,7 @@ pub mod overlap;
 pub mod pagecheck;
 pub mod quality;
 pub mod resources;
+pub mod rhythm;
 pub mod rules;
 pub mod spacing;
 pub mod structure;

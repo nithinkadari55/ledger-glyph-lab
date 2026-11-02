@@ -11,7 +11,8 @@ use typst_library::introspection::{
 };
 use typst_library::layout::{
     Abs, Axes, Dir, FixedAlignment, Fragment, Frame, FrameItem, FrameParent, Inherit,
-    OuterHAlignment, PlacementScope, Point, Region, Regions, Rel, Size,
+    OuterHAlignment, PlacementScope, Point, Probe, Region, RegionKind, RegionProbe,
+    Regions, Rel, Size,
 };
 use typst_library::model::ArtifactKind;
 use typst_library::model::{
@@ -262,7 +263,7 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
         // Lay out the columns and stitch them together.
         for i in 0..self.config.columns.count {
             self.column = i;
-            let (frame, used_height, column_separator_height) =
+            let (mut frame, used_height, column_separator_height) =
                 self.column(locator.next(&()), inner)?;
             total_used_height += used_height;
 
@@ -313,6 +314,17 @@ impl<'a, 'b> Composer<'a, 'b, '_, '_> {
             // the baseline of the column that region is in.
             if i == 0 && frame.has_baseline() {
                 output.set_baseline(frame.baseline());
+            }
+
+            if self.engine.library.probes && !frame.is_empty() {
+                let probe = RegionProbe {
+                    kind: RegionKind::Column,
+                    size: frame.size(),
+                    last_in_run: false,
+                    grid: None,
+                };
+                frame.prepend(Point::zero(), FrameItem::Probe(Probe::RegionStart(probe)));
+                frame.push(Point::zero(), FrameItem::Probe(Probe::RegionEnd));
             }
 
             output.push_frame(Point::with_x(x), frame);

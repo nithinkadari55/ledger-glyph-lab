@@ -181,7 +181,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 }
 
 /// The nearest enclosing table or grid cell.
-fn enclosing_cell(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
+pub fn enclosing_cell(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
     while let Some(index) = cursor {
         if geometry.containers[index].kind == "cell" {
             return Some(index);

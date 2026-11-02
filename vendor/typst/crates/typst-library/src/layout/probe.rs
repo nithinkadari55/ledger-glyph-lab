@@ -84,6 +84,8 @@ pub enum RegionKind {
     Background,
     /// The page foreground, including bleed.
     Foreground,
+    /// One column of a multi-column flow.
+    Column,
 }
 
 /// Facts about a committed paragraph line.

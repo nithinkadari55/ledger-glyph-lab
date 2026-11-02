@@ -131,6 +131,8 @@ pub struct Item {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f64>,
@@ -179,6 +181,8 @@ pub struct Container {
     pub bbox: BBox,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub region: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
     pub clip: bool,
     pub sized: bool,
     pub visible: bool,
@@ -250,6 +254,7 @@ pub struct Geometry {
     pub elements: Vec<Element>,
     pub containers: Vec<Container>,
     pub regions: Vec<Region>,
+    pub columns: Vec<Region>,
     pub lines: Vec<Line>,
     pub items: Vec<Item>,
 }
@@ -281,6 +286,8 @@ pub fn extract(document: &PagedDocument) -> Geometry {
         walker.containers.clear();
         walker.regions.clear();
         walker.isolation.clear();
+        walker.columns.clear();
+        walker.region_kinds.clear();
         walker.frame(&page.frame, Transform::identity(), None);
     }
     walker.finish()
@@ -297,6 +304,10 @@ struct Walker {
     /// region is a separate content tree (header, footer, background or
     /// foreground) that must not inherit elements open in the page body.
     isolation: Vec<Option<usize>>,
+    /// The open columns of multi-column flows.
+    columns: Vec<usize>,
+    /// For each open region probe, whether it is a column.
+    region_kinds: Vec<bool>,
     by_location: HashMap<Location, usize>,
 }
 
@@ -331,11 +342,18 @@ impl Walker {
                         }
                         None => clip,
                     };
-                    let depth = (self.containers.len(), self.regions.len());
+                    let depth = (
+                        self.containers.len(),
+                        self.regions.len(),
+                        self.columns.len(),
+                        self.region_kinds.len(),
+                    );
                     self.frame(&group.frame, group_ts, group_clip);
                     self.containers.truncate(depth.0);
                     self.regions.truncate(depth.1);
                     self.isolation.truncate(depth.1);
+                    self.columns.truncate(depth.2);
+                    self.region_kinds.truncate(depth.3);
                 }
                 FrameItem::Text(text) => {
                     let span = text
@@ -419,6 +437,7 @@ impl Walker {
                     page: self.page,
                     bbox,
                     region: self.regions.last().copied(),
+                    column: self.columns.last().copied(),
                     clip: container.clip,
                     sized: container.sized,
                     visible: container.visible,
@@ -433,6 +452,20 @@ impl Walker {
             }
             Probe::RegionStart(region) => {
                 let Some(bbox) = BBox::sized(region.size, ts) else { return };
+                if region.kind == RegionKind::Column {
+                    let index = self.geometry.columns.len();
+                    self.geometry.columns.push(Region {
+                        kind: "column",
+                        page: self.page,
+                        bbox,
+                        last_in_run: false,
+                        grid: None,
+                    });
+                    self.columns.push(index);
+                    self.region_kinds.push(true);
+                    return;
+                }
+                self.region_kinds.push(false);
                 let index = self.geometry.regions.len();
                 self.geometry.regions.push(Region {
                     kind: match region.kind {
@@ -441,6 +474,7 @@ impl Walker {
                         RegionKind::Footer => "footer",
                         RegionKind::Background => "background",
                         RegionKind::Foreground => "foreground",
+                        RegionKind::Column => unreachable!(),
                     },
                     page: self.page,
                     bbox,
@@ -452,6 +486,10 @@ impl Walker {
                 self.isolation.push(isolated.then_some(self.open.len()));
             }
             Probe::RegionEnd => {
+                if self.region_kinds.pop() == Some(true) {
+                    self.columns.pop();
+                    return;
+                }
                 self.regions.pop();
                 if let Some(Some(base)) = self.isolation.pop() {
                     self.open.truncate(base);
@@ -528,6 +566,7 @@ impl Walker {
             elem: self.current(),
             container: self.containers.last().copied(),
             region: self.regions.last().copied(),
+            column: self.columns.last().copied(),
             text,
             font_size,
             missing: None,

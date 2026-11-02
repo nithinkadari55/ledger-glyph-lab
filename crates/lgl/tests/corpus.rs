@@ -49,6 +49,11 @@ fn corpus() {
 
         let world = LabWorld::new(path, &options).expect("world");
         let first = lgl::check(&world, true);
+        for d in &first.diagnostics {
+            if d.message.contains('\n') || d.hints.iter().any(|h| h.contains('\n')) {
+                failures.push(format!("{name}: {} has a line break in its text", d.rule));
+            }
+        }
         let actual: BTreeSet<String> =
             first.diagnostics.iter().map(|d| d.rule.clone()).collect();
         if actual != expected {
