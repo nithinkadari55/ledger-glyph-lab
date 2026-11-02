@@ -1,4 +1,5 @@
 // expect: L014.stranded-heading
+// expect: S004.disabled-protection
 #set page(paper: "a4", margin: 2cm, columns: 2)
 #set text(size: 10pt)
 #set par(justify: false)

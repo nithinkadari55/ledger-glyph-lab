@@ -29,7 +29,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         // Watermarks and other page decorations are faint on purpose.
         if item.region.is_some_and(|r| {
             matches!(geometry.regions[r].kind, "background" | "foreground")
-        }) {
+        }) || overlay(geometry, item.elem)
+        {
             continue;
         }
         let (Some(color), Some(bbox)) = (item.color, item.visible()) else { continue };
@@ -68,6 +69,17 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         out.push(diagnostic);
     }
     out
+}
+
+/// Whether the content is labelled as an intended overlay.
+fn overlay(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].label.as_deref() == Some(crate::overlap::ALLOW_OVERLAP) {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
 }
 
 /// The colour painted beneath a text item: the topmost solid fill covering
