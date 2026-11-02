@@ -30,6 +30,110 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(number_alignment(world, geometry));
     out.extend(footnote_pages(world, geometry));
     out.extend(narrow_columns(world, geometry));
+    out.extend(ragged_columns(world, geometry));
+    out
+}
+
+pub const RAGGED_COLUMN: &str = "L048.ragged-column";
+
+/// How far the left and the right edges of a text column's cells may both
+/// wander before the column has no straight edge at all (centred text of
+/// different lengths, or mixed alignments).
+const MAX_RAGGED_SPREAD_PT: f64 = 6.0;
+
+/// Text cells, below the header, needed before a column is judged.
+const MIN_TEXT_CELLS: usize = 3;
+
+/// A text cell and the gaps between its edges and its ink.
+struct TextCell {
+    top: f64,
+    left: f64,
+    right: f64,
+    item: usize,
+}
+
+fn spread(values: impl Iterator<Item = f64> + Clone) -> f64 {
+    values.clone().fold(f64::NEG_INFINITY, f64::max) - values.fold(f64::INFINITY, f64::min)
+}
+
+/// Table columns of text whose cells share neither a left nor a right edge.
+fn ragged_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut cells: BTreeMap<usize, (String, f64, f64, usize)> = BTreeMap::new();
+    for (index, item) in geometry.items.iter().enumerate() {
+        if item.kind != ItemKind::Text {
+            continue;
+        }
+        let Some(cell) = enclosing_cell(geometry, item.container) else { continue };
+        let entry = cells.entry(cell).or_insert((
+            String::new(),
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            index,
+        ));
+        entry.0.push_str(item.text.as_deref().unwrap_or_default());
+        entry.1 = entry.1.min(item.bbox.x0);
+        entry.2 = entry.2.max(item.bbox.x1);
+    }
+
+    // Left and right gaps between each text cell and its ink, per column.
+    let mut columns: BTreeMap<(usize, i64, i64), Vec<TextCell>> = BTreeMap::new();
+    for (cell, (text, left, right, item)) in cells {
+        if text.trim().is_empty() || is_numeric(&text) {
+            continue;
+        }
+        let container = &geometry.containers[cell];
+        let key = (
+            container.page,
+            (container.bbox.x0 * 2.0).round() as i64,
+            (container.bbox.x1 * 2.0).round() as i64,
+        );
+        columns.entry(key).or_default().push(TextCell {
+            top: container.bbox.y0,
+            left: left - container.bbox.x0,
+            right: container.bbox.x1 - right,
+            item,
+        });
+    }
+
+    let mut out = Vec::new();
+    for ((page, _, _), mut column) in columns {
+        // The topmost cell is usually a header, which may be set apart.
+        column.sort_by(|a, b| a.top.total_cmp(&b.top));
+        let body = &column[1.min(column.len())..];
+        if body.len() < MIN_TEXT_CELLS {
+            continue;
+        }
+        let left = spread(body.iter().map(|c| c.left));
+        let right = spread(body.iter().map(|c| c.right));
+        if left < MAX_RAGGED_SPREAD_PT || right < MAX_RAGGED_SPREAD_PT {
+            continue;
+        }
+        let first = &geometry.items[body[0].item];
+        let mut diagnostic = Diagnostic::new(
+            RAGGED_COLUMN,
+            Severity::Warning,
+            format!(
+                "a table column of text on page {} has no straight edge: its cells start \
+                 {}pt apart and end {}pt apart, as happens when text of different lengths \
+                 is centred",
+                page + 1,
+                round1(left),
+                round1(right)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, first.span);
+        diagnostic.elem = Some("cell".into());
+        diagnostic.page = Some(page + 1);
+        diagnostic.measured = Some(round1(left.min(right)));
+        diagnostic.limit = Some(MAX_RAGGED_SPREAD_PT);
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "align text columns left (and numeric columns right), e.g. table(align: \
+             (left, left, right)); start numbered labels at a common left edge"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
     out
 }
 

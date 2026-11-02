@@ -421,6 +421,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L048.ragged-column",
+        "warning",
+        "A table column of text has no straight edge: below the header, its cells \
+         neither start nor end at a common position, as with centred text of different \
+         lengths or numbered labels whose numbers do not line up.",
+        "6pt spread of both edges, 3 text cells",
+        "Align text columns left and numeric columns right.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -518,6 +528,7 @@ mod tests {
             composition::FIGURE_SPACING,
             composition::LOPSIDED_COLUMNS,
             contrast::LOW_CONTRAST,
+            structure::RAGGED_COLUMN,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
