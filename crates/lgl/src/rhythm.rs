@@ -408,7 +408,7 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             diagnostic.limit = Some(round1(MIN_CLEARANCE_EM * size));
             diagnostic.unit = Some("pt");
             diagnostic.hints.push(
-                "give large text more leading (set par(leading: ..) in the large text\x27s \
+                "give large text more leading (set par(leading: ..) in the large text's \
                  own size, e.g. inside text(size: ..)[..]) or more space between the \
                  blocks"
                     .into(),

@@ -326,6 +326,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L038.cramped-lines",
+        "error",
+        "The ink of a line nearly touches the line below it (too little leading, or too \
+         little space around a title or heading).",
+        "clear space of 0.1em of the larger text size",
+        "Give large text more leading in its own size, or more space between blocks.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -413,6 +422,7 @@ mod tests {
             rhythm::ROW_BASELINES,
             rhythm::EQUATION_NUMBER,
             rhythm::WRAPPED_CODE,
+            rhythm::CRAMPED,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
