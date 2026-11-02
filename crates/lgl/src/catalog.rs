@@ -401,6 +401,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L046.lopsided-columns",
+        "warning",
+        "A table's column widths are badly distributed: one column wraps its cells into \
+         many lines while a neighbouring column stays on one line and is mostly empty.",
+        "3 lines against a single line under 60% full with 40pt to spare, in 2 rows",
+        "Give the wrapping column a larger share and let short columns size to content.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -496,6 +505,7 @@ mod tests {
             pagecheck::EMPTY_COLUMN,
             composition::CENTERED_PARAGRAPH,
             composition::FIGURE_SPACING,
+            composition::LOPSIDED_COLUMNS,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

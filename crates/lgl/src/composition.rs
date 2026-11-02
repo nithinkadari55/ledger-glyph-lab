@@ -1,11 +1,24 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{Geometry, ItemKind, Line, round1};
+use crate::structure::enclosing_cell;
 use crate::world::LabWorld;
 
 pub const CENTERED_PARAGRAPH: &str = "L044.centered-paragraph";
 pub const FIGURE_SPACING: &str = "L045.figure-too-close";
+pub const LOPSIDED_COLUMNS: &str = "L046.lopsided-columns";
+
+/// A cell wrapping into this many lines is cramped when a neighbour has room.
+const CRAMPED_CELL_LINES: usize = 3;
+
+/// A single-line neighbour filled less than this, with at least
+/// `MIN_SLACK_PT` to spare, could give width away.
+const MAX_ROOMY_FILL: f64 = 0.6;
+const MIN_SLACK_PT: f64 = 40.0;
+
+/// Rows that must show the pattern before the table is reported.
+const MIN_LOPSIDED_ROWS: usize = 2;
 
 /// A measure at least this share of the text area is wide; centred text that
 /// wraps across it is hard to read. Convention.
@@ -28,7 +41,92 @@ const MIN_FIGURE_EXTRA_EM: f64 = 0.3;
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = centered_paragraphs(world, geometry);
     out.extend(figure_spacing(world, geometry));
+    out.extend(lopsided_columns(world, geometry));
     out
+}
+
+/// Tables whose column widths are badly distributed: one column wraps every
+/// cell into many lines while a neighbouring column stays on one line and is
+/// mostly empty.
+fn lopsided_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut per_cell: BTreeMap<usize, Vec<&Line>> = BTreeMap::new();
+    for line in &geometry.lines {
+        if line.container.is_some_and(|c| geometry.containers[c].kind == "box") {
+            continue;
+        }
+        if let Some(cell) = enclosing_cell(geometry, line.container) {
+            per_cell.entry(cell).or_default().push(line);
+        }
+    }
+
+    let mut rows: BTreeMap<(usize, i64), Vec<(usize, &Vec<&Line>)>> = BTreeMap::new();
+    for (cell, lines) in &per_cell {
+        let container = &geometry.containers[*cell];
+        rows.entry((container.page, (container.bbox.y0 * 2.0).round() as i64))
+            .or_default()
+            .push((*cell, lines));
+    }
+
+    // (page, cramped column, roomy column) -> (rows, most lines, cramped cell, fill)
+    let mut pairs: BTreeMap<(usize, i64, i64), (usize, usize, usize, f64)> = BTreeMap::new();
+    for ((page, _), cells) in &rows {
+        for (cramped, cramped_lines) in cells {
+            if cramped_lines.len() < CRAMPED_CELL_LINES {
+                continue;
+            }
+            for (roomy, roomy_lines) in cells {
+                let [line] = roomy_lines.as_slice() else { continue };
+                if roomy == cramped || line.available <= 0.0 {
+                    continue;
+                }
+                let fill = line.natural / line.available;
+                if fill >= MAX_ROOMY_FILL || line.available - line.natural < MIN_SLACK_PT {
+                    continue;
+                }
+                let key = (
+                    *page,
+                    geometry.containers[*cramped].bbox.x0.round() as i64,
+                    geometry.containers[*roomy].bbox.x0.round() as i64,
+                );
+                let entry = pairs.entry(key).or_insert((0, 0, *cramped, fill));
+                entry.0 += 1;
+                entry.1 = entry.1.max(cramped_lines.len());
+                entry.3 = entry.3.max(fill);
+            }
+        }
+    }
+
+    pairs
+        .into_iter()
+        .filter(|(_, (rows, ..))| *rows >= MIN_LOPSIDED_ROWS)
+        .map(|((page, _, _), (rows, most, cell, fill))| {
+            let container = &geometry.containers[cell];
+            let mut diagnostic = Diagnostic::new(
+                LOPSIDED_COLUMNS,
+                Severity::Warning,
+                format!(
+                    "a table on page {} wraps one column into up to {most} lines in {rows} \
+                     rows while a neighbouring column stays on one line and is at most {}% \
+                     full",
+                    page + 1,
+                    (fill * 100.0).round()
+                ),
+            );
+            diagnostic.loc = diag::resolve_span(world, container.span);
+            diagnostic.elem = Some("cell".into());
+            diagnostic.page = Some(page + 1);
+            diagnostic.bbox = Some(container.bbox.rounded());
+            diagnostic.measured = Some(most as f64);
+            diagnostic.limit = Some(CRAMPED_CELL_LINES as f64);
+            diagnostic.unit = Some("lines");
+            diagnostic.hints.push(
+                "rebalance the column widths: give the wrapping column a larger share (for \
+                 example 2fr) and let short columns size to their content (auto)"
+                    .into(),
+            );
+            diagnostic
+        })
+        .collect()
 }
 
 struct Ink {
@@ -206,12 +304,15 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if let Some(line) = before {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
                 let pitch = pitch(geometry, line).unwrap_or(1.3 * size);
-                let extra = match inner.first().filter(|f| f.bbox.y0 <= frame.y0 + 0.5 * size) {
-                    Some(first) => first.bbox.y1 - line.bbox.y1 - pitch,
-                    None => frame.y0 - line.bbox.y1 - 0.25 * size,
-                };
+                let extra =
+                    match inner.first().filter(|f| f.bbox.y0 <= frame.y0 + 0.5 * size) {
+                        Some(first) => first.bbox.y1 - line.bbox.y1 - pitch,
+                        None => frame.y0 - line.bbox.y1 - 0.25 * size,
+                    };
                 if extra < MIN_FIGURE_EXTRA_EM * size && extra > -size {
-                    out.push(spacing_diagnostic(world, geometry, index, page, "above", extra, size));
+                    out.push(spacing_diagnostic(
+                        world, geometry, index, page, "above", extra, size,
+                    ));
                 }
             }
 
@@ -222,12 +323,15 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if let Some(line) = after {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
                 let pitch = pitch(geometry, line).unwrap_or(1.3 * size);
-                let extra = match inner.last().filter(|l| l.bbox.y1 >= frame.y1 - 0.5 * size) {
-                    Some(last) => line.bbox.y1 - last.bbox.y1 - pitch,
-                    None => line.bbox.y0 - frame.y1,
-                };
+                let extra =
+                    match inner.last().filter(|l| l.bbox.y1 >= frame.y1 - 0.5 * size) {
+                        Some(last) => line.bbox.y1 - last.bbox.y1 - pitch,
+                        None => line.bbox.y0 - frame.y1,
+                    };
                 if extra < MIN_FIGURE_EXTRA_EM * size && extra > -size {
-                    out.push(spacing_diagnostic(world, geometry, index, page, "below", extra, size));
+                    out.push(spacing_diagnostic(
+                        world, geometry, index, page, "below", extra, size,
+                    ));
                 }
             }
         }

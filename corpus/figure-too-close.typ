@@ -1,7 +1,7 @@
 // expect: L045.figure-too-close
 #set page(paper: "a4", margin: 2cm)
 #set text(size: 10pt)
-#show figure: set block(above: 0.2em, below: 0.2em)
+#show figure: set block(above: 0.6em, below: 0.6em)
 #show figure.where(kind: table): set figure.caption(position: top)
 The reference value was computed to machine precision with Newton's method.
 Table 1 lists the objective gap after ten, one hundred and one thousand
