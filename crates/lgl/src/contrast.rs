@@ -22,7 +22,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for (index, item) in geometry.items.iter().enumerate() {
         if item.kind != ItemKind::Text
-            || item.text.as_deref().is_none_or(|t| t.trim().is_empty())
+            || item.text.as_deref().is_none_or(|t| !t.chars().any(char::is_alphanumeric))
         {
             continue;
         }
