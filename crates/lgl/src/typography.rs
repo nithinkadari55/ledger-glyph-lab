@@ -19,7 +19,44 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     }
     stranded_headings(world, geometry, &mut out);
     out.extend(uneven_leading(world, geometry));
+    out.extend(hyphenated_display(world, geometry));
     out
+}
+
+pub const HYPHENATED_DISPLAY: &str = "L042.hyphenated-display-text";
+
+/// Text at least this large is display text (titles, headings, pull quotes),
+/// which is not hyphenated. Convention.
+const DISPLAY_TEXT_PT: f64 = 14.0;
+
+fn hyphenated_display(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    geometry
+        .lines
+        .iter()
+        .filter(|line| line.hyphenated)
+        .filter_map(|line| {
+            let size = crate::spacing::line_size(geometry, line)?;
+            (size >= DISPLAY_TEXT_PT).then(|| {
+                let mut diagnostic = line_diagnostic(
+                    world,
+                    HYPHENATED_DISPLAY,
+                    line,
+                    format!(
+                        "display text set at {}pt is hyphenated on page {}",
+                        round1(size),
+                        line.page + 1
+                    ),
+                    "turn hyphenation off for titles, headings and quotes (set \
+                     text(hyphenate: false) in their show rule) and break the line by \
+                     wording or width instead",
+                );
+                diagnostic.measured = Some(round1(size));
+                diagnostic.limit = Some(DISPLAY_TEXT_PT);
+                diagnostic.unit = Some("pt");
+                diagnostic
+            })
+        })
+        .collect()
 }
 
 /// The lines of each paragraph in document order. Lines that do not belong to

@@ -93,6 +93,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L038 cramped-lines | lines whose ink nearly touches the line below | |
 | L039 hollow-box | framed boxes much taller than their content, empty continuations | |
 | L040 touching-cells | text in neighbouring cells that touches | |
+| L041 mixed-precision | numbers in a column with different decimal places | |
+| L042 hyphenated-display-text | hyphenated titles, headings, pull quotes | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

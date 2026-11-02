@@ -357,6 +357,23 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L041.mixed-precision",
+        "warning",
+        "Numbers in one table column use different numbers of decimal places (23% next \
+         to 29.9%), so their decimal points do not line up.",
+        "3 numeric cells, any difference",
+        "Write every number in the column with the same number of decimal places.",
+        false,
+    ),
+    rule(
+        "L042.hyphenated-display-text",
+        "warning",
+        "A line of display text (title, heading, pull quote) ends with a hyphen.",
+        "14pt text",
+        "Turn hyphenation off for display text and break lines by wording or width.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -447,6 +464,8 @@ mod tests {
             rhythm::CRAMPED,
             boxes::HOLLOW_BOX,
             boxes::TOUCHING_CELLS,
+            structure::MIXED_PRECISION,
+            typography::HYPHENATED_DISPLAY,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

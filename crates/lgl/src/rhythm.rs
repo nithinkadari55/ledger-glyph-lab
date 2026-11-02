@@ -167,6 +167,11 @@ fn top_gaps(geometry: &Geometry) -> Vec<Diagnostic> {
 fn row_baselines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut lines_per_cell: BTreeMap<usize, Vec<&Line>> = BTreeMap::new();
     for line in &geometry.lines {
+        // An inline box (such as a code chip) lays out its own line inside
+        // the line of the cell; only the cell's own lines set its baseline.
+        if line.container.is_some_and(|c| geometry.containers[c].kind == "box") {
+            continue;
+        }
         if let Some(cell) = enclosing_cell(geometry, line.container) {
             lines_per_cell.entry(cell).or_default().push(line);
         }

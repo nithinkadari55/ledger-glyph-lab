@@ -106,7 +106,7 @@ fn owner(geometry: &Geometry, elem: Option<usize>) -> Option<(&'static str, usiz
 
 /// The largest text size on a line. Paragraphs set in different sizes play
 /// different roles (a title is not body text), so their spacing differs.
-fn line_size(geometry: &Geometry, line: &crate::geom::Line) -> Option<f64> {
+pub fn line_size(geometry: &Geometry, line: &crate::geom::Line) -> Option<f64> {
     geometry
         .items
         .iter()

@@ -8,6 +8,7 @@ pub const FIGURE_DISTANCE: &str = "L016.figure-far-from-reference";
 pub const NUMBER_ALIGNMENT: &str = "L017.misaligned-numbers";
 pub const FOOTNOTE_PAGE: &str = "L028.footnote-on-other-page";
 pub const NARROW_COLUMN: &str = "L029.narrow-column";
+pub const MIXED_PRECISION: &str = "L041.mixed-precision";
 
 /// A table column narrower than this, whose text wraps into many lines, is too
 /// narrow to read. Convention.
@@ -88,6 +89,19 @@ struct NumericCell {
     left: f64,
     right: f64,
     item: usize,
+    decimals: Option<usize>,
+}
+
+/// Digits after the decimal point, or `None` when the text has several points
+/// (a version or an address rather than a decimal number).
+fn decimals(text: &str) -> Option<usize> {
+    let mut parts = text.split('.');
+    parts.next()?;
+    let Some(fraction) = parts.next() else { return Some(0) };
+    if parts.next().is_some() {
+        return None;
+    }
+    Some(fraction.chars().take_while(|c| c.is_ascii_digit()).count())
 }
 
 fn is_numeric(text: &str) -> bool {
@@ -132,6 +146,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             left,
             right,
             item,
+            decimals: decimals(&text),
         });
     }
 
@@ -140,6 +155,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if cells.len() < MIN_NUMERIC_CELLS {
             continue;
         }
+        out.extend(mixed_precision(world, geometry, page, &cells));
         let spread = |f: fn(&NumericCell) -> f64| {
             let values = cells.iter().map(f);
             values.clone().fold(f64::NEG_INFINITY, f64::max)
@@ -178,6 +194,44 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         out.push(diagnostic);
     }
     out
+}
+
+fn mixed_precision(
+    world: &LabWorld,
+    geometry: &Geometry,
+    page: usize,
+    cells: &[NumericCell],
+) -> Option<Diagnostic> {
+    let mut counts: BTreeMap<usize, usize> = BTreeMap::new();
+    for decimals in cells.iter().filter_map(|c| c.decimals) {
+        *counts.entry(decimals).or_default() += 1;
+    }
+    if counts.len() < 2 {
+        return None;
+    }
+    let (common, _) = counts.iter().max_by_key(|(_, n)| **n)?;
+    let odd = cells.iter().find(|c| c.decimals != Some(*common))?;
+    let column = cells.iter().fold(cells[0].bbox, |acc, c| acc.union(&c.bbox));
+    let item = &geometry.items[odd.item];
+    let places: Vec<String> = counts.keys().map(|d| d.to_string()).collect();
+    let mut diagnostic = Diagnostic::new(
+        MIXED_PRECISION,
+        Severity::Warning,
+        format!(
+            "numbers in a table column on page {} use {} decimal places, so their \
+             decimal points do not line up",
+            page + 1,
+            places.join(" and ")
+        ),
+    );
+    diagnostic.loc = diag::resolve_span(world, item.span);
+    diagnostic.elem = Some("cell".into());
+    diagnostic.page = Some(page + 1);
+    diagnostic.bbox = Some(column.rounded());
+    diagnostic.hints.push(format!(
+        "write every number in the column with {common} decimal place(s)"
+    ));
+    Some(diagnostic)
 }
 
 /// The nearest enclosing table or grid cell.
