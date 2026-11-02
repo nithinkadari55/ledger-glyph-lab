@@ -111,12 +111,26 @@ fn decorated(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
     false
 }
 
+fn in_equation(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].name == "equation" {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
+}
+
 /// Thin lines (rules, ticks, gridlines) that run through text.
 fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let mut reported = std::collections::BTreeSet::new();
     for (index, shape) in geometry.items.iter().enumerate() {
-        if shape.kind != ItemKind::Shape || decorated(geometry, shape.elem) {
+        // Fraction bars and radicals are placed by the math font.
+        if shape.kind != ItemKind::Shape
+            || decorated(geometry, shape.elem)
+            || in_equation(geometry, shape.elem)
+        {
             continue;
         }
         let Some(line) = shape.visible() else { continue };
