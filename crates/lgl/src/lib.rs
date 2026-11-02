@@ -113,14 +113,9 @@ pub fn syntax(world: &LabWorld) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// The font families available to documents: the embedded fonts plus any in
-/// `font_dirs`, sorted by name.
+/// The font families available to documents, sorted by name.
 pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<String> {
-    let mut fonts = typst_kit::fonts::FontStore::new();
-    fonts.extend(typst_kit::fonts::embedded());
-    for dir in font_dirs {
-        fonts.extend(typst_kit::fonts::scan(dir));
-    }
+    let fonts = world::font_store(font_dirs);
     let mut families: Vec<String> =
         fonts.book().families().map(|(name, _)| name.to_string()).collect();
     families.sort();

@@ -16,6 +16,25 @@ use typst_kit::packages::{FsPackages, SystemPackages, UniversePackages};
 
 const USER_AGENT: &str = concat!("lgl/", env!("CARGO_PKG_VERSION"));
 
+include!(concat!(env!("OUT_DIR"), "/bundled_fonts.rs"));
+
+/// The fonts available to documents: Typst's embedded fonts, the families
+/// bundled with lgl (see `fonts/`), and any fonts in `dirs`.
+pub fn font_store(dirs: &[PathBuf]) -> FontStore {
+    let mut fonts = FontStore::new();
+    fonts.extend(typst_kit::fonts::embedded());
+    fonts.extend(BUNDLED_FONTS.iter().flat_map(|data| {
+        Font::iter(Bytes::new(*data)).map(|font| {
+            let info = font.info().clone();
+            (font, info)
+        })
+    }));
+    for dir in dirs {
+        fonts.extend(typst_kit::fonts::scan(dir));
+    }
+    fonts
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct WorldOptions {
     pub root: Option<PathBuf>,
@@ -55,11 +74,7 @@ impl LabWorld {
             .map_err(|_| WorldError::InputOutsideRoot)?;
         let main = RootedPath::new(VirtualRoot::Project, vpath).intern();
 
-        let mut fonts = FontStore::new();
-        fonts.extend(typst_kit::fonts::embedded());
-        for dir in &options.font_dirs {
-            fonts.extend(typst_kit::fonts::scan(dir));
-        }
+        let fonts = font_store(&options.font_dirs);
 
         let packages = SystemPackages::from_parts(
             options
