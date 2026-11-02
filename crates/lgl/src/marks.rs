@@ -56,11 +56,15 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for pair in geometry.lines.windows(2) {
         let (line, next) = (&pair[0], &pair[1]);
+        // Consecutive lines of one text block; their innermost elements may
+        // differ, as when the second line starts inside a link.
+        let step = next.bbox.y1 - line.bbox.y1;
         if line.page != next.page
             || line.container != next.container
-            || line.elem != next.elem
+            || (line.bbox.x0 - next.bbox.x0).abs() > 1.0
             || line.hyphenated
-            || next.bbox.y1 <= line.bbox.y1
+            || step <= 0.0
+            || step > 2.5 * line.bbox.height()
         {
             continue;
         }
