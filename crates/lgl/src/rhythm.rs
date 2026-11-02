@@ -32,6 +32,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(row_baselines(world, geometry));
     out.extend(equation_numbers(world, geometry));
     out.extend(wrapped_code(world, geometry));
+    out.extend(cramped_lines(world, geometry));
     out
 }
 
@@ -347,4 +348,73 @@ fn wrapped_code(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             out
         })
         .collect()
+}
+
+pub const CRAMPED: &str = "L038.cramped-lines";
+
+/// The smallest clear space between the ink of a line and the ink of the line
+/// below it, relative to the larger of their text sizes. Below this, lines
+/// look like they touch.
+const MIN_CLEARANCE_EM: f64 = 0.1;
+
+/// Consecutive lines of text whose ink nearly touches: too little leading, or
+/// too little space between a heading or title and the text around it.
+pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut by_page: BTreeMap<usize, Vec<(&Line, BBox, f64)>> = BTreeMap::new();
+    for line in &geometry.lines {
+        let ink = items_on(geometry, line)
+            .filter_map(|item| Some((item.visible()?, item.font_size?)))
+            .fold(None, |acc: Option<(BBox, f64)>, (bbox, size)| match acc {
+                Some((a, s)) => Some((a.union(&bbox), s.max(size))),
+                None => Some((bbox, size)),
+            });
+        if let Some((bbox, size)) = ink {
+            by_page.entry(line.page).or_default().push((line, bbox, size));
+        }
+    }
+
+    let mut out = Vec::new();
+    for (page, mut lines) in by_page {
+        lines.sort_by(|a, b| a.0.bbox.y0.total_cmp(&b.0.bbox.y0));
+        for (i, (upper, upper_ink, upper_size)) in lines.iter().enumerate() {
+            // The nearest line below that shares horizontal space.
+            let Some((lower, lower_ink, lower_size)) = lines[i + 1..].iter().find(|(l, ..)| {
+                l.bbox.y0 > upper.bbox.y0 + 0.5
+                    && l.bbox.x0 < upper.bbox.x1
+                    && upper.bbox.x0 < l.bbox.x1
+            }) else {
+                continue;
+            };
+            let size = upper_size.max(*lower_size);
+            let clearance = lower_ink.y0 - upper_ink.y1;
+            if clearance >= MIN_CLEARANCE_EM * size {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                CRAMPED,
+                Severity::Error,
+                format!(
+                    "a line on page {} nearly touches the line above it: only {}pt of clear \
+                     space for {}pt text",
+                    page + 1,
+                    round1(clearance),
+                    round1(size)
+                ),
+            );
+            diagnostic.loc = diag::resolve_span(world, lower.span);
+            diagnostic.page = Some(page + 1);
+            diagnostic.bbox = Some(upper_ink.union(lower_ink).rounded());
+            diagnostic.measured = Some(round1(clearance));
+            diagnostic.limit = Some(round1(MIN_CLEARANCE_EM * size));
+            diagnostic.unit = Some("pt");
+            diagnostic.hints.push(
+                "give large text more leading (set par(leading: ..) in the large text\x27s \
+                 own size, e.g. inside text(size: ..)[..]) or more space between the \
+                 blocks"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
+    out
 }

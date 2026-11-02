@@ -19,7 +19,7 @@ checked.
 | H11 | consistent gaps per role pair | L015 |
 | H12 | no stacked spacing | L015 (outlier gaps) |
 | H13 | constant baseline distance in a paragraph | L031 |
-| H14 | leading ratio | L033 |
+| H14 | leading ratio | L033, L038 |
 | H15 | no extra space at the top of a page | L034 |
 | H16 | page fill | L007 |
 | H17 | no unintended internal gap | partly L015; fractional spacing is deliberate and leaves no trace |

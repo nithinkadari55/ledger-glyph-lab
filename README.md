@@ -90,6 +90,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L035 row-baselines | single-line cells of a row on different baselines | |
 | L036 equation-number-gap | equation number touching its equation | |
 | L037 wrapped-code | code lines that wrap | |
+| L038 cramped-lines | lines whose ink nearly touches the line below | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
