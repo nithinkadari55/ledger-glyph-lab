@@ -46,7 +46,10 @@ fn line_items<'a>(geometry: &'a Geometry, line: &Line) -> Vec<&'a crate::geom::I
 }
 
 fn line_text(geometry: &Geometry, line: &Line) -> String {
-    line_items(geometry, line).iter().filter_map(|i| i.text.as_deref()).collect()
+    line_items(geometry, line)
+        .iter()
+        .filter_map(|i| i.text.as_deref())
+        .collect()
 }
 
 /// The approximate width of the first word of a line, measured on the text
