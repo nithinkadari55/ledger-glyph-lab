@@ -45,6 +45,17 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
+/// A table cell and its lines.
+type CellLines<'a> = (usize, &'a [&'a Line]);
+
+/// How often a cramped column sat next to a roomy one.
+struct Lopsided {
+    rows: usize,
+    most: usize,
+    cell: usize,
+    fill: f64,
+}
+
 /// Tables whose column widths are badly distributed: one column wraps every
 /// cell into many lines while a neighbouring column stays on one line and is
 /// mostly empty.
@@ -59,23 +70,23 @@ fn lopsided_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
 
-    let mut rows: BTreeMap<(usize, i64), Vec<(usize, &Vec<&Line>)>> = BTreeMap::new();
+    let mut rows: BTreeMap<(usize, i64), Vec<CellLines>> = BTreeMap::new();
     for (cell, lines) in &per_cell {
         let container = &geometry.containers[*cell];
         rows.entry((container.page, (container.bbox.y0 * 2.0).round() as i64))
             .or_default()
-            .push((*cell, lines));
+            .push((*cell, lines.as_slice()));
     }
 
-    // (page, cramped column, roomy column) -> (rows, most lines, cramped cell, fill)
-    let mut pairs: BTreeMap<(usize, i64, i64), (usize, usize, usize, f64)> = BTreeMap::new();
+    // Keyed by page and the left edges of the cramped and the roomy column.
+    let mut pairs: BTreeMap<(usize, i64, i64), Lopsided> = BTreeMap::new();
     for ((page, _), cells) in &rows {
         for (cramped, cramped_lines) in cells {
             if cramped_lines.len() < CRAMPED_CELL_LINES {
                 continue;
             }
             for (roomy, roomy_lines) in cells {
-                let [line] = roomy_lines.as_slice() else { continue };
+                let [line] = roomy_lines else { continue };
                 if roomy == cramped || line.available <= 0.0 {
                     continue;
                 }
@@ -88,18 +99,23 @@ fn lopsided_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     geometry.containers[*cramped].bbox.x0.round() as i64,
                     geometry.containers[*roomy].bbox.x0.round() as i64,
                 );
-                let entry = pairs.entry(key).or_insert((0, 0, *cramped, fill));
-                entry.0 += 1;
-                entry.1 = entry.1.max(cramped_lines.len());
-                entry.3 = entry.3.max(fill);
+                let entry = pairs.entry(key).or_insert(Lopsided {
+                    rows: 0,
+                    most: 0,
+                    cell: *cramped,
+                    fill,
+                });
+                entry.rows += 1;
+                entry.most = entry.most.max(cramped_lines.len());
+                entry.fill = entry.fill.max(fill);
             }
         }
     }
 
     pairs
         .into_iter()
-        .filter(|(_, (rows, ..))| *rows >= MIN_LOPSIDED_ROWS)
-        .map(|((page, _, _), (rows, most, cell, fill))| {
+        .filter(|(_, found)| found.rows >= MIN_LOPSIDED_ROWS)
+        .map(|((page, _, _), Lopsided { rows, most, cell, fill })| {
             let container = &geometry.containers[cell];
             let mut diagnostic = Diagnostic::new(
                 LOPSIDED_COLUMNS,
