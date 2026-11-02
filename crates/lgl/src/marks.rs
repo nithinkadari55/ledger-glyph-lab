@@ -32,7 +32,83 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = broken_addresses(world, geometry);
     out.extend(lines_through_text(world, geometry));
     out.extend(markup_leaks(world, geometry));
+    out.extend(malformed_numbers(world, geometry));
     out
+}
+
+pub const MALFORMED_NUMBER: &str = "L058.malformed-number";
+
+/// Whether a number written with both a comma and a point is grouped
+/// wrongly. The last separator is the decimal mark; the other one groups
+/// thousands, in groups of exactly three digits: 1,234.56 or 1.234,56.
+fn malformed_number(token: &str) -> bool {
+    let (Some(comma), Some(point)) = (token.rfind(','), token.rfind('.')) else {
+        return false;
+    };
+    let (decimal, group) = if point > comma { ('.', ',') } else { (',', '.') };
+    let Some((whole, fraction)) = token.rsplit_once(decimal) else { return true };
+    if whole.contains(decimal) || fraction.contains(group) || fraction.is_empty() {
+        return true;
+    }
+    let mut groups = whole.split(group);
+    let first = groups.next().unwrap_or_default();
+    !(1..=3).contains(&first.len()) || groups.any(|g| g.len() != 3)
+}
+
+/// Numbers like "93,3.88" whose digit grouping is wrong, typically from a
+/// formatting helper that inserts separators in the wrong place.
+fn malformed_numbers(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let mut reported = std::collections::BTreeSet::new();
+    for item in &geometry.items {
+        if item.kind != ItemKind::Text || in_code(geometry, item.elem) {
+            continue;
+        }
+        let Some(text) = item.text.as_deref() else { continue };
+        let tokens = text
+            .split(|c: char| !(c.is_ascii_digit() || c == ',' || c == '.'))
+            .map(|t| t.trim_matches(|c: char| !c.is_ascii_digit()));
+        for token in tokens {
+            if !malformed_number(token) || !reported.insert(token.to_string()) {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                MALFORMED_NUMBER,
+                Severity::Error,
+                format!(
+                    "the number \"{token}\" on page {} is grouped wrongly: thousands \
+                     separators must split the whole part into groups of three digits",
+                    item.page + 1
+                ),
+            );
+            diagnostic.loc =
+                diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+            diagnostic.page = Some(item.page + 1);
+            diagnostic.bbox = item.visible().map(|b| b.rounded());
+            diagnostic.hints.push(
+                "fix the number formatting (insert separators every three digits from the \
+                 decimal point leftwards) and check the values computed with it"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::malformed_number;
+
+    #[test]
+    fn grouping_is_checked() {
+        for good in ["1,234.56", "933.88", "1.234,56", "12,345,678.9", "0.5", "1,5"] {
+            assert!(!malformed_number(good), "{good}");
+        }
+        for bad in ["93,3.88", "1,23.4", "1,2345.6", "12.34,567.8", "1.2.3,4"] {
+            assert!(malformed_number(bad), "{bad}");
+        }
+    }
 }
 
 /// The first HTML entity or Markdown emphasis marker in text, such as

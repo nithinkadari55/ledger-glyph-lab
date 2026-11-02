@@ -1,4 +1,5 @@
 // expect: L039.hollow-box
+// expect: L043.empty-column
 #set page(paper: "a4", margin: 2cm, columns: 2)
 #set text(size: 10pt)
 #lorem(80)

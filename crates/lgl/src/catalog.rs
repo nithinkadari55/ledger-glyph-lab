@@ -519,6 +519,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L058.malformed-number",
+        "error",
+        "A number written with both a comma and a point is grouped wrongly, such as \
+         \"93,3.88\" for 933.88, typically from a faulty formatting helper.",
+        "groups of exactly three digits",
+        "Fix the number formatting and check the values computed with it.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -626,6 +635,7 @@ mod tests {
             composition::PARAGRAPH_SPACING,
             composition::UNSEPARATED_TERMS,
             composition::SPARSE_BARS,
+            marks::MALFORMED_NUMBER,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
