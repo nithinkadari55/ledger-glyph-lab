@@ -68,7 +68,11 @@ fn dangling_separators(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic>
     for rule in geometry.items.iter().filter(|i| horizontal_rule(i)) {
         let Some(column) = rule.column else { continue };
         if rule.bbox.width() < 60.0
-            || within_any(geometry, rule.elem, &["table", "grid", "cell", "figure", "heading"])
+            || within_any(
+                geometry,
+                rule.elem,
+                &["table", "grid", "cell", "figure", "heading"],
+            )
         {
             continue;
         }
@@ -101,7 +105,8 @@ fn dangling_separators(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic>
                 rule.page + 1
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(rule.span, rule.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(rule.span, rule.elem));
         diagnostic.page = Some(rule.page + 1);
         diagnostic.bbox = Some(r.rounded());
         diagnostic.hints.push(
@@ -225,7 +230,12 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             {
                 continue;
             }
-            let band = BBox { x0: ra.x0.max(rb.x0), y0: ra.y1, x1: ra.x1.min(rb.x1), y1: rb.y0 };
+            let band = BBox {
+                x0: ra.x0.max(rb.x0),
+                y0: ra.y1,
+                x1: ra.x1.min(rb.x1),
+                y1: rb.y0,
+            };
             let empty = !geometry.items.iter().any(|i| {
                 i.page == a.page
                     && !std::ptr::eq(i, *a)
@@ -295,7 +305,8 @@ fn box_padding(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && i.bbox.y1 <= frame.y1 + 1.0
             })
             .collect();
-        let Some(largest) = inside.iter().filter_map(|i| i.font_size).max_by(f64::total_cmp)
+        let Some(largest) =
+            inside.iter().filter_map(|i| i.font_size).max_by(f64::total_cmp)
         else {
             continue;
         };
