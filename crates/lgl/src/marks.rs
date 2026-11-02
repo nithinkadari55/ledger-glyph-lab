@@ -26,10 +26,78 @@ enum Contact {
     Touching,
 }
 
+pub const MARKUP_LEAK: &str = "L053.markup-in-text";
+
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = broken_addresses(world, geometry);
     out.extend(lines_through_text(world, geometry));
+    out.extend(markup_leaks(world, geometry));
     out
+}
+
+/// The first HTML entity or Markdown emphasis marker in text, such as
+/// "&nbsp;" or "**bold**", which Typst prints literally.
+fn leaked_markup(text: &str) -> Option<&str> {
+    let mut rest = text;
+    while let Some(start) = rest.find('&') {
+        let tail = &rest[start + 1..];
+        let end = tail.find(';')?;
+        let name = &tail[..end];
+        let named = (2..=8).contains(&name.len()) && name.chars().all(|c| c.is_ascii_alphabetic());
+        let numeric = name.len() > 1
+            && name.starts_with('#')
+            && name[1..].chars().all(|c| c.is_ascii_alphanumeric());
+        if named || numeric {
+            return Some(&rest[start..start + end + 2]);
+        }
+        rest = tail;
+    }
+    text.find("**").map(|i| &text[i..i + 2])
+}
+
+/// HTML entities and Markdown markers that ended up in the printed text.
+fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    let mut reported = std::collections::BTreeSet::new();
+    for item in &geometry.items {
+        if item.kind != ItemKind::Text || in_code(geometry, item.elem) {
+            continue;
+        }
+        let Some(found) = item.text.as_deref().and_then(leaked_markup) else { continue };
+        if !reported.insert((item.page, found.to_string())) {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            MARKUP_LEAK,
+            Severity::Error,
+            format!(
+                "\"{found}\" is printed literally on page {}: Typst does not interpret HTML \
+                 entities or Markdown markers",
+                item.page + 1
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+        diagnostic.page = Some(item.page + 1);
+        diagnostic.bbox = item.visible().map(|b| b.rounded());
+        diagnostic.hints.push(
+            "use Typst syntax: ~ for a non-breaking space, the character itself (– — ’ ×) \
+             or sym.*, and *bold* or _italic_ markup"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// Whether the content is code, where such text is meant literally.
+fn in_code(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].name == "raw" {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
 }
 
 /// The text items of a line, from left to right.

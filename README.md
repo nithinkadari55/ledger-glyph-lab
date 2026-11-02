@@ -105,6 +105,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L050 line-through-text | rules, ticks or gridlines running through text | |
 | L051 hyphenated-label | short labels (chart labels, narrow cells) that break a word | |
 | L052 lonely-title-word | titles whose last line holds a single word | |
+| L053 markup-in-text | HTML entities or Markdown markers printed literally | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

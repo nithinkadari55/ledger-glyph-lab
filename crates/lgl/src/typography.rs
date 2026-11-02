@@ -465,7 +465,11 @@ pub fn uneven_leading(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
     let mut out = Vec::new();
     for lines in paragraphs(geometry) {
         let columns: Vec<Vec<&Line>> = lines
-            .chunk_by(|a, b| a.page == b.page && (a.bbox.x0 - b.bbox.x0).abs() < 0.5)
+            .chunk_by(|a, b| {
+                a.page == b.page
+                    && a.container == b.container
+                    && (a.bbox.x0 - b.bbox.x0).abs() < 0.5
+            })
             .map(<[_]>::to_vec)
             .collect();
         for run in columns {

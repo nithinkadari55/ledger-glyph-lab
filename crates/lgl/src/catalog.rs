@@ -471,6 +471,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L053.markup-in-text",
+        "error",
+        "An HTML entity (&nbsp;, &mdash;, &#8211;) or a Markdown marker (**) is printed \
+         literally, outside code.",
+        "any",
+        "Use Typst syntax: ~ for a non-breaking space, the character itself or sym.*, \
+         *bold* and _italic_.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -573,6 +583,7 @@ mod tests {
             marks::LINE_THROUGH_TEXT,
             typography::HYPHENATED_LABEL,
             typography::LONELY_TITLE_WORD,
+            marks::MARKUP_LEAK,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
