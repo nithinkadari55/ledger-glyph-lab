@@ -120,3 +120,25 @@ fn transforms_get_reflow() {
     assert!(!rules.iter().any(|r| r.starts_with("S003")), "remaining: {rules:?}\n{text}");
     assert!(text.contains("reflow: true"), "{text}");
 }
+
+#[test]
+fn disabled_sticky_headings_are_restored() {
+    let (rules, applied, text) = rules_after_repair("stranded-heading.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(!text.contains("sticky: false"), "{text}");
+    assert!(
+        !rules.iter().any(|r| r.starts_with("S004") || r.starts_with("L014")),
+        "remaining: {rules:?}\n{text}"
+    );
+}
+
+#[test]
+fn disabled_orphan_costs_are_restored() {
+    let (rules, applied, text) = rules_after_repair("orphan.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(!text.contains("costs"), "{text}");
+    assert!(
+        !rules.iter().any(|r| r.starts_with("S004") || r.starts_with("L010")),
+        "remaining: {rules:?}\n{text}"
+    );
+}

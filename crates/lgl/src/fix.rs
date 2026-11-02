@@ -6,7 +6,7 @@ use typst::syntax::ast::{self, AstNode};
 use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::diag::{Diagnostic, SourceLoc};
-use crate::lint::NO_REFLOW;
+use crate::lint::{DISABLED_PROTECTION, NO_REFLOW};
 use crate::pagecheck::COLUMN_IMBALANCE;
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
@@ -69,6 +69,7 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     edits: vec![set_named(world, &source, &call, "reflow", "true")?],
                 })
             }),
+            DISABLED_PROTECTION => protection_fix(world, &source, anchor),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
                 Some(Fix {
@@ -120,6 +121,35 @@ fn underfill_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix>
     Some(Fix {
         description: "allow the block to break across pages".into(),
         edits: vec![set_named(world, source, &call, "breakable", "true")?],
+    })
+}
+
+/// Removes a set rule that only disables a protection, together with the show
+/// rule it is the body of, if any. Rules that also set other properties are
+/// left for the author.
+fn protection_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let node = LinkedNode::new(source.root()).find(anchor)?;
+    let rule = ast::SetRule::from_untyped(&node)?;
+    if rule.args().items().count() != 1 || rule.condition().is_some() {
+        return None;
+    }
+    let parent = node.parent()?;
+    let target = if ast::ShowRule::from_untyped(parent).is_some() { parent } else { &node };
+    let mut start = target.range().start;
+    if let Some(hash) = target.prev_sibling_with_trivia()
+        && hash.kind() == SyntaxKind::Hash
+    {
+        start = hash.range().start;
+    }
+    let mut end = target.range().end;
+    if source.text()[end..].starts_with("\r\n") {
+        end += 2;
+    } else if source.text()[end..].starts_with('\n') {
+        end += 1;
+    }
+    Some(Fix {
+        description: "remove the rule so that Typst's protection applies".into(),
+        edits: vec![edit_range(world, source, start..end, "")?],
     })
 }
 

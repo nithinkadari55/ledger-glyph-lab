@@ -356,7 +356,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "Source lint: rules that disable orphan/widow costs or sticky headings.",
         "any",
         "Remove the rule and keep Typst's defaults.",
-        false,
+        true,
     ),
 ];
 

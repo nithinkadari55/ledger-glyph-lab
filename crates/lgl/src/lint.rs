@@ -120,7 +120,7 @@ fn check_set_rule(
         _ => false,
     };
     if disabled {
-        out.push(finding(
+        let mut diagnostic = finding(
             world,
             node,
             DISABLED_PROTECTION,
@@ -128,7 +128,9 @@ fn check_set_rule(
              headings"
                 .into(),
             "remove the rule and keep Typst's defaults",
-        ));
+        );
+        diagnostic.anchor = Some(node.span());
+        out.push(diagnostic);
     }
 }
 
