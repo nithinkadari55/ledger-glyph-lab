@@ -99,8 +99,11 @@ pub fn syntax(world: &LabWorld) -> Vec<Diagnostic> {
     errors
         .iter()
         .map(|error| {
-            let mut out =
-                Diagnostic::new("typst.syntax.error", Severity::Error, error.message.as_str());
+            let mut out = Diagnostic::new(
+                "typst.syntax.error",
+                Severity::Error,
+                error.message.as_str(),
+            );
             out.loc = diag::resolve(world, error.span);
             out.hints = error.hints.iter().map(|hint| hint.v.to_string()).collect();
             out

@@ -91,6 +91,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L036 equation-number-gap | equation number touching its equation | |
 | L037 wrapped-code | code lines that wrap | |
 | L038 cramped-lines | lines whose ink nearly touches the line below | |
+| L039 hollow-box | framed boxes much taller than their content, empty continuations | |
+| L040 touching-cells | text in neighbouring cells that touches | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

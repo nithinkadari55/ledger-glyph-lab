@@ -1,4 +1,5 @@
 // expect: L039.hollow-box
+// expect: L025.near-empty-last-page
 #set page(paper: "a4", margin: 2cm)
 #set text(size: 10pt)
 = Key features

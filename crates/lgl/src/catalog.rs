@@ -445,6 +445,8 @@ mod tests {
             rhythm::EQUATION_NUMBER,
             rhythm::WRAPPED_CODE,
             rhythm::CRAMPED,
+            boxes::HOLLOW_BOX,
+            boxes::TOUCHING_CELLS,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

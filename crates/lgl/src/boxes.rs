@@ -73,6 +73,16 @@ fn hollow_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
 
+    // A box that holds nothing at all is a deliberate shape, unless it is the
+    // continuation of a box whose content is on another page.
+    let with_content: std::collections::HashSet<_> = geometry
+        .containers
+        .iter()
+        .zip(&content)
+        .filter(|(_, c)| c.is_some())
+        .map(|(container, _)| container.span)
+        .collect();
+
     let mut out = Vec::new();
     for (index, container) in geometry.containers.iter().enumerate() {
         if container.kind == "cell"
@@ -86,6 +96,11 @@ fn hollow_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let filled = content[index]
             .and_then(|c| c.intersect(&container.bbox))
             .map_or(0.0, |c| c.height());
+        if content[index].is_none()
+            && (container.span.is_detached() || !with_content.contains(&container.span))
+        {
+            continue;
+        }
         let empty = height - filled;
         if empty < MAX_EMPTY_PT || filled >= MIN_FILLED_SHARE * height {
             continue;
@@ -154,10 +169,12 @@ fn touching_cells(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
         let (Some(size), Some(bbox)) = (item.font_size, item.visible()) else { continue };
         let Some(cell) = enclosing_cell(geometry, item.container) else { continue };
-        pages
-            .entry(item.page)
-            .or_default()
-            .push(CellText { item: index, cell, bbox, size });
+        pages.entry(item.page).or_default().push(CellText {
+            item: index,
+            cell,
+            bbox,
+            size,
+        });
     }
 
     let mut seen = BTreeMap::new();
@@ -175,7 +192,8 @@ fn touching_cells(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 {
                     continue;
                 }
-                let shared = left.bbox.y1.min(right.bbox.y1) - left.bbox.y0.max(right.bbox.y0);
+                let shared =
+                    left.bbox.y1.min(right.bbox.y1) - left.bbox.y0.max(right.bbox.y0);
                 if shared < 0.5 * left.bbox.height().min(right.bbox.height()) {
                     continue;
                 }
