@@ -352,41 +352,62 @@ fn wrapped_code(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 pub const CRAMPED: &str = "L038.cramped-lines";
 
-/// The smallest clear space between the ink of a line and the ink of the line
-/// below it, relative to the larger of their text sizes. Below this, lines
-/// look like they touch.
+/// Typical font proportions: how far descenders reach below the baseline and
+/// ascenders and capitals above it, relative to the font size. Individual
+/// glyphs (accents, deep descenders) are deliberately ignored, as they are
+/// normal in well-set text.
+const DESCENT_EM: f64 = 0.25;
+const ASCENT_EM: f64 = 0.75;
+
+/// The smallest clear space between two stacked lines, relative to the larger
+/// of their text sizes. Below this, lines look like they touch.
 const MIN_CLEARANCE_EM: f64 = 0.1;
 
-/// Consecutive lines of text whose ink nearly touches: too little leading, or
-/// too little space between a heading or title and the text around it.
+/// Stacked lines of text that nearly touch: too little leading for their size,
+/// typically large text whose leading was set relative to a smaller size, or
+/// too little space between a title and the text around it.
 pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
-    let mut by_page: BTreeMap<usize, Vec<(&Line, BBox, f64)>> = BTreeMap::new();
+    struct Row<'a> {
+        line: &'a Line,
+        ink: BBox,
+        size: f64,
+        baseline: f64,
+    }
+
+    let mut by_page: BTreeMap<usize, Vec<Row>> = BTreeMap::new();
     for line in &geometry.lines {
+        if allowed_overlay(geometry, line.elem) {
+            continue;
+        }
         let ink = items_on(geometry, line)
             .filter_map(|item| Some((item.visible()?, item.font_size?)))
             .fold(None, |acc: Option<(BBox, f64)>, (bbox, size)| match acc {
                 Some((a, s)) => Some((a.union(&bbox), s.max(size))),
                 None => Some((bbox, size)),
             });
-        if let Some((bbox, size)) = ink {
-            by_page.entry(line.page).or_default().push((line, bbox, size));
+        if let Some((ink, size)) = ink {
+            let baseline = line.bbox.y0 + line.baseline;
+            by_page.entry(line.page).or_default().push(Row { line, ink, size, baseline });
         }
     }
 
     let mut out = Vec::new();
-    for (page, mut lines) in by_page {
-        lines.sort_by(|a, b| a.0.bbox.y0.total_cmp(&b.0.bbox.y0));
-        for (i, (upper, upper_ink, upper_size)) in lines.iter().enumerate() {
-            // The nearest line below that shares horizontal space.
-            let Some((lower, lower_ink, lower_size)) = lines[i + 1..].iter().find(|(l, ..)| {
-                l.bbox.y0 > upper.bbox.y0 + 0.5
-                    && l.bbox.x0 < upper.bbox.x1
-                    && upper.bbox.x0 < l.bbox.x1
+    for (page, mut rows) in by_page {
+        rows.sort_by(|a, b| a.baseline.total_cmp(&b.baseline));
+        for (i, upper) in rows.iter().enumerate() {
+            // The nearest line stacked below whose ink shares horizontal space.
+            // Lines side by side, or overlapping, are not stacked.
+            let Some(lower) = rows[i + 1..].iter().find(|r| {
+                r.baseline - upper.baseline >= 0.5 * r.size.max(upper.size)
+                    && r.ink.x0 < upper.ink.x1
+                    && upper.ink.x0 < r.ink.x1
             }) else {
                 continue;
             };
-            let size = upper_size.max(*lower_size);
-            let clearance = lower_ink.y0 - upper_ink.y1;
+            let size = upper.size.max(lower.size);
+            let clearance = (lower.baseline - upper.baseline)
+                - DESCENT_EM * upper.size
+                - ASCENT_EM * lower.size;
             if clearance >= MIN_CLEARANCE_EM * size {
                 continue;
             }
@@ -394,27 +415,40 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 CRAMPED,
                 Severity::Error,
                 format!(
-                    "a line on page {} nearly touches the line above it: only {}pt of clear \
-                     space for {}pt text",
+                    "a line on page {} nearly touches the line above it: their baselines \
+                     are {}pt apart, which leaves {}pt of clear space for {}pt and {}pt text",
                     page + 1,
+                    round1(lower.baseline - upper.baseline),
                     round1(clearance),
-                    round1(size)
+                    round1(upper.size),
+                    round1(lower.size)
                 ),
             );
-            diagnostic.loc = diag::resolve_span(world, lower.span);
+            diagnostic.loc = diag::resolve_span(world, lower.line.span);
             diagnostic.page = Some(page + 1);
-            diagnostic.bbox = Some(upper_ink.union(lower_ink).rounded());
+            diagnostic.bbox = Some(upper.ink.union(&lower.ink).rounded());
             diagnostic.measured = Some(round1(clearance));
             diagnostic.limit = Some(round1(MIN_CLEARANCE_EM * size));
             diagnostic.unit = Some("pt");
             diagnostic.hints.push(
-                "give large text more leading (set par(leading: ..) in the large text's \
-                 own size, e.g. inside text(size: ..)[..]) or more space between the \
-                 blocks"
+                "give large text more leading in its own size (e.g. set par(leading: ..) \
+                 inside the text(size: ..) block, or put the large text in its own block) \
+                 and leave space between a title and the lines around it"
                     .into(),
             );
             out.push(diagnostic);
         }
     }
     out
+}
+
+/// Whether a line belongs to content labelled as an intended overlay.
+fn allowed_overlay(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].label.as_deref() == Some(crate::overlap::ALLOW_OVERLAP) {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
 }

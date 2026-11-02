@@ -1,4 +1,5 @@
 // expect: L018.marginal-overflow
+// expect: L038.cramped-lines
 #set page(
   paper: "a5",
   margin: (top: 1.5cm, rest: 2cm),

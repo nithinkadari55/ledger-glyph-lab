@@ -7,7 +7,7 @@
   #line(length: 100%, stroke: 0.5pt + rgb("#24405f"))
 ]
 
-#text(22pt, weight: "bold")[Jordan Example] \
+#block(below: 1.2em)[#text(22pt, weight: "bold")[Jordan Example]]
 Data Engineer · Riverton · jordan\@example.com
 
 #grid(
