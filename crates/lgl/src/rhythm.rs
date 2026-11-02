@@ -436,8 +436,10 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     round1(lower.size)
                 ),
             );
-            diagnostic.loc =
-                diag::resolve_span(world, geometry.span_for(lower.line.span, lower.line.elem));
+            diagnostic.loc = diag::resolve_span(
+                world,
+                geometry.span_for(lower.line.span, lower.line.elem),
+            );
             diagnostic.page = Some(page + 1);
             diagnostic.bbox = Some(upper.ink.union(&lower.ink).rounded());
             diagnostic.measured = Some(round1(clearance));

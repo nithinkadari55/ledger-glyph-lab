@@ -72,9 +72,16 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let following = line_text(geometry, next);
         let Some(token) = text.split_whitespace().last() else { continue };
         let Some(rest) = following.split_whitespace().next() else { continue };
-        let ends = token.chars().last().is_some_and(|c| c.is_alphanumeric() || ".@/_-".contains(c));
+        let ends = token
+            .chars()
+            .last()
+            .is_some_and(|c| c.is_alphanumeric() || ".@/_-".contains(c));
         let continues = rest.chars().next().is_some_and(char::is_alphanumeric);
-        if text.ends_with(char::is_whitespace) || !ends || !continues || !is_address(token) {
+        if text.ends_with(char::is_whitespace)
+            || !ends
+            || !continues
+            || !is_address(token)
+        {
             continue;
         }
         let mut diagnostic = Diagnostic::new(
@@ -85,7 +92,8 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 line.page + 1
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(line.span, line.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(line.span, line.elem));
         diagnostic.page = Some(line.page + 1);
         diagnostic.bbox = Some(line.bbox.union(&next.bbox).rounded());
         diagnostic.hints.push(
