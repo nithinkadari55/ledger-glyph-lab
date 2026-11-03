@@ -47,6 +47,7 @@ pub fn run(
     out.extend(crate::composition::run(world, geometry));
     out.extend(crate::contrast::run(world, geometry));
     out.extend(crate::marks::run(world, geometry));
+    out.extend(crate::titles::run(world, geometry));
     out
 }
 

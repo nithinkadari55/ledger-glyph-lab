@@ -16,6 +16,7 @@ pub mod rhythm;
 pub mod rules;
 pub mod spacing;
 pub mod structure;
+pub mod titles;
 pub mod typography;
 pub mod whitespace;
 pub mod world;
@@ -130,8 +131,10 @@ pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<FamilyInfo> {
                 axes: Vec::new(),
                 math: false,
                 monospace: false,
+                smallcaps: false,
             };
-            for info in ids.filter_map(|id| book.info(id)) {
+            for id in ids {
+                let Some(info) = book.info(id) else { continue };
                 let weight = info.variant.weight.to_number();
                 let (mut light, mut heavy) = (weight, weight);
                 for axis in &info.axes {
@@ -147,6 +150,7 @@ pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<FamilyInfo> {
                 family.italic |= info.variant.style != FontStyle::Normal;
                 family.math |= info.flags.contains(FontFlags::MATH);
                 family.monospace |= info.flags.contains(FontFlags::MONOSPACE);
+                family.smallcaps |= fonts.font(id).is_some_and(|font| has_smallcaps(&font));
             }
             family.axes.sort();
             family
@@ -171,6 +175,17 @@ pub struct FamilyInfo {
     /// Whether the family can typeset math.
     pub math: bool,
     pub monospace: bool,
+    /// Whether the family has true small capitals (the `smcp` feature), which
+    /// `smallcaps()` needs.
+    pub smallcaps: bool,
+}
+
+/// Whether the font's substitution table offers small capitals.
+fn has_smallcaps(font: &typst::text::Font) -> bool {
+    font.ttf()
+        .tables()
+        .gsub
+        .is_some_and(|gsub| gsub.features.into_iter().any(|f| f.tag.to_bytes() == *b"smcp"))
 }
 
 /// Repeatedly applies the suggested fixes for the main file, starting from
