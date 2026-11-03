@@ -138,6 +138,7 @@ Same character widths, so text breaks into the same lines.
 
 - Noto Sans Symbols (`notosanssymbols/`)
 - Noto Sans Symbols 2 (`notosanssymbols2/`)
+- Noto Color Emoji (`notocoloremoji/`, full-colour vector emoji)
 - Noto Emoji (`notoemoji/`, monochrome)
 - Noto Music (`notomusic/`)
 - Libre Barcode 39 (`librebarcode39/`)
