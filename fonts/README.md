@@ -99,7 +99,7 @@ Same character widths, so text breaks into the same lines.
 - Anton (`anton/`)
 - Abril Fatface (`abrilfatface/`)
 - DM Serif Display (`dmserifdisplay/`)
-- Archivo Black (`archivoblack/`)
+- Archivo Black (`archivoblack/`; Typst names it "Archivo", weight 900)
 - Bricolage Grotesque (`bricolagegrotesque/`)
 - Alfa Slab One (`alfaslabone/`)
 - Saira Stencil One (`sairastencilone/`)
@@ -144,3 +144,8 @@ Same character widths, so text breaks into the same lines.
 - Libre Barcode 128 (`librebarcode128/`)
 
 Manrope and Fira Code have no italic styles.
+
+Variable fonts with an optical-size axis (DM Sans, Newsreader, Bricolage
+Grotesque) name their default instance after its size, like "DM Sans 9pt"; lgl
+lists them under their plain names, and Typst picks the optical size from the
+text size.

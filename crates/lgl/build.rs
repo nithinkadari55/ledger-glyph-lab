@@ -55,7 +55,11 @@ fn main() {
             std::fs::write(&target, compressed).unwrap();
             std::fs::write(packed.join(format!("{i}.hash")), hash.to_le_bytes()).unwrap();
         }
-        let name = file.strip_prefix(&fonts).unwrap().to_string_lossy().replace('\\', "/");
+        let name = file
+            .strip_prefix(&fonts)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/");
         writeln!(
             code,
             "    BundledFont {{ name: {name:?}, hash: {hash:#018x}, size: {}, data: include_bytes!({:?}) }},",

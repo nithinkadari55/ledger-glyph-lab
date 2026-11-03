@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use typst::diag::FileResult;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
-use typst::text::{Font, FontBook, FontInfo};
+use typst::text::{Font, FontBook, FontInfo, Tag};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 use typst_kit::datetime::Time;
@@ -33,14 +33,37 @@ impl BundledFont {
     /// Decompresses the file.
     fn bytes(&self) -> Option<Bytes> {
         let data =
-            miniz_oxide::inflate::decompress_to_vec_with_limit(self.data, self.size).ok()?;
+            miniz_oxide::inflate::decompress_to_vec_with_limit(self.data, self.size)
+                .ok()?;
         Some(Bytes::new(data))
     }
 
     /// Describes every face in the file. This decompresses the file.
     fn describe(&self) -> Vec<(u32, FontInfo)> {
         let Some(data) = self.bytes() else { return Vec::new() };
-        Font::iter(data).map(|font| (font.index(), font.info().clone())).collect()
+        Font::iter(data)
+            .map(|font| {
+                let mut info = font.info().clone();
+                drop_optical_size(&mut info);
+                (font.index(), info)
+            })
+            .collect()
+    }
+}
+
+/// Variable fonts with an optical-size axis often name their default instance
+/// after its size, like "DM Sans 9pt". Typst picks the optical size from the
+/// text size, so the family is known by its plain name.
+fn drop_optical_size(info: &mut FontInfo) {
+    if !info.axes.iter().any(|axis| axis.tag == Tag::from_bytes(b"opsz")) {
+        return;
+    }
+    let Some((name, size)) = info.family.rsplit_once(' ') else { return };
+    let is_size = size.strip_suffix("pt").is_some_and(|number| {
+        !number.is_empty() && number.chars().all(|c| c.is_ascii_digit() || c == '.')
+    });
+    if is_size {
+        info.family = name.to_string();
     }
 }
 
@@ -95,8 +118,10 @@ pub fn bundled_font_index() -> String {
             (format!("{:016x}", file.hash), faces)
         })
         .collect();
-    let lines: Vec<String> =
-        entries.iter().map(|(hash, faces)| format!("\"{hash}\": {faces}")).collect();
+    let lines: Vec<String> = entries
+        .iter()
+        .map(|(hash, faces)| format!("\"{hash}\": {faces}"))
+        .collect();
     format!("{{\n{}\n}}\n", lines.join(",\n"))
 }
 
@@ -260,8 +285,8 @@ mod tests {
         let fresh = super::bundled_font_index();
         let parse = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap();
         if parse(&fresh) != parse(super::FONT_INDEX) {
-            let path =
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/font-index.json");
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/font-index.json");
             std::fs::write(&path, fresh).unwrap();
             panic!("fonts/index.json is out of date; replace it with {}", path.display());
         }

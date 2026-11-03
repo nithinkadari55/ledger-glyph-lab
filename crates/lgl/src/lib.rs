@@ -115,13 +115,62 @@ pub fn syntax(world: &LabWorld) -> Vec<Diagnostic> {
 }
 
 /// The font families available to documents, sorted by name.
-pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<String> {
+pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<FamilyInfo> {
+    use typst::text::{FontFlags, FontStyle, Tag};
+
     let fonts = world::font_store(font_dirs);
-    let mut families: Vec<String> =
-        fonts.book().families().map(|(name, _)| name.to_string()).collect();
-    families.sort();
-    families.dedup();
+    let book = fonts.book();
+    let mut families: Vec<FamilyInfo> = book
+        .families()
+        .map(|(name, ids)| {
+            let mut family = FamilyInfo {
+                family: name.to_string(),
+                weights: [u16::MAX, 0],
+                italic: false,
+                axes: Vec::new(),
+                math: false,
+                monospace: false,
+            };
+            for info in ids.filter_map(|id| book.info(id)) {
+                let weight = info.variant.weight.to_number();
+                let (mut light, mut heavy) = (weight, weight);
+                for axis in &info.axes {
+                    if axis.tag == Tag::from_bytes(b"wght") {
+                        light = axis.min.0 as u16;
+                        heavy = axis.max.0 as u16;
+                    } else if !family.axes.contains(&axis.tag.to_string()) {
+                        family.axes.push(axis.tag.to_string());
+                    }
+                }
+                let [lightest, heaviest] = family.weights;
+                family.weights = [lightest.min(light), heaviest.max(heavy)];
+                family.italic |= info.variant.style != FontStyle::Normal;
+                family.math |= info.flags.contains(FontFlags::MATH);
+                family.monospace |= info.flags.contains(FontFlags::MONOSPACE);
+            }
+            family.axes.sort();
+            family
+        })
+        .collect();
+    families.sort_by(|a, b| a.family.cmp(&b.family));
+    families.dedup_by(|a, b| a.family == b.family);
     families
+}
+
+/// A font family available to documents.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct FamilyInfo {
+    pub family: String,
+    /// The lightest and the heaviest weight.
+    pub weights: [u16; 2],
+    /// Whether the family has italic or oblique styles.
+    pub italic: bool,
+    /// Variation axes other than weight, like `wdth` (set with `stretch`) or
+    /// `opsz`.
+    pub axes: Vec<String>,
+    /// Whether the family can typeset math.
+    pub math: bool,
+    pub monospace: bool,
 }
 
 /// Repeatedly applies the suggested fixes for the main file, starting from

@@ -92,8 +92,10 @@ fn main() -> ExitCode {
             }
         },
         Command::Fonts(args) => {
-            let families = lgl::font_families(&args.font_paths);
-            println!("{}", serde_json::json!({ "families": families }));
+            let details = lgl::font_families(&args.font_paths);
+            let families: Vec<&str> = details.iter().map(|f| f.family.as_str()).collect();
+            let report = serde_json::json!({ "families": families, "details": details });
+            println!("{report}");
             ExitCode::SUCCESS
         }
         Command::Fix(args) => match fix(args) {
