@@ -568,6 +568,16 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L063.chart-labels",
+        "warning",
+        "The category labels of a bar chart sit far below the bars (more than 2.5 times \
+         their size, detached from the axis), or are not centred under their bars (off by \
+         more than 0.3 bar widths).",
+        "2.5em gap; 0.3 bar widths offset",
+        "Place labels directly under the axis, laid out in the same columns as the bars.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -680,6 +690,7 @@ mod tests {
             boxes::DOUBLE_RULE,
             boxes::BOX_PADDING,
             boxes::DANGLING_SEPARATOR,
+            composition::CHART_LABELS,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

@@ -46,6 +46,127 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(paragraph_spacing(world, geometry));
     out.extend(unseparated_terms(world, geometry));
     out.extend(sparse_bars(world, geometry));
+    out.extend(chart_labels(world, geometry));
+    out
+}
+
+pub const CHART_LABELS: &str = "L063.chart-labels";
+
+/// Category labels under a bar chart further below the bars than this many
+/// times their size are detached from the axis.
+const MAX_LABEL_GAP_EM: f64 = 2.5;
+
+/// A category label whose centre is further from its bar's centre than this
+/// share of the bar width sits under the wrong place.
+const MAX_LABEL_OFFSET: f64 = 0.3;
+
+/// Bar charts whose category labels are far below the bars or not centred
+/// under them.
+fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut rows: BTreeMap<(usize, i64), Vec<&crate::geom::Item>> = BTreeMap::new();
+    for shape in geometry.items.iter().filter(|i| i.kind == ItemKind::Shape) {
+        let b = &shape.bbox;
+        if shape.color.is_some() && b.height() >= 4.0 && b.width() >= 2.0 {
+            rows.entry((shape.page, (b.y1 * 2.0).round() as i64)).or_default().push(shape);
+        }
+    }
+    let texts: Vec<&crate::geom::Item> = geometry
+        .items
+        .iter()
+        .filter(|i| {
+            i.kind == ItemKind::Text
+                && i.font_size.is_some()
+                && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+        })
+        .collect();
+    let centre = |b: &BBox| (b.x0 + b.x1) / 2.0;
+    let mut out = Vec::new();
+    for ((page, bottom), mut bars) in rows {
+        if bars.len() < 3 {
+            continue;
+        }
+        bars.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+        let x0 = bars[0].bbox.x0;
+        let x1 = bars.iter().map(|b| b.bbox.x1).fold(f64::NEG_INFINITY, f64::max);
+        let heights = bars.iter().map(|b| b.bbox.height());
+        let spread = heights.clone().fold(f64::NEG_INFINITY, f64::max)
+            - heights.fold(f64::INFINITY, f64::min);
+        // Bars of one height are table cells or swatches, not a chart.
+        if spread < 1.0 || bars.iter().any(|b| b.bbox.width() > 0.25 * (x1 - x0)) {
+            continue;
+        }
+        let base = bottom as f64 / 2.0;
+        let below: Vec<&&crate::geom::Item> = texts
+            .iter()
+            .filter(|t| {
+                t.page == page
+                    && t.bbox.y0 > base - 1.0
+                    && t.bbox.y0 < base + 120.0
+                    && (x0 - 20.0..=x1 + 20.0).contains(&centre(&t.bbox))
+            })
+            .collect();
+        let Some(top) = below.iter().map(|t| t.bbox.y0).min_by(f64::total_cmp) else {
+            continue;
+        };
+        let mut labels: Vec<&&crate::geom::Item> =
+            below.into_iter().filter(|t| (t.bbox.y0 - top).abs() < 1.5).collect();
+        if labels.len() < 3 {
+            continue;
+        }
+        labels.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+        let size = labels.iter().filter_map(|t| t.font_size).fold(0.0, f64::max);
+        let gap = top - base;
+        let first = labels[0];
+        let mut report = |message: String, measured: f64, limit: f64, hint: &str| {
+            let mut diagnostic = Diagnostic::new(CHART_LABELS, Severity::Warning, message);
+            diagnostic.loc =
+                diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+            diagnostic.page = Some(page + 1);
+            diagnostic.bbox = Some(BBox { x0, y0: base, x1, y1: top + size }.rounded());
+            diagnostic.measured = Some(round1(measured));
+            diagnostic.limit = Some(round1(limit));
+            diagnostic.hints.push(hint.into());
+            out.push(diagnostic);
+        };
+        if gap > MAX_LABEL_GAP_EM * size {
+            report(
+                format!(
+                    "the category labels of a chart on page {} sit {}pt below the bars, \
+                     {}x their size, detached from the axis",
+                    page + 1,
+                    round1(gap),
+                    round1(gap / size)
+                ),
+                gap,
+                MAX_LABEL_GAP_EM * size,
+                "place the labels directly under the axis (a few points below the bars) \
+                 instead of in a separate row further down",
+            );
+        }
+        if labels.len() == bars.len() {
+            let width = bars.iter().map(|b| b.bbox.width()).sum::<f64>() / bars.len() as f64;
+            let offset = labels
+                .iter()
+                .zip(&bars)
+                .map(|(t, b)| (centre(&t.bbox) - centre(&b.bbox)).abs())
+                .fold(0.0, f64::max);
+            if offset > MAX_LABEL_OFFSET * width {
+                report(
+                    format!(
+                        "the category labels of a chart on page {} are not centred under \
+                         their bars: one is {}pt off, {}x the bar width",
+                        page + 1,
+                        round1(offset),
+                        round1(offset / width)
+                    ),
+                    offset / width,
+                    MAX_LABEL_OFFSET,
+                    "lay out labels and bars in the same grid columns (or compute both \
+                     positions from the same values) so each label centres under its bar",
+                );
+            }
+        }
+    }
     out
 }
 
