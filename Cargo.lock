@@ -1382,6 +1382,7 @@ dependencies = [
  "clap",
  "ecow",
  "libm",
+ "miniz_oxide",
  "serde",
  "serde_json",
  "typst",

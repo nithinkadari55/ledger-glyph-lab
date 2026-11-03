@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -5,34 +6,98 @@ use std::path::{Path, PathBuf};
 use typst::diag::FileResult;
 use typst::foundations::{Bytes, Datetime, Duration};
 use typst::syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
-use typst::text::{Font, FontBook};
+use typst::text::{Font, FontBook, FontInfo};
 use typst::utils::LazyHash;
 use typst::{Library, LibraryExt, World};
 use typst_kit::datetime::Time;
 use typst_kit::downloader::SystemDownloader;
 use typst_kit::files::{FileStore, FsRoot, SystemFiles};
-use typst_kit::fonts::FontStore;
+use typst_kit::fonts::{FontSource, FontStore};
 use typst_kit::packages::{FsPackages, SystemPackages, UniversePackages};
 
 const USER_AGENT: &str = concat!("lgl/", env!("CARGO_PKG_VERSION"));
 
+/// A font file bundled with lgl (see `fonts/`), compressed with DEFLATE.
+pub struct BundledFont {
+    /// The file's path below `fonts/`.
+    pub name: &'static str,
+    /// The FNV-1a hash of the uncompressed file.
+    pub hash: u64,
+    /// The size of the uncompressed file.
+    pub size: usize,
+    /// The compressed file.
+    pub data: &'static [u8],
+}
+
+impl BundledFont {
+    /// Decompresses the file.
+    fn bytes(&self) -> Option<Bytes> {
+        let data =
+            miniz_oxide::inflate::decompress_to_vec_with_limit(self.data, self.size).ok()?;
+        Some(Bytes::new(data))
+    }
+
+    /// Describes every face in the file. This decompresses the file.
+    fn describe(&self) -> Vec<(u32, FontInfo)> {
+        let Some(data) = self.bytes() else { return Vec::new() };
+        Font::iter(data).map(|font| (font.index(), font.info().clone())).collect()
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/bundled_fonts.rs"));
+
+/// The metadata of the bundled fonts, keyed by file hash, so that lgl does
+/// not have to decompress every font to start. A file missing from the index
+/// is described at startup instead. The `bundled_font_index_is_current` test
+/// writes a fresh index when `fonts/` changes.
+const FONT_INDEX: &str = include_str!("../../../fonts/index.json");
+
+/// A face of a bundled font file, decompressed when a document first uses it.
+struct BundledFace {
+    file: &'static BundledFont,
+    index: u32,
+}
+
+impl FontSource for BundledFace {
+    fn load(&self) -> Option<Font> {
+        Font::new(self.file.bytes()?, self.index)
+    }
+}
 
 /// The fonts available to documents: Typst's embedded fonts, the families
 /// bundled with lgl (see `fonts/`), and any fonts in `dirs`.
 pub fn font_store(dirs: &[PathBuf]) -> FontStore {
     let mut fonts = FontStore::new();
     fonts.extend(typst_kit::fonts::embedded());
-    fonts.extend(BUNDLED_FONTS.iter().flat_map(|data| {
-        Font::iter(Bytes::new(*data)).map(|font| {
-            let info = font.info().clone();
-            (font, info)
-        })
-    }));
+    let mut index: HashMap<String, Vec<(u32, FontInfo)>> =
+        serde_json::from_str(FONT_INDEX).unwrap_or_default();
+    for file in BUNDLED_FONTS {
+        let faces = index
+            .remove(&format!("{:016x}", file.hash))
+            .unwrap_or_else(|| file.describe());
+        for (face, info) in faces {
+            fonts.push((BundledFace { file, index: face }, info));
+        }
+    }
     for dir in dirs {
         fonts.extend(typst_kit::fonts::scan(dir));
     }
     fonts
+}
+
+/// The font index for the bundled fonts, one file per line, in the format of
+/// `fonts/index.json`.
+pub fn bundled_font_index() -> String {
+    let entries: BTreeMap<String, String> = BUNDLED_FONTS
+        .iter()
+        .map(|file| {
+            let faces = serde_json::to_string(&file.describe()).unwrap();
+            (format!("{:016x}", file.hash), faces)
+        })
+        .collect();
+    let lines: Vec<String> =
+        entries.iter().map(|(hash, faces)| format!("\"{hash}\": {faces}")).collect();
+    format!("{{\n{}\n}}\n", lines.join(",\n"))
 }
 
 #[derive(Debug, Clone, Default)]
@@ -185,3 +250,27 @@ impl fmt::Display for WorldError {
 }
 
 impl std::error::Error for WorldError {}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    #[test]
+    fn bundled_font_index_is_current() {
+        let fresh = super::bundled_font_index();
+        let parse = |text: &str| serde_json::from_str::<serde_json::Value>(text).unwrap();
+        if parse(&fresh) != parse(super::FONT_INDEX) {
+            let path =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/font-index.json");
+            std::fs::write(&path, fresh).unwrap();
+            panic!("fonts/index.json is out of date; replace it with {}", path.display());
+        }
+    }
+
+    #[test]
+    fn bundled_fonts_load() {
+        for file in super::BUNDLED_FONTS {
+            assert!(!file.describe().is_empty(), "{} has no usable face", file.name);
+        }
+    }
+}

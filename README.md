@@ -144,5 +144,6 @@ large as the natural line pitch, or lines skip grid lines (L033 reports this).
 
 Code in `crates/` is dual-licensed under MIT or Apache-2.0.
 
-The fonts in `fonts/` are licensed under the SIL Open Font License 1.1; see
-`fonts/README.md` and the `OFL.txt` file of each family.
+The fonts in `fonts/` are licensed under the SIL Open Font License 1.1, except
+Special Elite (Apache License 2.0); see `fonts/README.md` and the licence file
+of each family.

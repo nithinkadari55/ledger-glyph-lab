@@ -21,8 +21,12 @@ typst-syntax = { workspace = true }
 clap = { workspace = true }
 ecow = { workspace = true }
 libm = { workspace = true }
+miniz_oxide = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[build-dependencies]
+miniz_oxide = { workspace = true }
 
 [lints]
 workspace = true
