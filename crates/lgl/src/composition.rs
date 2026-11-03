@@ -67,7 +67,9 @@ fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     for shape in geometry.items.iter().filter(|i| i.kind == ItemKind::Shape) {
         let b = &shape.bbox;
         if shape.color.is_some() && b.height() >= 4.0 && b.width() >= 2.0 {
-            rows.entry((shape.page, (b.y1 * 2.0).round() as i64)).or_default().push(shape);
+            rows.entry((shape.page, (b.y1 * 2.0).round() as i64))
+                .or_default()
+                .push(shape);
         }
     }
     let texts: Vec<&crate::geom::Item> = geometry
@@ -118,7 +120,8 @@ fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let gap = top - base;
         let first = labels[0];
         let mut report = |message: String, measured: f64, limit: f64, hint: &str| {
-            let mut diagnostic = Diagnostic::new(CHART_LABELS, Severity::Warning, message);
+            let mut diagnostic =
+                Diagnostic::new(CHART_LABELS, Severity::Warning, message);
             diagnostic.loc =
                 diag::resolve_span(world, geometry.span_for(first.span, first.elem));
             diagnostic.page = Some(page + 1);
@@ -144,7 +147,8 @@ fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             );
         }
         if labels.len() == bars.len() {
-            let width = bars.iter().map(|b| b.bbox.width()).sum::<f64>() / bars.len() as f64;
+            let width =
+                bars.iter().map(|b| b.bbox.width()).sum::<f64>() / bars.len() as f64;
             let offset = labels
                 .iter()
                 .zip(&bars)
