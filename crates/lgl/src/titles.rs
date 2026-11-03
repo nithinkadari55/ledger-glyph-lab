@@ -162,10 +162,9 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     // Only subtitle-like text: larger than the body, not a heading or table.
     // A box or rule in between ends the title block.
     let subtitle = next.size >= body + 0.4
-        && !next
-            .items
-            .iter()
-            .any(|&i| inside(geometry, geometry.items[i].elem, &["heading", "table", "grid"]));
+        && !next.items.iter().any(|&i| {
+            inside(geometry, geometry.items[i].elem, &["heading", "table", "grid"])
+        });
     let between = |bbox: &BBox| {
         block.y1 - 0.5 <= bbox.y0 && bbox.y0 <= next.bbox.y0 && overlaps(bbox, &block)
     };
@@ -329,19 +328,28 @@ fn floating_arrows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .filter(|&k| boxes[k].x0 <= mid_x && mid_x <= boxes[k].x1)
             .collect();
         let horizontal = {
-            let left = row.iter().filter(|&&k| boxes[k].x1 <= b.x0 + 0.5).map(|&k| boxes[k].x1);
-            let right =
-                row.iter().filter(|&&k| boxes[k].x0 >= b.x1 - 0.5).map(|&k| boxes[k].x0);
+            let left = row
+                .iter()
+                .filter(|&&k| boxes[k].x1 <= b.x0 + 0.5)
+                .map(|&k| boxes[k].x1);
+            let right = row
+                .iter()
+                .filter(|&&k| boxes[k].x0 >= b.x1 - 0.5)
+                .map(|&k| boxes[k].x0);
             match (left.reduce(f64::max), right.reduce(f64::min)) {
                 (Some(l), Some(r)) => Some((r - l, b.width())),
                 _ => None,
             }
         };
         let vertical = {
-            let up =
-                column.iter().filter(|&&k| boxes[k].y1 <= b.y0 + 0.5).map(|&k| boxes[k].y1);
-            let down =
-                column.iter().filter(|&&k| boxes[k].y0 >= b.y1 - 0.5).map(|&k| boxes[k].y0);
+            let up = column
+                .iter()
+                .filter(|&&k| boxes[k].y1 <= b.y0 + 0.5)
+                .map(|&k| boxes[k].y1);
+            let down = column
+                .iter()
+                .filter(|&&k| boxes[k].y0 >= b.y1 - 0.5)
+                .map(|&k| boxes[k].y0);
             match (up.reduce(f64::max), down.reduce(f64::min)) {
                 (Some(u), Some(d)) => Some((d - u, b.height())),
                 _ => None,

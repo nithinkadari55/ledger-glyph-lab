@@ -150,7 +150,8 @@ pub fn font_families(font_dirs: &[std::path::PathBuf]) -> Vec<FamilyInfo> {
                 family.italic |= info.variant.style != FontStyle::Normal;
                 family.math |= info.flags.contains(FontFlags::MATH);
                 family.monospace |= info.flags.contains(FontFlags::MONOSPACE);
-                family.smallcaps |= fonts.font(id).is_some_and(|font| has_smallcaps(&font));
+                family.smallcaps |=
+                    fonts.font(id).is_some_and(|font| has_smallcaps(&font));
             }
             family.axes.sort();
             family
@@ -182,10 +183,13 @@ pub struct FamilyInfo {
 
 /// Whether the font's substitution table offers small capitals.
 fn has_smallcaps(font: &typst::text::Font) -> bool {
-    font.ttf()
-        .tables()
-        .gsub
-        .is_some_and(|gsub| gsub.features.into_iter().any(|f| f.tag.to_bytes() == *b"smcp"))
+    let instance = font.clone().instantiate(
+        font.info().variant,
+        typst::layout::Abs::pt(10.0),
+        &typst::text::FontVariations::default(),
+    );
+    let Some(gsub) = instance.ttf().tables().gsub else { return false };
+    gsub.features.into_iter().any(|feature| feature.tag.to_bytes() == *b"smcp")
 }
 
 /// Repeatedly applies the suggested fixes for the main file, starting from
