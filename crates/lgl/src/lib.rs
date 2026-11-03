@@ -189,7 +189,9 @@ fn has_smallcaps(font: &typst::text::Font) -> bool {
         &typst::text::FontVariations::default(),
     );
     let Some(gsub) = instance.ttf().tables().gsub else { return false };
-    gsub.features.into_iter().any(|feature| feature.tag.to_bytes() == *b"smcp")
+    gsub.features
+        .into_iter()
+        .any(|feature| feature.tag.to_bytes() == *b"smcp")
 }
 
 /// Repeatedly applies the suggested fixes for the main file, starting from

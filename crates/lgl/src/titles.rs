@@ -180,12 +180,50 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         return Vec::new();
     }
 
+    // The subtitle's own lines, and the space below them up to the next text,
+    // rule or box. A subtitle that is clearly closer to its title than to what
+    // follows still reads as part of it.
+    let mut sub = next.bbox;
+    while let Some(line) = lines.iter().find(|l| {
+        (l.size - next.size).abs() < 0.5
+            && l.bbox.y0 > sub.y1 - 0.5
+            && l.bbox.y0 - sub.y1 < 0.6 * next.size
+            && overlaps(&l.bbox, &sub)
+    }) {
+        sub = sub.union(&line.bbox);
+    }
+    let below = |bbox: &BBox| bbox.y0 >= sub.y1 - 0.5 && overlaps(bbox, &block);
+    let after = lines
+        .iter()
+        .map(|l| l.bbox)
+        .chain(
+            geometry
+                .containers
+                .iter()
+                .filter(|c| c.visible && c.page == 0)
+                .map(|c| c.bbox),
+        )
+        .chain(
+            geometry
+                .items
+                .iter()
+                .filter(|i| i.page == 0 && i.kind == ItemKind::Shape)
+                .map(|i| i.bbox),
+        )
+        .filter(below)
+        .map(|bbox| bbox.y0 - sub.y1)
+        .reduce(f64::min);
+    if after.is_none_or(|after| gap < after) {
+        return Vec::new();
+    }
+
     let mut diagnostic = Diagnostic::new(
         DETACHED_SUBTITLE,
         Severity::Warning,
         format!(
             "the text below the {}pt title on page 1 starts {}pt under it, more than a \
-             title line away, so it drifts from the title instead of belonging to it",
+             title line away and no closer to the title than to what follows, so it \
+             drifts from the title instead of belonging to it",
             round1(big),
             round1(gap)
         ),

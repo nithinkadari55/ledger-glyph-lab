@@ -580,7 +580,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L064.detached-subtitle",
         "warning",
-        "The subtitle, standfirst or tagline below the document title starts more than one          title size below it, so it drifts away from the title.",
+        "The subtitle, standfirst or tagline below the document title starts more than one          title size below it and no closer to the title than to what follows, so it          drifts away from the title.",
         "1 title size",
         "Keep the subtitle close to the title; put the larger space after the title block.",
         false,
