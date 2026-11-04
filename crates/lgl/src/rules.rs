@@ -93,6 +93,8 @@ struct Subject {
     span: Span,
     elem: Option<String>,
     label: Option<String>,
+    /// The item checked, when the subject is an item rather than a container.
+    item: Option<usize>,
 }
 
 type Findings = HashMap<(&'static str, Anchor), Finding>;
@@ -138,6 +140,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             span: container.span,
             elem: Some(container.kind.to_string()),
             label: container.elem.and_then(|e| geometry.elements[e].label.clone()),
+            item: None,
         };
         if let Some(classified) = classify(geometry, &subject, None) {
             flagged_containers.insert(index);
@@ -187,6 +190,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             span: item.span,
             elem: element.map(|e| e.name.to_string()),
             label: element.and_then(|e| e.label.clone()),
+            item: Some(index),
         };
         let line = (item.kind == ItemKind::Text)
             .then(|| overfull_line(geometry, item.page, &bbox))
@@ -235,8 +239,10 @@ fn classify(
     let region_excess =
         subject.region.map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
 
-    let exceeds_container =
-        bounded.is_some_and(|c| exceeds(subject, &geometry.containers[c].bbox));
+    let exceeds_container = bounded.is_some_and(|c| {
+        exceeds(subject, &geometry.containers[c].bbox)
+            && !invisible_overhang(geometry, subject, c)
+    });
     let exceeds_page = page_excess.0 > TOLERANCE_PT;
     let exceeds_region = subject
         .region
@@ -279,6 +285,47 @@ fn classify(
         MARGINAL_OVERFLOW
     };
     Some((rule, Anchor::Span(subject.span), region_excess?))
+}
+
+/// Typst sizes a row by its lines' text edges, so inline math such as a
+/// stacked fraction hangs a few points above or below a grid cell. A cell
+/// without fill or stroke shows no edge, so such an overhang is a defect only
+/// where it meets other ink (a neighbouring row, a rule, another fill).
+fn invisible_overhang(geometry: &Geometry, subject: &Subject, cell: usize) -> bool {
+    let container = &geometry.containers[cell];
+    let Some(index) = subject.item else { return false };
+    let (b, c) = (&subject.bbox, &container.bbox);
+    if container.kind != "cell"
+        || container.visible
+        || c.x0 - b.x0 > subject.sides[0]
+        || b.x1 - c.x1 > subject.sides[1]
+    {
+        return false;
+    }
+    let bands = [(b.y0, c.y0), (c.y1, b.y1)];
+    let in_cell = |mut cursor: Option<usize>| {
+        while let Some(i) = cursor {
+            if i == cell {
+                return true;
+            }
+            cursor = geometry.containers[i].parent;
+        }
+        false
+    };
+    !geometry.items.iter().enumerate().any(|(i, other)| {
+        let Some(o) = other.visible() else { return false };
+        let behind = o.x0 <= b.x0 && o.y0 <= b.y0 && o.x1 >= b.x1 && o.y1 >= b.y1;
+        i != index
+            && other.page == subject.page
+            && other.kind != ItemKind::Link
+            && !behind
+            && !in_cell(other.container)
+            && o.x0 < b.x1
+            && o.x1 > b.x0
+            && bands
+                .iter()
+                .any(|&(top, bottom)| top < bottom && o.y0 < bottom && o.y1 > top)
+    })
 }
 
 /// Whether the subject extends beyond `bounds` by more than its tolerance on
