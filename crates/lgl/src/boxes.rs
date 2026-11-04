@@ -136,6 +136,10 @@ const MIN_CELL_CLEAR_EM: f64 = 0.15;
 /// doubled separator; closer pairs are a deliberate double line.
 const DOUBLE_RULE_GAP_PT: std::ops::RangeInclusive<f64> = 3.0..=36.0;
 
+/// Text on a rule's row ending or starting within this distance of the rule
+/// labels it as a writing line ("Name: ____", "3/4 = ____").
+const LABEL_GAP_PT: f64 = 12.0;
+
 /// Text in a filled box needs this much clear space to the top and bottom
 /// edges of the fill.
 const MIN_BOX_CLEAR_EM: f64 = 0.25;
@@ -143,6 +147,33 @@ const MIN_BOX_CLEAR_EM: f64 = 0.25;
 /// A thin horizontal rule: a shape at most 1.5pt tall and 20pt wide.
 fn horizontal_rule(item: &crate::geom::Item) -> bool {
     item.kind == ItemKind::Shape && item.bbox.height() < 1.5 && item.bbox.width() >= 20.0
+}
+
+/// Whether text on the rule's row (other than `skip`) ends just before the
+/// rule or starts just after it, making the rule a writing line rather than
+/// a separator. Returns (label before, label after).
+pub(crate) fn line_labels(
+    geometry: &Geometry,
+    rule: &crate::geom::Item,
+    skip: Option<&crate::geom::Item>,
+) -> (bool, bool) {
+    let r = &rule.bbox;
+    let mut labels = (false, false);
+    for text in &geometry.items {
+        if text.page != rule.page
+            || !nonblank_text(text)
+            || skip.is_some_and(|s| std::ptr::eq(s, text))
+        {
+            continue;
+        }
+        let (t, size) = (&text.bbox, text.font_size.unwrap_or_default());
+        if t.y1 < r.y0 - 1.2 * size || t.y0 > r.y0 {
+            continue;
+        }
+        labels.0 |= (r.x0 - LABEL_GAP_PT..=r.x0 + 0.5).contains(&t.x1);
+        labels.1 |= (r.x1 - 0.5..=r.x1 + LABEL_GAP_PT).contains(&t.x0);
+    }
+    labels
 }
 
 fn nonblank_text(item: &crate::geom::Item) -> bool {
@@ -213,7 +244,8 @@ fn cell_padding(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// Two parallel horizontal rules of the same length with nothing between
 /// them, such as a section's closing rule followed by the next section's
-/// opening rule.
+/// opening rule. Labelled writing lines ("3/4 = ____" stacked in rows) are
+/// not separators.
 fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let rules: Vec<&crate::geom::Item> =
         geometry.items.iter().filter(|i| horizontal_rule(i)).collect();
@@ -249,7 +281,8 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && i.bbox.x0 < band.x1
                     && i.bbox.x1 > band.x0
             });
-            if !empty {
+            let writing = |r: &crate::geom::Item| line_labels(geometry, r, None) != (false, false);
+            if !empty || writing(a) || writing(b) {
                 continue;
             }
             let mut diagnostic = Diagnostic::new(

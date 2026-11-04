@@ -913,7 +913,8 @@ fn detached_label(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// A text line sitting on a horizontal rule that runs on both sides of it,
 /// level with its bottom: two blocks have collapsed into each other (often a
-/// v(1fr) that shrank to nothing).
+/// v(1fr) that shrank to nothing). A form row ("Name: ____ Date: ____") is
+/// not: there the rule on the left is another label's writing line.
 fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let rules: Vec<&Item> = geometry
         .items
@@ -933,15 +934,18 @@ fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let level = |r: &&&Item| {
             r.page == text.page && (t.y1 - 0.3 * size..=t.y1 + 1.0).contains(&r.bbox.y0)
         };
-        let left = rules
+        let left: Vec<&&Item> = rules
             .iter()
             .filter(level)
-            .any(|r| (0.0..=2.0 * size).contains(&(t.x0 - r.bbox.x1)));
+            .filter(|r| (0.0..=2.0 * size).contains(&(t.x0 - r.bbox.x1)))
+            .collect();
         let right = rules
             .iter()
             .filter(level)
             .any(|r| (0.0..=2.0 * size).contains(&(r.bbox.x0 - t.x1)));
-        if !left || !right {
+        let form_row =
+            left.iter().any(|r| crate::boxes::line_labels(geometry, r, Some(text)).0);
+        if left.is_empty() || !right || form_row {
             continue;
         }
         let mut diagnostic = Diagnostic::new(
