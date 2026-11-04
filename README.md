@@ -125,6 +125,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L070 pair-spacing | repeated pairs spaced wider inside each pair than between pairs | |
 | L071 detached-label | label more than five times its size above the document title | |
 | L072 text-on-rule | text sitting on a line that runs on both sides of it | |
+| L073 crowded-subtitle | subtitle less than 0.2 title sizes below a one-line title | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

@@ -14,6 +14,7 @@ pub const DROP_CAP_HOLE: &str = "L068.drop-cap-hole";
 pub const PAIR_SPACING: &str = "L070.pair-spacing";
 pub const DETACHED_LABEL: &str = "L071.detached-label";
 pub const TEXT_ON_RULE: &str = "L072.text-on-rule";
+pub const CROWDED_SUBTITLE: &str = "L073.crowded-subtitle";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -27,6 +28,11 @@ const TITLE_ZONE: f64 = 0.45;
 /// apart from it. Measured on 115 generated documents: subtitles up to 0.77
 /// title sizes below their title read as part of it, from 0.94 they drift.
 const MAX_SUBTITLE_GAP_EM: f64 = 0.9;
+
+/// A subtitle closer than this many title sizes below a one-line title
+/// crowds it. Measured on 125 generated documents: gaps from 0.23 title sizes
+/// read well; 0.02 and 0.15 crowd the title.
+const MIN_SUBTITLE_GAP_EM: f64 = 0.2;
 
 /// A line with more characters than this is running text; the title area of
 /// the first page ends where running text starts.
@@ -238,6 +244,32 @@ fn check_title(
             .items
             .iter()
             .any(|i| i.page == 0 && i.kind == ItemKind::Shape && between(&i.bbox));
+    // A one-line title whose subtitle crowds right up to it (multi-line
+    // titles are judged against their own line gap by L054).
+    if subtitle && !divided && gap < MIN_SUBTITLE_GAP_EM * big && block.height() < 1.6 * big {
+        let mut diagnostic = Diagnostic::new(
+            CROWDED_SUBTITLE,
+            Severity::Warning,
+            format!(
+                "the text below the {}pt title on page 1 starts only {}pt under it, so \
+                 the two crowd each other",
+                round1(big),
+                round1(gap.max(0.0))
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, first));
+        diagnostic.page = Some(1);
+        diagnostic.bbox = Some(block.union(&next.bbox).rounded());
+        diagnostic.measured = Some(round1(gap));
+        diagnostic.limit = Some(round1(MIN_SUBTITLE_GAP_EM * big));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "leave about 0.3 to 0.6 times the title size between the title and the text \
+             below it"
+                .into(),
+        );
+        return Some(diagnostic);
+    }
     if !subtitle || divided || gap <= MAX_SUBTITLE_GAP_EM * big {
         return None;
     }

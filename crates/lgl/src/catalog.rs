@@ -651,6 +651,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L073.crowded-subtitle",
+        "warning",
+        "A subtitle or standfirst starts less than 0.2 title sizes below a one-line title, \
+         so the two crowd each other.",
+        "0.2 title size",
+        "Leave about 0.3 to 0.6 title sizes between title and subtitle.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -773,6 +782,7 @@ mod tests {
             titles::PAIR_SPACING,
             titles::DETACHED_LABEL,
             titles::TEXT_ON_RULE,
+            titles::CROWDED_SUBTITLE,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
