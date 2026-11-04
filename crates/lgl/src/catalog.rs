@@ -671,8 +671,8 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L075.off-centre-panel",
         "warning",
-        "The framed panel holding a one-page document has more than 1.5 times as much \
-         space on one side (top or bottom) as on the other.",
+        "The framed panel holding a one-page document (at least half the page high) has \
+         more than 1.5 times as much space on one side (top or bottom) as on the other.",
         "1.5",
         "Centre the panel on the page, or let it fill the page height.",
         false,

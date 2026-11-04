@@ -675,7 +675,9 @@ fn off_centre_panel(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for panel in &geometry.containers {
         let b = panel.bbox;
-        if !panel.visible || b.width() < 0.7 * page.width {
+        // A panel that frames the page: most of its width and at least half its
+        // height (a short box that happens to hold all text is ordinary flow).
+        if !panel.visible || b.width() < 0.7 * page.width || b.height() < 0.5 * page.height {
             continue;
         }
         let held = texts
