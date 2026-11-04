@@ -513,7 +513,9 @@ pub fn drop_caps(geometry: &Geometry) -> Vec<usize> {
 pub fn drop_cap_cells(geometry: &Geometry) -> std::collections::BTreeSet<usize> {
     drop_caps(geometry)
         .into_iter()
-        .filter_map(|i| crate::structure::enclosing_cell(geometry, geometry.items[i].container))
+        .filter_map(|i| {
+            crate::structure::enclosing_cell(geometry, geometry.items[i].container)
+        })
         .collect()
 }
 

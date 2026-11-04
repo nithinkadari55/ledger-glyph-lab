@@ -48,7 +48,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 round1(distance)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         diagnostic.page = Some(index + 1);
         diagnostic.bbox = item.visible().map(|b| b.rounded());
         diagnostic.measured = Some(round1(distance));

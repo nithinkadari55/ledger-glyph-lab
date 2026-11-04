@@ -18,17 +18,12 @@ pub const LOOSE_LINE: &str = "L005.loose-line";
 /// Tolerance for geometric bounds, in points.
 const TOLERANCE_PT: f64 = 0.5;
 
-/// Text may hang into the margin by design (punctuation overhang), so text
-/// gets a tolerance relative to its size: above and below, and on a side
-/// where the outermost character is punctuation. Letters and digits at a side
-/// get the plain geometric tolerance.
+/// Text may hang into the margin by design (Typst hangs dashes, hyphens and
+/// punctuation at line ends), and glyphs of large text can reach slightly
+/// past their line start, so text gets a tolerance relative to its size. A
+/// letter or digit at the right end of the text gets the plain geometric
+/// tolerance: nothing hangs it there.
 const TEXT_TOLERANCE_EM: f64 = 0.35;
-
-/// Whether a character may hang into a margin or past a cell edge.
-fn hangs(c: char) -> bool {
-    c.is_ascii_punctuation()
-        || matches!(c, '–' | '—' | '‘' | '’' | '“' | '”' | '«' | '»' | '…' | '·' | '•')
-}
 
 /// Extra space between characters of a justified line from which letter
 /// spacing becomes visible.
@@ -153,15 +148,12 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
             _ => TOLERANCE_PT,
         };
-        let text = item.text.as_deref().map(str::trim).unwrap_or_default();
-        let side = |c: Option<char>| match c {
-            Some(c) if !hangs(c) => TOLERANCE_PT,
-            _ => tolerance,
-        };
-        let sides = if item.kind == ItemKind::Text {
-            [side(text.chars().next()), side(text.chars().next_back())]
-        } else {
-            [tolerance; 2]
+        let last = item.text.as_deref().and_then(|t| t.trim().chars().next_back());
+        let sides = match last {
+            Some(c) if item.kind == ItemKind::Text && c.is_alphanumeric() => {
+                [tolerance, TOLERANCE_PT]
+            }
+            _ => [tolerance; 2],
         };
         let element = item.elem.map(|e| &geometry.elements[e]);
         // A container's own fill and stroke belong to it, and a stroke is
@@ -235,8 +227,9 @@ fn classify(
     let exceeds_container =
         bounded.is_some_and(|c| exceeds(subject, &geometry.containers[c].bbox));
     let exceeds_page = page_excess.0 > TOLERANCE_PT;
-    let exceeds_region =
-        subject.region.is_some_and(|r| exceeds(subject, &geometry.regions[r].bbox));
+    let exceeds_region = subject
+        .region
+        .is_some_and(|r| exceeds(subject, &geometry.regions[r].bbox));
     let column_excess = subject.column.map(|c| {
         let column = &geometry.columns[c].bbox;
         let (left, right) = (column.x0 - subject.bbox.x0, subject.bbox.x1 - column.x1);

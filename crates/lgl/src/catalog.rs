@@ -36,7 +36,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "error",
         "Content extends beyond a cell, an explicitly sized box/block, or a box/block \
          with fill or stroke, without clip.",
-        "0.5pt (text: 0.35em)",
+        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
         "Give the container more room (auto, fr, %), let content wrap, or clip on \
          purpose.",
         true,
@@ -45,7 +45,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L003.margin-intrusion",
         "error",
         "Body content extends into the page margin.",
-        "0.5pt (text: 0.35em for punctuation overhang)",
+        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
         "Keep content within the text area: relative sizes, smaller content.",
         true,
     ),
@@ -281,7 +281,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L032.column-overflow",
         "error",
         "Content extends beyond its column into the gutter or the next column.",
-        "0.5pt (text: 0.35em)",
+        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
         "Use relative or fractional widths inside columns, or span columns with \
          place(scope: \"parent\", float: true).",
         false,
@@ -618,6 +618,14 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L069.uneven-boxes",
+        "warning",
+        "Boxes side by side in a row, tops level, differ in height by more than 10%, so          the row looks ragged.",
+        "0.9 height ratio",
+        "Give the boxes one row height, or stack them.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -736,6 +744,7 @@ mod tests {
             titles::FLOATING_ARROW,
             edges::PRINT_EDGE,
             titles::DROP_CAP_HOLE,
+            boxes::UNEVEN_BOXES,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
