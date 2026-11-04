@@ -116,9 +116,11 @@ different and still pass. `lgl rules` prints the full catalog.
 | L061 tight-box-padding | text crowding the top or bottom of a filled box | |
 | L062 dangling-separator | separator rules at the top or bottom of a column | |
 | L063 chart-labels | bar chart labels detached from the axis or not centred under their bars | |
-| L064 detached-subtitle | subtitle more than a title size below the title and no closer to it than to what follows | |
+| L064 detached-subtitle | subtitle more than 0.9 title sizes below its title and no closer to it than to what follows | |
 | L065 detached-underline | underline far below its display text and closer to the next text | |
 | L066 floating-arrow | arrow covering less than 35% of the gap between the boxes it links | |
+| L067 print-edge | content within 5 mm of the page edge that does not run off it | |
+| L068 drop-cap-hole | drop cap more than one line taller than the text beside it | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

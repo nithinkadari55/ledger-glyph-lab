@@ -10,6 +10,7 @@ use crate::world::LabWorld;
 pub const DETACHED_SUBTITLE: &str = "L064.detached-subtitle";
 pub const DETACHED_UNDERLINE: &str = "L065.detached-underline";
 pub const FLOATING_ARROW: &str = "L066.floating-arrow";
+pub const DROP_CAP_HOLE: &str = "L068.drop-cap-hole";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -20,9 +21,13 @@ const DISPLAY_RATIO: f64 = 1.4;
 const TITLE_ZONE: f64 = 0.45;
 
 /// A subtitle further below its title than this many title sizes stands
-/// apart from it: another title line would fit into the gap. Convention,
-/// tunable.
-const MAX_SUBTITLE_GAP_EM: f64 = 1.0;
+/// apart from it. Measured on 115 generated documents: subtitles up to 0.77
+/// title sizes below their title read as part of it, from 0.94 they drift.
+const MAX_SUBTITLE_GAP_EM: f64 = 0.9;
+
+/// A line with more characters than this is running text; the title area of
+/// the first page ends where running text starts.
+const RUNNING_CHARS: usize = 60;
 
 /// An underline further below its text than this many text sizes no longer
 /// reads as underlining it. Convention, tunable.
@@ -38,13 +43,18 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = detached_subtitle(world, geometry);
     out.extend(detached_underline(world, geometry));
     out.extend(floating_arrows(world, geometry));
+    out.extend(drop_cap_holes(world, geometry));
     out
 }
 
-/// The most common text size, weighted by characters.
+/// The most common text size of running text, weighted by characters. Code,
+/// tables and headings do not count.
 fn body_size(geometry: &Geometry) -> Option<f64> {
     let mut weights: BTreeMap<i64, usize> = BTreeMap::new();
     for item in &geometry.items {
+        if inside(geometry, item.elem, &["raw", "table", "grid", "heading"]) {
+            continue;
+        }
         if let (ItemKind::Text, Some(size), Some(text)) =
             (item.kind, item.font_size, &item.text)
         {
@@ -106,6 +116,14 @@ fn text_lines(geometry: &Geometry, page: usize) -> Vec<TextLine> {
     lines
 }
 
+fn characters(geometry: &Geometry, line: &TextLine) -> usize {
+    line.items
+        .iter()
+        .filter_map(|&i| geometry.items[i].text.as_deref())
+        .map(|text| text.chars().count())
+        .sum()
+}
+
 fn letters(geometry: &Geometry, line: &TextLine) -> usize {
     line.items
         .iter()
@@ -118,44 +136,69 @@ fn report_span(geometry: &Geometry, item: &Item) -> typst::syntax::Span {
     geometry.span_for(item.span, item.elem)
 }
 
-/// A subtitle, standfirst or tagline set so far below the document title
-/// that it drifts away from it.
+/// A subtitle, standfirst or tagline set so far below its title that it
+/// drifts away from it. Every display line in the title area of the first
+/// page is checked, so a secondary title ("CERTIFICATE" above a larger name)
+/// and a subtitle with a standfirst below it are covered too.
 fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let (Some(body), Some(page)) = (body_size(geometry), geometry.pages.first()) else {
         return Vec::new();
     };
     let lines = text_lines(geometry, 0);
-    let top: Vec<&TextLine> = lines
+    let display = DISPLAY_PT.max(DISPLAY_RATIO * body);
+    // The title area ends where running text starts.
+    let running = lines
         .iter()
-        .filter(|l| l.bbox.y0 < TITLE_ZONE * page.height && letters(geometry, l) >= 3)
-        .collect();
-    let Some(big) = top.iter().map(|l| l.size).reduce(f64::max) else {
-        return Vec::new();
-    };
-    if big < DISPLAY_PT.max(DISPLAY_RATIO * body) {
-        return Vec::new();
-    }
-
-    // The title: the first line of the largest size and the lines that
-    // continue it.
-    let mut title: Vec<&TextLine> =
-        top.iter().copied().filter(|l| (l.size - big).abs() < 0.5).collect();
-    title.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
-    let mut block = title[0].bbox;
-    for line in &title[1..] {
-        if line.bbox.y0 - block.y1 < big {
-            block = block.union(&line.bbox);
+        .filter(|l| characters(geometry, l) > RUNNING_CHARS)
+        .map(|l| l.bbox.y1)
+        .reduce(f64::min)
+        .unwrap_or(f64::INFINITY);
+    let mut order: Vec<usize> = (0..lines.len()).collect();
+    order.sort_by(|&a, &b| lines[a].bbox.y0.total_cmp(&lines[b].bbox.y0));
+    let mut used = vec![false; lines.len()];
+    let mut out = Vec::new();
+    for &k in &order {
+        let title = &lines[k];
+        if used[k]
+            || title.size < display
+            || title.bbox.y0 >= TITLE_ZONE * page.height
+            || running <= title.bbox.y0
+            || letters(geometry, title) < 3
+        {
+            continue;
         }
+        // The title's own lines.
+        used[k] = true;
+        let mut block = title.bbox;
+        for &j in &order {
+            let line = &lines[j];
+            if !used[j]
+                && (line.size - title.size).abs() < 0.5
+                && (0.0..title.size).contains(&(line.bbox.y0 - block.y1))
+                && overlaps(&line.bbox, &block)
+            {
+                used[j] = true;
+                block = block.union(&line.bbox);
+            }
+        }
+        out.extend(check_title(world, geometry, &lines, block, title.size, body));
     }
+    out
+}
 
-    let Some(next) = lines
+fn check_title(
+    world: &LabWorld,
+    geometry: &Geometry,
+    lines: &[TextLine],
+    block: BBox,
+    big: f64,
+    body: f64,
+) -> Option<Diagnostic> {
+    let next = lines
         .iter()
         .filter(|l| l.bbox.y0 >= block.y1 - 0.5 && overlaps(&l.bbox, &block))
         .filter(|l| l.size < big - 0.5)
-        .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
-    else {
-        return Vec::new();
-    };
+        .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))?;
     let gap = next.bbox.y0 - block.y1;
     let first = &geometry.items[next.items[0]];
 
@@ -177,7 +220,7 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .iter()
             .any(|i| i.page == 0 && i.kind == ItemKind::Shape && between(&i.bbox));
     if !subtitle || divided || gap <= MAX_SUBTITLE_GAP_EM * big {
-        return Vec::new();
+        return None;
     }
 
     // The subtitle's own lines, and the space below them up to the next text,
@@ -214,14 +257,14 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         .map(|bbox| bbox.y0 - sub.y1)
         .reduce(f64::min);
     if after.is_none_or(|after| gap < after) {
-        return Vec::new();
+        return None;
     }
 
     let mut diagnostic = Diagnostic::new(
         DETACHED_SUBTITLE,
         Severity::Warning,
         format!(
-            "the text below the {}pt title on page 1 starts {}pt under it, more than a \
+            "the text below the {}pt title on page 1 starts {}pt under it, almost a \
              title line away and no closer to the title than to what follows, so it \
              drifts from the title instead of belonging to it",
             round1(big),
@@ -239,7 +282,7 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
          between them) and put the larger space after the whole title block"
             .into(),
     );
-    vec![diagnostic]
+    Some(diagnostic)
 }
 
 /// An underline below display text (a name on a certificate, a headline)
@@ -417,6 +460,110 @@ fn floating_arrows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.hints.push(
             "move the boxes closer together, or draw the arrow across the gap (for \
              example a line with an arrow mark that spans the space between the boxes)"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// A drop cap reaches at least this many times the body size.
+const DROP_CAP_RATIO: f64 = 2.5;
+
+/// Empty space beside a drop cap, in body sizes, from which it reads as a
+/// hole: more than one missing line.
+const MAX_DROP_CAP_HOLE_EM: f64 = 1.0;
+
+/// The items that are drop caps: a single letter in the body text at least
+/// 2.5 times the body size, not a monogram in a box or circle of its own.
+pub fn drop_caps(geometry: &Geometry) -> Vec<usize> {
+    let Some(body) = body_size(geometry) else { return Vec::new() };
+    let mut out = Vec::new();
+    for (index, cap) in geometry.items.iter().enumerate() {
+        let Some(size) = cap.font_size else { continue };
+        let letter = cap.text.as_deref().map(str::trim).unwrap_or_default();
+        let mut chars = letter.chars();
+        if !is_text(cap)
+            || size < DROP_CAP_RATIO * body
+            || !chars.next().is_some_and(char::is_alphabetic)
+            || chars.next().is_some()
+            || !geometry.is_body(cap.region)
+        {
+            continue;
+        }
+        let b = cap.bbox;
+        let badge = geometry.containers.iter().any(|c| {
+            c.visible
+                && c.page == cap.page
+                && c.bbox.x0 <= b.x0
+                && b.x1 <= c.bbox.x1
+                && c.bbox.y0 <= b.y0
+                && b.y1 <= c.bbox.y1
+                && c.bbox.width() * c.bbox.height() < 4.0 * b.width() * b.height()
+        });
+        if !badge {
+            out.push(index);
+        }
+    }
+    out
+}
+
+/// The grid or table cells that hold a drop cap (packages like droplet set
+/// the letter and its text in neighbouring cells).
+pub fn drop_cap_cells(geometry: &Geometry) -> std::collections::BTreeSet<usize> {
+    drop_caps(geometry)
+        .into_iter()
+        .filter_map(|i| crate::structure::enclosing_cell(geometry, geometry.items[i].container))
+        .collect()
+}
+
+/// A drop cap taller than the lines beside it: its paragraph is too short,
+/// so the big letter leaves a hole in the text.
+fn drop_cap_holes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let Some(body) = body_size(geometry) else { return Vec::new() };
+    let mut out = Vec::new();
+    for index in drop_caps(geometry) {
+        let cap = &geometry.items[index];
+        let letter = cap.text.as_deref().map(str::trim).unwrap_or_default();
+        let b = cap.bbox;
+        let beside: Vec<&Item> = geometry
+            .items
+            .iter()
+            .filter(|i| {
+                is_text(i)
+                    && i.page == cap.page
+                    && i.bbox.x0 >= b.x1 - 1.0
+                    && i.bbox.x0 < b.x1 + 3.0 * body
+                    && i.bbox.y0 < b.y1
+                    && i.bbox.y1 > b.y0
+            })
+            .collect();
+        let Some(low) = beside.iter().map(|i| i.bbox.y1).reduce(f64::max) else {
+            continue;
+        };
+        let hole = b.y1 - low;
+        if hole <= MAX_DROP_CAP_HOLE_EM * body {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            DROP_CAP_HOLE,
+            Severity::Warning,
+            format!(
+                "the drop cap {letter:?} on page {} is {}pt taller than the text beside it, \
+                 leaving a hole: its paragraph is too short for it",
+                cap.page + 1,
+                round1(hole)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, cap));
+        diagnostic.page = Some(cap.page + 1);
+        diagnostic.bbox = Some(b.rounded());
+        diagnostic.measured = Some(round1(hole));
+        diagnostic.limit = Some(round1(MAX_DROP_CAP_HOLE_EM * body));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "start the drop cap on a paragraph long enough to run beside its full height, \
+             or make the drop cap span fewer lines"
                 .into(),
         );
         out.push(diagnostic);

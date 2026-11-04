@@ -199,22 +199,29 @@ fn row_baselines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
 
+    // A drop cap sits on a different baseline by design.
+    let drop_caps = crate::titles::drop_cap_cells(geometry);
+    let mut excluded = std::collections::BTreeSet::new();
     let mut rows: BTreeMap<(usize, i64), Vec<(f64, &Line)>> = BTreeMap::new();
     for (cell, lines) in &lines_per_cell {
+        let container = &geometry.containers[*cell];
+        let key = (container.page, (container.bbox.y0 * 2.0).round() as i64);
+        if drop_caps.contains(cell) {
+            excluded.insert(key);
+        }
         let [line] = lines.as_slice() else { continue };
         if graphic_cells.contains(cell) {
             continue;
         }
-        let container = &geometry.containers[*cell];
-        let key = (container.page, (container.bbox.y0 * 2.0).round() as i64);
         rows.entry(key)
             .or_default()
             .push((line.bbox.y0 + line.baseline, line));
     }
 
     let mut out = Vec::new();
-    for ((page, _), cells) in rows {
-        if cells.len() < 2 {
+    for (key, cells) in rows {
+        let (page, _) = key;
+        if cells.len() < 2 || excluded.contains(&key) {
             continue;
         }
         let low = cells.iter().map(|c| c.0).fold(f64::INFINITY, f64::min);

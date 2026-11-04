@@ -19,8 +19,16 @@ pub const LOOSE_LINE: &str = "L005.loose-line";
 const TOLERANCE_PT: f64 = 0.5;
 
 /// Text may hang into the margin by design (punctuation overhang), so text
-/// gets a tolerance relative to its size.
+/// gets a tolerance relative to its size: above and below, and on a side
+/// where the outermost character is punctuation. Letters and digits at a side
+/// get the plain geometric tolerance.
 const TEXT_TOLERANCE_EM: f64 = 0.35;
+
+/// Whether a character may hang into a margin or past a cell edge.
+fn hangs(c: char) -> bool {
+    c.is_ascii_punctuation()
+        || matches!(c, '–' | '—' | '‘' | '’' | '“' | '”' | '«' | '»' | '…' | '·' | '•')
+}
 
 /// Extra space between characters of a justified line from which letter
 /// spacing becomes visible.
@@ -48,6 +56,7 @@ pub fn run(
     out.extend(crate::contrast::run(world, geometry));
     out.extend(crate::marks::run(world, geometry));
     out.extend(crate::titles::run(world, geometry));
+    out.extend(crate::edges::run(world, geometry));
     out
 }
 
@@ -73,7 +82,10 @@ struct Finding {
 struct Subject {
     page: usize,
     bbox: BBox,
+    /// The tolerance above and below.
     tolerance: f64,
+    /// The tolerance on the left and on the right.
+    sides: [f64; 2],
     container: Option<usize>,
     region: Option<usize>,
     column: Option<usize>,
@@ -118,6 +130,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             page: container.page,
             bbox: container.bbox,
             tolerance: TOLERANCE_PT,
+            sides: [TOLERANCE_PT; 2],
             container: container.parent,
             region: container.region,
             column: container.column,
@@ -140,6 +153,16 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
             _ => TOLERANCE_PT,
         };
+        let text = item.text.as_deref().map(str::trim).unwrap_or_default();
+        let side = |c: Option<char>| match c {
+            Some(c) if !hangs(c) => TOLERANCE_PT,
+            _ => tolerance,
+        };
+        let sides = if item.kind == ItemKind::Text {
+            [side(text.chars().next()), side(text.chars().next_back())]
+        } else {
+            [tolerance; 2]
+        };
         let element = item.elem.map(|e| &geometry.elements[e]);
         // A container's own fill and stroke belong to it, and a stroke is
         // centred on its edge, so they are checked against the parent.
@@ -154,6 +177,7 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             page: item.page,
             bbox,
             tolerance,
+            sides,
             container,
             region: item.region,
             column: item.column,
@@ -208,15 +232,21 @@ fn classify(
     let region_excess =
         subject.region.map(|r| subject.bbox.excess(&geometry.regions[r].bbox));
 
-    let exceeds_container = container_excess.is_some_and(|e| e.0 > subject.tolerance);
+    let exceeds_container =
+        bounded.is_some_and(|c| exceeds(subject, &geometry.containers[c].bbox));
     let exceeds_page = page_excess.0 > TOLERANCE_PT;
-    let exceeds_region = region_excess.is_some_and(|e| e.0 > subject.tolerance);
+    let exceeds_region =
+        subject.region.is_some_and(|r| exceeds(subject, &geometry.regions[r].bbox));
     let column_excess = subject.column.map(|c| {
         let column = &geometry.columns[c].bbox;
         let (left, right) = (column.x0 - subject.bbox.x0, subject.bbox.x1 - column.x1);
         if left > right { (left, "left") } else { (right, "right") }
     });
-    let exceeds_column = column_excess.is_some_and(|e| e.0 > subject.tolerance);
+    let exceeds_column = subject.column.is_some_and(|c| {
+        let column = &geometry.columns[c].bbox;
+        column.x0 - subject.bbox.x0 > subject.sides[0]
+            || subject.bbox.x1 - column.x1 > subject.sides[1]
+    });
     if !exceeds_container && !exceeds_page && !exceeds_region && !exceeds_column {
         return None;
     }
@@ -245,6 +275,16 @@ fn classify(
         MARGINAL_OVERFLOW
     };
     Some((rule, Anchor::Span(subject.span), region_excess?))
+}
+
+/// Whether the subject extends beyond `bounds` by more than its tolerance on
+/// any side.
+fn exceeds(subject: &Subject, bounds: &BBox) -> bool {
+    let b = &subject.bbox;
+    bounds.x0 - b.x0 > subject.sides[0]
+        || b.x1 - bounds.x1 > subject.sides[1]
+        || bounds.y0 - b.y0 > subject.tolerance
+        || b.y1 - bounds.y1 > subject.tolerance
 }
 
 /// The nearest container whose bounds the author can see or chose: a cell, a

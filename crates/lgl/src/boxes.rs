@@ -503,11 +503,16 @@ fn touching_cells(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         });
     }
 
+    // A drop cap keeps its own gap to the text beside it.
+    let drop_caps = crate::titles::drop_cap_cells(geometry);
     let mut seen = BTreeMap::new();
     for texts in pages.values() {
         for left in texts {
             for right in texts {
-                if left.cell == right.cell {
+                if left.cell == right.cell
+                    || drop_caps.contains(&left.cell)
+                    || drop_caps.contains(&right.cell)
+                {
                     continue;
                 }
                 let size = left.size.max(right.size);
