@@ -269,7 +269,7 @@ fn check_title(
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
             "leave about 0.3 to 0.6 times the title size between the title and the text \
-             below it"
+             below it, e.g. put the title in block(below: ..)"
                 .into(),
         );
         return Some(diagnostic);
@@ -333,8 +333,11 @@ fn check_title(
     diagnostic.limit = Some(round1(MAX_SUBTITLE_GAP_EM * big));
     diagnostic.unit = Some("pt");
     diagnostic.hints.push(
-        "keep the subtitle close to the title (about 0.3 to 0.6 times the title size \
-         between them) and put the larger space after the whole title block"
+        "set the gap explicitly: paragraph and block spacing apply between the title \
+         and the subtitle, and v(0pt) does not remove it; put the title in \
+         block(below: ..) and the subtitle in block(above: 0pt), or set \
+         par(spacing: ..) for the title block, to about 0.3 to 0.6 times the title \
+         size, and keep the larger space after the whole title block"
             .into(),
     );
     Some(diagnostic)
