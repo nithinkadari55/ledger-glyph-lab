@@ -666,7 +666,8 @@ fn off_centre_panel(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         .items
         .iter()
         .filter(|i| {
-            i.kind == ItemKind::Text && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+            i.kind == ItemKind::Text
+                && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
         })
         .collect();
     if texts.is_empty() {
@@ -677,7 +678,10 @@ fn off_centre_panel(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let b = panel.bbox;
         // A panel that frames the page: most of its width and at least half its
         // height (a short box that happens to hold all text is ordinary flow).
-        if !panel.visible || b.width() < 0.7 * page.width || b.height() < 0.5 * page.height {
+        if !panel.visible
+            || b.width() < 0.7 * page.width
+            || b.height() < 0.5 * page.height
+        {
             continue;
         }
         let held = texts
