@@ -246,7 +246,11 @@ fn check_title(
             .any(|i| i.page == 0 && i.kind == ItemKind::Shape && between(&i.bbox));
     // A one-line title whose subtitle crowds right up to it (multi-line
     // titles are judged against their own line gap by L054).
-    if subtitle && !divided && gap < MIN_SUBTITLE_GAP_EM * big && block.height() < 1.6 * big {
+    if subtitle
+        && !divided
+        && gap < MIN_SUBTITLE_GAP_EM * big
+        && block.height() < 1.6 * big
+    {
         let mut diagnostic = Diagnostic::new(
             CROWDED_SUBTITLE,
             Severity::Warning,
