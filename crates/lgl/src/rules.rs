@@ -158,7 +158,9 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         // tolerance on the right.
         let last = item.text.as_deref().and_then(|t| t.chars().next_back());
         let sides = match (last, item.font_size) {
-            (Some(c), Some(size)) if item.kind == ItemKind::Text && c.is_alphanumeric() => {
+            (Some(c), Some(size))
+                if item.kind == ItemKind::Text && c.is_alphanumeric() =>
+            {
                 [tolerance, TOLERANCE_PT.max(LETTER_TOLERANCE_EM * size)]
             }
             _ => [tolerance; 2],
