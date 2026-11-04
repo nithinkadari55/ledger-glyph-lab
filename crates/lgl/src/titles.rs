@@ -943,8 +943,9 @@ fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .iter()
             .filter(level)
             .any(|r| (0.0..=2.0 * size).contains(&(r.bbox.x0 - t.x1)));
-        let form_row =
-            left.iter().any(|r| crate::boxes::line_labels(geometry, r, Some(text)).0);
+        let form_row = left
+            .iter()
+            .any(|r| crate::boxes::line_labels(geometry, r, Some(text)).0);
         if left.is_empty() || !right || form_row {
             continue;
         }

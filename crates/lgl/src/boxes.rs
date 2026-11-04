@@ -281,7 +281,8 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && i.bbox.x0 < band.x1
                     && i.bbox.x1 > band.x0
             });
-            let writing = |r: &crate::geom::Item| line_labels(geometry, r, None) != (false, false);
+            let writing =
+                |r: &crate::geom::Item| line_labels(geometry, r, None) != (false, false);
             if !empty || writing(a) || writing(b) {
                 continue;
             }
