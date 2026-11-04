@@ -206,6 +206,10 @@ pub struct Container {
     pub parent: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub elem: Option<usize>,
+    /// For one fragment of a block broken across pages or columns: its index
+    /// and the number of fragments.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fragment: Option<[usize; 2]>,
     #[serde(skip)]
     pub span: Span,
 }
@@ -481,6 +485,8 @@ impl Walker {
                     visible: container.visible,
                     parent: self.containers.last().copied(),
                     elem: self.current(),
+                    fragment: (container.fragment.1 > 1)
+                        .then_some([container.fragment.0, container.fragment.1]),
                     span: container.span,
                 });
                 self.containers.push(index);

@@ -131,6 +131,9 @@ different and still pass. `lgl rules` prints the full catalog.
 | L076 wrong-page-label | "Page N of M" label that does not match the page or the page count | |
 | L077 spread-banner | title banner whose title and subtitle are pushed to its edges | |
 | L078 near-empty-page | inner page holding under a quarter of its text area spilled from a full page | |
+| L079 rule-through-text | rule drawn through the letters of text | |
+| L080 box-over-text | box painted over part of text outside it | |
+| L081 split-box | box broken across pages leaving fewer than three lines in a piece | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

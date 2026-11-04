@@ -56,7 +56,8 @@ pub fn layout_cell(
     let fragment = crate::layout_fragment(engine, &cell.body, locator, styles, regions)?;
 
     let mut frames = fragment.into_frames();
-    for frame in &mut frames {
+    let count = frames.len();
+    for (i, frame) in frames.iter_mut().enumerate() {
         crate::probe::container(
             engine,
             frame,
@@ -65,6 +66,7 @@ pub fn layout_cell(
             false,
             true,
             false,
+            (i, count),
         );
     }
 

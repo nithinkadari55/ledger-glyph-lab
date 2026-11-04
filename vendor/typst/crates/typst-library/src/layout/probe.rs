@@ -43,6 +43,9 @@ pub struct ContainerProbe {
     pub visible: bool,
     /// The span of the element that produced the container.
     pub span: Span,
+    /// For one fragment of a block broken across regions: its index and the
+    /// number of fragments. `(0, 1)` for a container that did not break.
+    pub fragment: (usize, usize),
 }
 
 /// The kind of a [`ContainerProbe`].

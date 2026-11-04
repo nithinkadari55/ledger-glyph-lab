@@ -104,6 +104,7 @@ pub fn layout_single_block(
         elem.clip.get(styles),
         !width.is_auto() || !height.is_auto(),
         visible,
+        (0, 1),
     );
 
     // Assign label to each frame in the fragment.
@@ -226,6 +227,7 @@ pub fn layout_multi_block(
     }
 
     // Post-process to apply insets, clipping, fills, and strokes.
+    let count = fragment.len();
     for (i, (frame, region)) in fragment.iter_mut().zip(pod.iter()).enumerate() {
         // Explicit blocks are boundaries for gradient relativeness.
         if is_explicit {
@@ -259,6 +261,7 @@ pub fn layout_multi_block(
             clip,
             !width.is_auto() || !height.is_auto(),
             has_fill_or_stroke,
+            (i, count),
         );
     }
 

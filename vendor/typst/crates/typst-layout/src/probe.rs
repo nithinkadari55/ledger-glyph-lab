@@ -18,6 +18,7 @@ pub fn container(
     clip: bool,
     sized: bool,
     visible: bool,
+    fragment: (usize, usize),
 ) {
     if !engine.library.probes || frame.is_empty() {
         return;
@@ -30,6 +31,7 @@ pub fn container(
         sized,
         visible,
         span,
+        fragment,
     };
     frame.prepend(Point::zero(), FrameItem::Probe(Probe::ContainerStart(probe)));
     frame.push(Point::zero(), FrameItem::Probe(Probe::ContainerEnd));

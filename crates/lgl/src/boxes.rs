@@ -45,6 +45,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(uneven_boxes(world, geometry));
     out.extend(off_centre_panel(world, geometry));
     out.extend(spread_banners(world, geometry));
+    out.extend(split_boxes(world, geometry));
     out
 }
 
@@ -849,6 +850,68 @@ fn spread_banners(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.hints.push(
             "bring the subtitle closer to the title (a small gap) and give the banner more \
              top and bottom inset, at least half the title size"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+pub const SPLIT_BOX: &str = "L081.split-box";
+
+/// A framed or filled box broken across pages must keep at least this many
+/// lines on each side of the break; fewer leave a sliver of the box (a label
+/// alone at the bottom of a page, a last line alone on the next).
+const MIN_FRAGMENT_LINES: usize = 3;
+
+/// Visible boxes broken across pages so that one piece holds only a line or
+/// two.
+fn split_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for (index, container) in geometry.containers.iter().enumerate() {
+        let Some([piece, pieces]) = container.fragment else { continue };
+        if !container.visible || container.kind != "block" {
+            continue;
+        }
+        let inside = |mut cursor: Option<usize>| {
+            while let Some(c) = cursor {
+                if c == index {
+                    return true;
+                }
+                cursor = geometry.containers[c].parent;
+            }
+            false
+        };
+        let has_image = geometry
+            .items
+            .iter()
+            .any(|i| i.kind == ItemKind::Image && inside(i.container));
+        let lines = geometry.lines.iter().filter(|l| inside(l.container)).count();
+        if has_image || lines >= MIN_FRAGMENT_LINES {
+            continue;
+        }
+        let side = if piece == 0 { "starts" } else { "ends" };
+        let mut diagnostic = Diagnostic::new(
+            SPLIT_BOX,
+            Severity::Error,
+            format!(
+                "a box breaks across pages and {side} with only {lines} line{} on page {} \
+                 (piece {} of {pieces})",
+                if lines == 1 { "" } else { "s" },
+                container.page + 1,
+                piece + 1
+            ),
+        );
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(container.span, container.elem));
+        diagnostic.page = Some(container.page + 1);
+        diagnostic.bbox = Some(container.bbox.rounded());
+        diagnostic.measured = Some(lines as f64);
+        diagnostic.limit = Some(MIN_FRAGMENT_LINES as f64);
+        diagnostic.unit = Some("lines");
+        diagnostic.hints.push(
+            "keep a short box in one piece with block(breakable: false), or make room so \
+             it fits on one page"
                 .into(),
         );
         out.push(diagnostic);

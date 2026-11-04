@@ -92,6 +92,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         .into_values()
         .map(|f| to_diagnostic(world, geometry, f))
         .collect();
+    out.extend(shapes_over_text(world, geometry));
     out.sort_by(|a, b| a.page.cmp(&b.page).then_with(|| a.message.cmp(&b.message)));
     out
 }
@@ -178,4 +179,125 @@ fn to_diagnostic(world: &LabWorld, geometry: &Geometry, finding: Finding) -> Dia
          label intended overlays with <{ALLOW_OVERLAP}>"
     ));
     out
+}
+
+pub const RULE_THROUGH_TEXT: &str = "L079.rule-through-text";
+pub const BOX_OVER_TEXT: &str = "L080.box-over-text";
+
+/// A shape thinner than this is a rule; a rule shorter than the minimum
+/// length is a mark (a fraction bar, a bullet), not a separator.
+const RULE_MAX_PT: f64 = 3.0;
+const RULE_MIN_LENGTH_PT: f64 = 20.0;
+
+/// A rule within this depth of a text's ink only touches it.
+const RULE_SLACK_PT: f64 = 0.5;
+
+/// Shapes that belong to the text they cross.
+const DECORATIONS: [&str; 4] = ["underline", "strike", "overline", "highlight"];
+
+/// A rule drawn through text, or a box painted over part of it: blocks that
+/// ran into each other (often a v(1fr) that shrank to nothing on a full page,
+/// which also removes the normal gap between the blocks).
+pub fn shapes_over_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let texts: Vec<(usize, &Item, BBox)> = geometry
+        .items
+        .iter()
+        .enumerate()
+        .filter(|(_, i)| {
+            i.kind == ItemKind::Text
+                && i.font_size.is_some()
+                && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+        })
+        .filter_map(|(index, i)| i.visible().map(|b| (index, i, b)))
+        .collect();
+    let mut out = Vec::new();
+    for (index, shape) in geometry.items.iter().enumerate() {
+        if shape.kind != ItemKind::Shape {
+            continue;
+        }
+        let Some(s) = shape.visible() else { continue };
+        if s.width() <= 0.0 {
+            continue;
+        }
+        let rule = s.height() < RULE_MAX_PT && s.width() >= RULE_MIN_LENGTH_PT;
+        if !rule && s.height() < RULE_MAX_PT {
+            continue;
+        }
+        let hit = texts.iter().find_map(|&(at, text, t)| {
+            if text.page != shape.page || belongs_to(geometry, shape, text) {
+                return None;
+            }
+            let o = s.intersect(&t)?;
+            if o.width() <= 1.0 || o.height() <= 0.0 {
+                return None;
+            }
+            let crossing = if rule {
+                o.height() >= s.height().min(RULE_SLACK_PT)
+            } else {
+                let inside = s.x0 <= t.x0 + 0.5
+                    && s.y0 <= t.y0 + 0.5
+                    && s.x1 >= t.x1 - 0.5
+                    && s.y1 >= t.y1 - 0.5;
+                index > at && !inside && o.height() > 1.0
+            };
+            crossing.then_some((text, o))
+        });
+        let Some((text, o)) = hit else { continue };
+        let words = text.text.as_deref().unwrap_or_default().trim();
+        let (rule_id, message, hint) = if rule {
+            (
+                RULE_THROUGH_TEXT,
+                format!(
+                    "a rule on page {} runs through the text {words:?}, {}pt into its letters",
+                    shape.page + 1,
+                    round1(o.height())
+                ),
+                "leave space between the rule and the text. A v(1fr) next to the rule \
+                 shrinks to nothing on a full page and also removes the normal gap between \
+                 blocks, so put a fixed gap such as v(0.8em) on both sides of the rule",
+            )
+        } else {
+            (
+                BOX_OVER_TEXT,
+                format!(
+                    "a box on page {} is painted over the text {words:?}, covering {}pt of it",
+                    shape.page + 1,
+                    round1(o.height())
+                ),
+                "leave space before the box. A v(1fr) before it shrinks to nothing on a full \
+                 page and also removes the normal gap between blocks, so add a fixed gap such \
+                 as v(1em) next to it",
+            )
+        };
+        let mut diagnostic = Diagnostic::new(rule_id, Severity::Error, message);
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(shape.span, shape.elem));
+        diagnostic.page = Some(shape.page + 1);
+        diagnostic.bbox = Some(o.rounded());
+        diagnostic.measured = Some(round1(o.height()));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(hint.into());
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// Whether the shape belongs to the text: a decoration of it, or the fill or
+/// border of a container the text sits in.
+fn belongs_to(geometry: &Geometry, shape: &Item, text: &Item) -> bool {
+    if let Some(e) = shape.elem
+        && text.elem == Some(e)
+        && DECORATIONS.contains(&geometry.elements[e].name)
+    {
+        return true;
+    }
+    let Some(own) = shape.container else { return false };
+    let mut cursor = text.container;
+    while let Some(c) = cursor {
+        if c == own {
+            return true;
+        }
+        cursor = geometry.containers[c].parent;
+    }
+    false
 }

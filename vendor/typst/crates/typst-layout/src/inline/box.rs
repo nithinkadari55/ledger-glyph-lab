@@ -80,6 +80,7 @@ pub fn layout_box(
         elem.clip.get(styles),
         !width.is_auto() || !height.is_auto(),
         visible,
+        (0, 1),
     );
 
     // Assign label to the frame.
