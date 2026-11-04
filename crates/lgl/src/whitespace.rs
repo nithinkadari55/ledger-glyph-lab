@@ -75,7 +75,8 @@ fn near_empty_pages(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             ),
         );
         if let Some(item) = first {
-            diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+            diagnostic.loc =
+                diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         }
         diagnostic.page = Some(region.page + 1);
         diagnostic.bbox = Some(region.bbox.rounded());

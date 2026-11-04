@@ -85,7 +85,9 @@ pub fn page_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 })
                 .collect();
             items.sort_by(|a, b| {
-                (a.bbox.y0.round(), a.bbox.x0).partial_cmp(&(b.bbox.y0.round(), b.bbox.x0)).unwrap()
+                (a.bbox.y0.round(), a.bbox.x0)
+                    .partial_cmp(&(b.bbox.y0.round(), b.bbox.x0))
+                    .unwrap()
             });
             let text: String = items
                 .iter()

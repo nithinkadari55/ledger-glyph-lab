@@ -1043,7 +1043,8 @@ fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagno
         diagnostic.bbox = Some(f.union(&c).rounded());
         diagnostic.measured = Some(round1(gap));
         diagnostic.limit = Some(round1(
-            if crowded { MIN_FIGURE_CAPTION_GAP } else { MAX_FIGURE_CAPTION_GAP } * caption_size,
+            if crowded { MIN_FIGURE_CAPTION_GAP } else { MAX_FIGURE_CAPTION_GAP }
+                * caption_size,
         ));
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
