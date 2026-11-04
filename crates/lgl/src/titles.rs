@@ -768,7 +768,9 @@ fn detached_label(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let item = &geometry.items[label.items[0]];
     let gap = title.bbox.y0 - label.bbox.y1;
     let between = |b: &BBox| {
-        label.bbox.y1 - 0.5 <= b.y0 && b.y1 <= title.bbox.y0 + 0.5 && overlaps(b, &title.bbox)
+        label.bbox.y1 - 0.5 <= b.y0
+            && b.y1 <= title.bbox.y0 + 0.5
+            && overlaps(b, &title.bbox)
     };
     // A rule or box in between makes the label a separate header.
     let divided = geometry
@@ -815,7 +817,9 @@ fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let rules: Vec<&Item> = geometry
         .items
         .iter()
-        .filter(|r| r.kind == ItemKind::Shape && r.bbox.height() < 3.0 && r.bbox.width() > 30.0)
+        .filter(|r| {
+            r.kind == ItemKind::Shape && r.bbox.height() < 3.0 && r.bbox.width() > 30.0
+        })
         .collect();
     let mut out = Vec::new();
     for text in &geometry.items {
