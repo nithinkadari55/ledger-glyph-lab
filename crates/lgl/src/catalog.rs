@@ -626,6 +626,14 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L070.pair-spacing",
+        "warning",
+        "Three or more repeated pairs (label and value, command and description) are spaced          wider inside each pair than between pairs, so each second part reads as belonging          to the next pair.",
+        "space between pairs",
+        "Less space inside a pair, more space between pairs.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -745,6 +753,7 @@ mod tests {
             edges::PRINT_EDGE,
             titles::DROP_CAP_HOLE,
             boxes::UNEVEN_BOXES,
+            titles::PAIR_SPACING,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

@@ -11,6 +11,7 @@ pub const DETACHED_SUBTITLE: &str = "L064.detached-subtitle";
 pub const DETACHED_UNDERLINE: &str = "L065.detached-underline";
 pub const FLOATING_ARROW: &str = "L066.floating-arrow";
 pub const DROP_CAP_HOLE: &str = "L068.drop-cap-hole";
+pub const PAIR_SPACING: &str = "L070.pair-spacing";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -44,6 +45,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(detached_underline(world, geometry));
     out.extend(floating_arrows(world, geometry));
     out.extend(drop_cap_holes(world, geometry));
+    out.extend(pair_spacing(world, geometry));
     out
 }
 
@@ -569,6 +571,145 @@ fn drop_cap_holes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .into(),
         );
         out.push(diagnostic);
+    }
+    out
+}
+
+/// At least this many pairs in a row make a repeated pattern.
+const MIN_PAIRS: usize = 3;
+
+/// The space inside a pair must exceed the space between pairs by this much,
+/// and by this factor, to count as inverted.
+const PAIR_SLACK_PT: f64 = 1.5;
+const PAIR_RATIO: f64 = 1.25;
+
+/// A run of text in one style: a line or a paragraph.
+struct Unit {
+    key: (i64, [i32; 4]),
+    bbox: BBox,
+    size: f64,
+    item: usize,
+}
+
+fn median(mut values: Vec<f64>) -> f64 {
+    values.sort_by(f64::total_cmp);
+    values[values.len() / 2]
+}
+
+/// Repeated pairs (command and description, label and value, term and
+/// definition) whose second part sits closer to the next pair than to its own
+/// first part, so every pair reads wrongly grouped.
+fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for page in 0..geometry.pages.len() {
+        // Visual lines: text items sharing a baseline.
+        let mut lines: Vec<Unit> = Vec::new();
+        for (index, item) in geometry.items.iter().enumerate() {
+            if item.page != page
+                || !is_text(item)
+                || !geometry.is_body(item.region)
+                || inside(geometry, item.elem, &["raw"])
+            {
+                continue;
+            }
+            let size = item.font_size.unwrap_or_default();
+            let b = item.bbox;
+            if let Some(line) = lines.iter_mut().find(|l| {
+                (l.bbox.y1 - b.y1).abs() < 0.3 * size
+                    && l.bbox.x0 - 2.0 <= b.x0
+                    && b.x0 <= l.bbox.x1 + 30.0
+            }) {
+                line.bbox = line.bbox.union(&b);
+                continue;
+            }
+            let color = item.color.unwrap_or_default().map(|c| (c * 100.0).round() as i32);
+            lines.push(Unit {
+                key: ((size * 10.0).round() as i64, color),
+                bbox: b,
+                size,
+                item: index,
+            });
+        }
+        lines.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+
+        // Paragraphs: consecutive lines of one style and left edge.
+        let mut paragraphs: Vec<Unit> = Vec::new();
+        for line in lines {
+            if let Some(p) = paragraphs.iter_mut().rev().find(|p| {
+                p.key == line.key
+                    && (p.bbox.x0 - line.bbox.x0).abs() < 3.0
+                    && (-1.0..0.5 * line.size).contains(&(line.bbox.y0 - p.bbox.y1))
+            }) {
+                p.bbox = p.bbox.union(&line.bbox);
+                continue;
+            }
+            paragraphs.push(line);
+        }
+
+        // Columns: paragraphs sharing a left edge.
+        let mut columns: BTreeMap<i64, Vec<&Unit>> = BTreeMap::new();
+        for p in &paragraphs {
+            columns.entry((p.bbox.x0 / 4.0).round() as i64).or_default().push(p);
+        }
+        for column in columns.values_mut() {
+            column.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+            let mut k = 0;
+            while k + 2 * MIN_PAIRS - 1 < column.len() {
+                let (a, b) = (column[k].key, column[k + 1].key);
+                if a == b {
+                    k += 1;
+                    continue;
+                }
+                let start = k;
+                let style = move |j: usize| if (j - start) % 2 == 0 { a } else { b };
+                let mut j = k;
+                while j + 1 < column.len()
+                    && column[j].key == style(j)
+                    && column[j + 1].key == style(j + 1)
+                {
+                    j += 1;
+                }
+                let run = &column[k..=j];
+                if run.len() < 2 * MIN_PAIRS {
+                    k += 1;
+                    continue;
+                }
+                let gaps: Vec<f64> =
+                    run.windows(2).map(|w| w[1].bbox.y0 - w[0].bbox.y1).collect();
+                let within = median(gaps.iter().step_by(2).copied().collect());
+                let between = median(gaps.iter().skip(1).step_by(2).copied().collect());
+                if within > between + PAIR_SLACK_PT && within > PAIR_RATIO * between {
+                    let second = &geometry.items[run[1].item];
+                    let mut diagnostic = Diagnostic::new(
+                        PAIR_SPACING,
+                        Severity::Warning,
+                        format!(
+                            "{} repeated pairs on page {} are {}pt apart inside each pair \
+                             but only {}pt from the next pair, so each second part reads \
+                             as belonging to the pair below",
+                            run.len() / 2,
+                            page + 1,
+                            round1(within),
+                            round1(between)
+                        ),
+                    );
+                    diagnostic.loc = diag::resolve_span(world, report_span(geometry, second));
+                    diagnostic.page = Some(page + 1);
+                    diagnostic.bbox = Some(run[0].bbox.union(&run[run.len() - 1].bbox).rounded());
+                    diagnostic.measured = Some(round1(within));
+                    diagnostic.limit = Some(round1(between));
+                    diagnostic.unit = Some("pt");
+                    diagnostic.hints.push(
+                        "keep each label or command closer to its own value or \
+                         description than to the next pair: less space inside a pair, \
+                         more space between pairs"
+                            .into(),
+                    );
+                    out.push(diagnostic);
+                }
+                k = j;
+            }
+        }
     }
     out
 }

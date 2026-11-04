@@ -122,6 +122,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L067 print-edge | content within 5 mm of the page edge that does not run off it | |
 | L068 drop-cap-hole | drop cap more than one line taller than the text beside it | |
 | L069 uneven-boxes | boxes side by side in a row with heights more than 10% apart | |
+| L070 pair-spacing | repeated pairs spaced wider inside each pair than between pairs | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
