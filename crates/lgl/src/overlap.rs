@@ -217,12 +217,15 @@ pub fn boxes_over_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic>
         // Only a box painted after the text covers it; one painted before is
         // a background.
         let hit = texts.iter().find_map(|&(at, text, t)| {
-            if at > index || text.page != shape.page || belongs_to(geometry, shape, text) {
+            if at > index || text.page != shape.page || belongs_to(geometry, shape, text)
+            {
                 return None;
             }
             let o = s.intersect(&t)?;
-            let inside =
-                s.x0 <= t.x0 + 0.5 && s.y0 <= t.y0 + 0.5 && s.x1 >= t.x1 - 0.5 && s.y1 >= t.y1 - 0.5;
+            let inside = s.x0 <= t.x0 + 0.5
+                && s.y0 <= t.y0 + 0.5
+                && s.x1 >= t.x1 - 0.5
+                && s.y1 >= t.y1 - 0.5;
             (o.width() > 1.0 && o.height() > 1.0 && !inside).then_some((text, o))
         });
         let Some((text, o)) = hit else { continue };

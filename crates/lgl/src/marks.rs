@@ -355,7 +355,11 @@ fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
             }
             let mut diagnostic = Diagnostic::new(
                 LINE_THROUGH_TEXT,
-                if contact == Contact::Through { Severity::Error } else { Severity::Warning },
+                if contact == Contact::Through {
+                    Severity::Error
+                } else {
+                    Severity::Warning
+                },
                 format!(
                     "a {} line {} the text \"{}\" on page {}",
                     if vertical { "vertical" } else { "horizontal" },
