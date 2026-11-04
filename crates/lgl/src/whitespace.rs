@@ -3,6 +3,13 @@ use crate::geom::{BBox, Geometry, ItemKind, round1};
 use crate::world::LabWorld;
 
 pub const PAGE_UNDERFILL: &str = "L007.page-underfill";
+pub const NEAR_EMPTY_PAGE: &str = "L078.near-empty-page";
+
+/// A page inside the document (not the last) whose content ends within this
+/// share of its text area holds only a sliver, typically content that spilled
+/// over before a page break. Measured on 168 generated documents: every
+/// inner page uses at least 35% of its text area except one at 4%.
+const MIN_INNER_PAGE_USE: f64 = 0.25;
 
 /// The share of the text area that may stay empty at the bottom of a page that
 /// was ended for lack of space. Convention, tunable.
@@ -21,6 +28,51 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             continue;
         }
         out.push(underfill(world, geometry, region.page, empty, limit, &region.bbox));
+    }
+    out.extend(near_empty_pages(world, geometry));
+    out
+}
+
+/// An inner page that holds only a sliver of content, even when a page
+/// break follows it (the break is meant to start a new page, not to leave
+/// one almost blank).
+fn near_empty_pages(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let last = geometry.pages.len().saturating_sub(1);
+    let mut out = Vec::new();
+    for (index, region) in geometry.regions.iter().enumerate() {
+        if region.kind != "page-body" || region.page >= last {
+            continue;
+        }
+        let Some(bottom) = content_bottom(geometry, index) else { continue };
+        let used = (bottom - region.bbox.y0) / region.bbox.height();
+        if used >= MIN_INNER_PAGE_USE {
+            continue;
+        }
+        let first = first_item(geometry, region.page).map(|i| &geometry.items[i]);
+        let mut diagnostic = Diagnostic::new(
+            NEAR_EMPTY_PAGE,
+            Severity::Warning,
+            format!(
+                "page {} uses only {}% of its text area and the document continues on the \
+                 next page, so it is almost blank",
+                region.page + 1,
+                (used * 100.0).round()
+            ),
+        );
+        if let Some(item) = first {
+            diagnostic.loc = diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+        }
+        diagnostic.page = Some(region.page + 1);
+        diagnostic.bbox = Some(region.bbox.rounded());
+        diagnostic.measured = Some(round1(used * 100.0));
+        diagnostic.limit = Some(MIN_INNER_PAGE_USE * 100.0);
+        diagnostic.unit = Some("% of the text area");
+        diagnostic.hints.push(
+            "the content before a page break spilled onto this page: shorten or tighten the \
+             previous page so it fits, or remove the page break"
+                .into(),
+        );
+        out.push(diagnostic);
     }
     out
 }

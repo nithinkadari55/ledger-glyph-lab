@@ -698,6 +698,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L078.near-empty-page",
+        "warning",
+        "A page inside the document uses less than a quarter of its text area, even before \
+         a page break, so it is almost blank.",
+        "25% of the text area",
+        "Fit the spilled content on the previous page, or remove the page break.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -825,6 +834,7 @@ mod tests {
             boxes::OFF_CENTRE_PANEL,
             edges::PAGE_LABEL,
             boxes::SPREAD_BANNER,
+            whitespace::NEAR_EMPTY_PAGE,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
