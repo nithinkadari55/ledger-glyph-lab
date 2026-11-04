@@ -10,8 +10,12 @@ pub const LINE_THROUGH_TEXT: &str = "L050.line-through-text";
 const MANUAL_BREAK_MARGIN: f64 = 1.3;
 
 /// A shape thinner than this in one direction is a line: a rule, a tick, a
-/// gridline.
-const MAX_LINE_THICKNESS_PT: f64 = 1.5;
+/// gridline (heading and card rules are often 2pt).
+const MAX_LINE_THICKNESS_PT: f64 = 3.0;
+
+/// A horizontal line reaching this far into a text's ink (or its whole
+/// thickness, if thinner) cuts its letters.
+const MIN_CUT_DEPTH_PT: f64 = 0.5;
 
 /// How far into a text run a line must reach before it reads as crossing it.
 const MIN_CROSSING_SHARE: f64 = 0.2;
@@ -351,7 +355,7 @@ fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
             }
             let mut diagnostic = Diagnostic::new(
                 LINE_THROUGH_TEXT,
-                Severity::Warning,
+                if contact == Contact::Through { Severity::Error } else { Severity::Warning },
                 format!(
                     "a {} line {} the text \"{}\" on page {}",
                     if vertical { "vertical" } else { "horizontal" },
@@ -374,7 +378,9 @@ fn lines_through_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
             diagnostic.unit = Some("pt");
             diagnostic.hints.push(
                 "move the line or the text so they do not cross: end gridlines and ticks \
-                 before labels, or give labels a background"
+                 before labels, or give labels a background. A v(1fr) next to a rule \
+                 shrinks to nothing on a full page and also removes the normal gap between \
+                 blocks, so put a fixed gap such as v(0.8em) on both sides of the rule"
                     .into(),
             );
             out.push(diagnostic);
@@ -397,9 +403,8 @@ fn contact(line: &BBox, text: &BBox, vertical: bool, size: f64) -> Option<Contac
     if overlap <= MIN_CROSSING_SHARE * text.width() {
         return None;
     }
-    if line.y0 > text.y0 + MIN_CROSSING_SHARE * text.height()
-        && line.y1 < text.y1 - MIN_CROSSING_SHARE * text.height()
-    {
+    let depth = line.y1.min(text.y1) - line.y0.max(text.y0);
+    if depth > 0.0 && depth >= line.height().min(MIN_CUT_DEPTH_PT) {
         return Some(Contact::Through);
     }
     let clearance = MIN_LINE_CLEARANCE_EM * size;

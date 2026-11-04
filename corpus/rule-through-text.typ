@@ -1,4 +1,4 @@
-// expect: L079.rule-through-text
+// expect: L050.line-through-text
 #set page(paper: "a6", margin: 1.5cm)
 #set text(size: 11pt)
 #block(below: 0pt, text(size: 22pt)[Photography gone])

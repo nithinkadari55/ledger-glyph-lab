@@ -443,12 +443,12 @@ pub const CATALOG: &[RuleInfo] = &[
     ),
     rule(
         "L050.line-through-text",
-        "warning",
+        "error/warning",
         "A thin line (rule, tick, gridline) runs through text, or a horizontal line \
          touches its ink, such as a heading rule set right under the descenders. \
          Underline, strike, overline, highlight and content labelled <allow-overlap> \
          are exempt.",
-        "a fifth of the text height or width; 0.08em clearance",
+        "lines up to 3pt thick; through 0.5pt deep (error); 0.08em clearance (warning)",
         "End lines before labels, move the text, or give labels a background.",
         false,
     ),
@@ -708,14 +708,6 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
-        "L079.rule-through-text",
-        "error",
-        "A horizontal rule runs through the letters of text it does not decorate, usually          because a v(1fr) beside it shrank to nothing and removed the gap between blocks.",
-        "0.5pt",
-        "Put a fixed gap on both sides of the rule.",
-        false,
-    ),
-    rule(
         "L080.box-over-text",
         "error",
         "A filled or framed box is painted over part of text outside it.",
@@ -868,7 +860,6 @@ mod tests {
             edges::PAGE_LABEL,
             boxes::SPREAD_BANNER,
             whitespace::NEAR_EMPTY_PAGE,
-            overlap::RULE_THROUGH_TEXT,
             overlap::BOX_OVER_TEXT,
             boxes::SPLIT_BOX,
             lint::NEGATIVE_SPACING,

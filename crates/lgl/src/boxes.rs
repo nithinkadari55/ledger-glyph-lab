@@ -887,7 +887,8 @@ fn split_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .iter()
             .any(|i| i.kind == ItemKind::Image && inside(i.container));
         let lines = geometry.lines.iter().filter(|l| inside(l.container)).count();
-        if has_image || lines >= MIN_FRAGMENT_LINES {
+        // An empty piece is an empty continuation, reported by L039.
+        if has_image || lines == 0 || lines >= MIN_FRAGMENT_LINES {
             continue;
         }
         let side = if piece == 0 { "starts" } else { "ends" };

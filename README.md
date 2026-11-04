@@ -102,7 +102,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L047 low-contrast | text barely distinguishable from the fill or page beneath it | |
 | L048 ragged-column | table text columns with neither edge aligned (centred text of different lengths) | |
 | L049 broken-address | web or email addresses or phone numbers split across lines | |
-| L050 line-through-text | rules, ticks or gridlines running through text | |
+| L050 line-through-text | rules, ticks or gridlines running through or touching text | |
 | L051 hyphenated-label | short labels (chart labels, narrow cells) that break a word | |
 | L052 lonely-title-word | titles whose last line holds a single word | |
 | L053 markup-in-text | HTML entities or Markdown markers printed literally | |
@@ -131,7 +131,6 @@ different and still pass. `lgl rules` prints the full catalog.
 | L076 wrong-page-label | "Page N of M" label that does not match the page or the page count | |
 | L077 spread-banner | title banner whose title and subtitle are pushed to its edges | |
 | L078 near-empty-page | inner page holding under a quarter of its text area spilled from a full page | |
-| L079 rule-through-text | rule drawn through the letters of text | |
 | L080 box-over-text | box painted over part of text outside it | |
 | L081 split-box | box broken across pages leaving fewer than three lines in a piece | |
 | S001 negative-spacing | source: large negative h()/v() | |
