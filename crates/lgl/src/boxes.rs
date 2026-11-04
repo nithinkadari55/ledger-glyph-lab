@@ -597,7 +597,9 @@ fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         .containers
         .iter()
         .filter(|c| {
-            c.visible && matches!(c.kind, "block" | "box") && c.bbox.height() >= MIN_PANEL_PT
+            c.visible
+                && matches!(c.kind, "block" | "box")
+                && c.bbox.height() >= MIN_PANEL_PT
         })
         .collect();
     let mut out = Vec::new();
