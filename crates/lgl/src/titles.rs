@@ -56,6 +56,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(drop_cap_holes(world, geometry));
     out.extend(pair_spacing(world, geometry));
     out.extend(detached_label(world, geometry));
+    out.extend(detached_group_labels(world, geometry));
     out.extend(text_on_rule(world, geometry));
     out.extend(detached_figure_captions(world, geometry));
     out
@@ -1055,6 +1056,229 @@ fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagno
         diagnostic.hints.push(
             "set the caption directly under its figure (about half to one caption size \
              between them), e.g. with a smaller block(below: ..) or par(spacing: ..)"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// A short label above a larger value it names (DATES above "14 MAR", ADULTS
+/// above "£18", COCKTAILS above the first drink) sits more than this many
+/// times further from the value than from whatever is above it, so it reads
+/// with the wrong group. Measured on 206 generated documents: labels that read
+/// with their value sit at up to 1.84 times the gap above them; floating ones
+/// at 2.14 to 2.95.
+const MAX_LABEL_DRIFT: f64 = 2.0;
+
+/// ... and more than this many times its own size from the value.
+const MIN_LABEL_DRIFT_EM: f64 = 2.0;
+
+/// The value is at least this many times larger than its label.
+const LABEL_VALUE_RATIO: f64 = 1.4;
+
+const MAX_GROUP_LABEL_CHARS: usize = 32;
+const MAX_GROUP_VALUE_CHARS: usize = 40;
+
+/// One probed line with the ink of its text.
+struct InkLine {
+    page: usize,
+    frame: BBox,
+    ink: BBox,
+    size: f64,
+    text: String,
+    heading: bool,
+    item: usize,
+}
+
+fn ink_lines(geometry: &Geometry) -> Vec<InkLine> {
+    let texts: Vec<usize> =
+        (0..geometry.items.len()).filter(|&i| is_text(&geometry.items[i])).collect();
+    let mut out = Vec::new();
+    for line in &geometry.lines {
+        let b = &line.bbox;
+        let mut members: Vec<usize> = texts
+            .iter()
+            .copied()
+            .filter(|&i| {
+                let item = &geometry.items[i];
+                let middle = (item.bbox.y0 + item.bbox.y1) / 2.0;
+                item.page == line.page
+                    && (b.y0 - 0.5..=b.y1 + 0.5).contains(&middle)
+                    && item.bbox.x0 >= b.x0 - 1.0
+                    && item.bbox.x1 <= b.x1 + line.overflow + 2.0
+            })
+            .collect();
+        if members.is_empty() {
+            continue;
+        }
+        members.sort_by(|&a, &b| {
+            geometry.items[a].bbox.x0.total_cmp(&geometry.items[b].bbox.x0)
+        });
+        let mut ink = geometry.items[members[0]].bbox;
+        let mut size: f64 = 0.0;
+        let mut text = String::new();
+        let mut heading = false;
+        for &i in &members {
+            let item = &geometry.items[i];
+            ink = ink.union(&item.bbox);
+            size = size.max(item.font_size.unwrap_or_default());
+            text.push_str(item.text.as_deref().unwrap_or_default());
+            heading |= enclosing(geometry, item.elem, "heading").is_some();
+        }
+        out.push(InkLine {
+            page: line.page,
+            frame: *b,
+            ink,
+            size,
+            text: text.trim().to_string(),
+            heading,
+            item: members[0],
+        });
+    }
+    out
+}
+
+/// A short label above a larger value that floats closer to whatever comes
+/// before it than to the value it names. Labels above the largest text on a
+/// page (kickers above a title) are left to the kicker check.
+fn detached_group_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let lines = ink_lines(geometry);
+    let mut largest: BTreeMap<usize, f64> = BTreeMap::new();
+    for line in &lines {
+        let top = largest.entry(line.page).or_insert(0.0);
+        *top = top.max(line.size);
+    }
+    let obstacles: Vec<&Item> = geometry
+        .items
+        .iter()
+        .filter(|i| matches!(i.kind, ItemKind::Shape | ItemKind::Image) || is_text(i))
+        .collect();
+    let mut out = Vec::new();
+    for (index, a) in lines.iter().enumerate() {
+        if a.text.chars().count() > MAX_GROUP_LABEL_CHARS
+            || a.text.chars().filter(|c| c.is_alphabetic()).count() < 2
+        {
+            continue;
+        }
+        // A line of a longer paragraph is no label.
+        let in_paragraph = lines.iter().enumerate().any(|(other, o)| {
+            let up = a.frame.y0 - o.frame.y1;
+            let down = o.frame.y0 - a.frame.y1;
+            other != index
+                && o.page == a.page
+                && overlaps(&o.ink, &a.ink)
+                && (o.size - a.size).abs() < 0.5
+                && ((-2.0..a.size).contains(&up) || (-2.0..a.size).contains(&down))
+        });
+        if in_paragraph {
+            continue;
+        }
+        let Some(value) = lines
+            .iter()
+            .enumerate()
+            .filter(|&(other, b)| {
+                other != index
+                    && b.page == a.page
+                    && b.ink.y0 > a.ink.y1 - 0.5
+                    && overlaps(&a.ink, &b.ink)
+            })
+            .map(|(_, b)| b)
+            .min_by(|x, y| x.ink.y0.total_cmp(&y.ink.y0))
+        else {
+            continue;
+        };
+        let centre = |b: &BBox| (b.x0 + b.x1) / 2.0;
+        let aligned = (a.ink.x0 - value.ink.x0).abs() < 3.0
+            || (centre(&a.ink) - centre(&value.ink)).abs() < 3.0;
+        if !aligned
+            || value.size < LABEL_VALUE_RATIO * a.size
+            || value.text.chars().count() > MAX_GROUP_VALUE_CHARS
+            || value.heading
+            || value.size >= largest[&a.page] - 0.01
+        {
+            continue;
+        }
+        // The frame or fill around both is the group's own box.
+        let encloses = |b: &BBox| {
+            b.x0 <= a.ink.x0.min(value.ink.x0) + 0.5
+                && b.x1 >= a.ink.x1.max(value.ink.x1) - 0.5
+                && b.y0 <= a.ink.y0 + 0.5
+                && b.y1 >= value.ink.y1 - 0.5
+        };
+        let (x0, x1) = (a.ink.x0.max(value.ink.x0), a.ink.x1.min(value.ink.x1));
+        let (y0, y1) = (a.ink.y1, value.ink.y0);
+        let between = obstacles.iter().any(|i| {
+            let b = &i.bbox;
+            i.page == a.page
+                && b.y0 < y1 - 0.5
+                && b.y1 > y0 + 0.5
+                && b.x1 > x0
+                && b.x0 < x1
+                && !encloses(b)
+        });
+        if between {
+            continue;
+        }
+        // What the label could belong to instead: the nearest ink above it,
+        // or the top edge of the box that holds the group.
+        let above = obstacles
+            .iter()
+            .filter(|i| {
+                i.page == a.page
+                    && i.bbox.y1 <= a.ink.y0 + 0.5
+                    && i.bbox.x1 > a.ink.x0
+                    && i.bbox.x0 < a.ink.x1
+                    && !encloses(&i.bbox)
+            })
+            .map(|i| a.ink.y0 - i.bbox.y1)
+            .chain(
+                geometry
+                    .containers
+                    .iter()
+                    .filter(|c| {
+                        c.visible
+                            && c.page == a.page
+                            && c.bbox.y0 <= a.ink.y0
+                            && c.bbox.y1 >= value.ink.y1
+                            && c.bbox.x0 <= a.ink.x0 + 0.5
+                            && c.bbox.x1 >= a.ink.x1 - 0.5
+                    })
+                    .map(|c| a.ink.y0 - c.bbox.y0),
+            )
+            .filter(|gap| *gap >= -0.5)
+            .reduce(f64::min);
+        let Some(above) = above else { continue };
+        let gap = y1 - y0;
+        if gap <= MAX_LABEL_DRIFT * above.max(0.0) || gap <= MIN_LABEL_DRIFT_EM * a.size {
+            continue;
+        }
+        let item = &geometry.items[a.item];
+        let mut diagnostic = Diagnostic::new(
+            DETACHED_LABEL,
+            Severity::Warning,
+            format!(
+                "the label {:?} on page {} sits {}pt above {:?}, the value it names, but \
+                 only {}pt below what comes before it, so it reads with the wrong group",
+                a.text,
+                a.page + 1,
+                round1(gap),
+                value.text,
+                round1(above)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, item));
+        diagnostic.page = Some(a.page + 1);
+        diagnostic.bbox = Some(a.ink.union(&value.ink).rounded());
+        diagnostic.measured = Some(round1(gap));
+        diagnostic.limit = Some(round1((MAX_LABEL_DRIFT * above).max(MIN_LABEL_DRIFT_EM * a.size)));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "keep the label and its value together, about a third of the value's size \
+             apart: stack(spacing: 8pt, label, value) for a 24pt value, or one block with a \
+             small par(spacing). A \
+             v(..) between paragraphs is added to the paragraph spacing, and an em spacing \
+             grows with large text"
                 .into(),
         );
         out.push(diagnostic);

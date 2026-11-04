@@ -637,9 +637,11 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L071.detached-label",
         "warning",
-        "A small label above the document title (a kicker) sits more than five times its          own size above the title, with no rule between, so it floats free of the title.",
-        "5 label sizes",
-        "Set the label two to four times its size above the title.",
+        "A small label floats free of what it names: a kicker more than five times its own \
+         size above the document title, or a short label above a larger value (a stat, a \
+         price, a list) more than twice as far from the value as from whatever is above it.",
+        "5 label sizes (kicker); 2 times the gap above it (label and value)",
+        "Keep the label about a third of the value's size above it (stack(spacing: ..)).",
         false,
     ),
     rule(
