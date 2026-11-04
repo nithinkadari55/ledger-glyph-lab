@@ -63,13 +63,13 @@ fn letter_calls(
     out: &mut Vec<Diagnostic>,
 ) {
     if node.kind() == SyntaxKind::MathLetter
-        && letters.iter().any(|l| l.as_str() == node.text().as_str())
+        && letters.iter().any(|l| l.as_str() == node.get().leaf_text().as_str())
         && let Some(next) = node.next_sibling()
         && next.kind() == SyntaxKind::MathDelimited
-        && next.offset() == node.offset() + node.len()
-        && next.children().next().is_some_and(|open| open.text() == "(")
+        && next.offset() == node.offset() + node.get().len()
+        && next.children().next().is_some_and(|open| open.get().leaf_text() == "(")
     {
-        let name = node.text();
+        let name = node.get().leaf_text();
         let mut diagnostic = finding(
             world,
             node,
