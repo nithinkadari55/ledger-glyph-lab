@@ -664,7 +664,8 @@ fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     continue;
                 }
                 let start = k;
-                let style = move |j: usize| if (j - start).is_multiple_of(2) { a } else { b };
+                let style =
+                    move |j: usize| if (j - start).is_multiple_of(2) { a } else { b };
                 let mut j = k;
                 while j + 1 < column.len()
                     && column[j].key == style(j)
