@@ -36,7 +36,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "error",
         "Content extends beyond a cell, an explicitly sized box/block, or a box/block \
          with fill or stroke, without clip.",
-        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
+        "0.5pt (text: 0.35em, but 0.15em for a letter or digit at the right end)",
         "Give the container more room (auto, fr, %), let content wrap, or clip on \
          purpose.",
         true,
@@ -45,7 +45,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L003.margin-intrusion",
         "error",
         "Body content extends into the page margin.",
-        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
+        "0.5pt (text: 0.35em, but 0.15em for a letter or digit at the right end)",
         "Keep content within the text area: relative sizes, smaller content.",
         true,
     ),
@@ -281,7 +281,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L032.column-overflow",
         "error",
         "Content extends beyond its column into the gutter or the next column.",
-        "0.5pt (text: 0.35em, but 0.5pt for a letter or digit at the right end)",
+        "0.5pt (text: 0.35em, but 0.15em for a letter or digit at the right end)",
         "Use relative or fractional widths inside columns, or span columns with \
          place(scope: \"parent\", float: true).",
         false,

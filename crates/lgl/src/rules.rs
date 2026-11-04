@@ -21,9 +21,14 @@ const TOLERANCE_PT: f64 = 0.5;
 /// Text may hang into the margin by design (Typst hangs dashes, hyphens and
 /// punctuation at line ends), and glyphs of large text can reach slightly
 /// past their line start, so text gets a tolerance relative to its size. A
-/// letter or digit at the right end of the text gets the plain geometric
-/// tolerance: nothing hangs it there.
+/// letter or digit at the right end of the text gets a small tolerance only:
+/// nothing hangs it there.
 const TEXT_TOLERANCE_EM: f64 = 0.35;
+
+/// Tolerance for a letter or digit at the right end of text. Measured on 115
+/// generated documents: glyph advances reach up to 0.11em past a line end;
+/// a clipped table header reached 0.26em.
+const LETTER_TOLERANCE_EM: f64 = 0.15;
 
 /// Extra space between characters of a justified line from which letter
 /// spacing becomes visible.
@@ -148,10 +153,13 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
             _ => TOLERANCE_PT,
         };
-        let last = item.text.as_deref().and_then(|t| t.trim().chars().next_back());
-        let sides = match last {
-            Some(c) if item.kind == ItemKind::Text && c.is_alphanumeric() => {
-                [tolerance, TOLERANCE_PT]
+        // A trailing space is part of the item's box but invisible, so only
+        // text that really ends in a letter or digit is held to the tighter
+        // tolerance on the right.
+        let last = item.text.as_deref().and_then(|t| t.chars().next_back());
+        let sides = match (last, item.font_size) {
+            (Some(c), Some(size)) if item.kind == ItemKind::Text && c.is_alphanumeric() => {
+                [tolerance, TOLERANCE_PT.max(LETTER_TOLERANCE_EM * size)]
             }
             _ => [tolerance; 2],
         };
