@@ -15,6 +15,7 @@ pub const PAIR_SPACING: &str = "L070.pair-spacing";
 pub const DETACHED_LABEL: &str = "L071.detached-label";
 pub const TEXT_ON_RULE: &str = "L072.text-on-rule";
 pub const CROWDED_SUBTITLE: &str = "L073.crowded-subtitle";
+pub const DETACHED_FIGURE_CAPTION: &str = "L074.detached-figure-caption";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -56,6 +57,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(pair_spacing(world, geometry));
     out.extend(detached_label(world, geometry));
     out.extend(text_on_rule(world, geometry));
+    out.extend(detached_figure_captions(world, geometry));
     out
 }
 
@@ -219,9 +221,15 @@ fn check_title(
     big: f64,
     body: f64,
 ) -> Option<Diagnostic> {
+    // The text below the title, including text that crowds so close that its
+    // box reaches into the lower part of the title's last line.
     let next = lines
         .iter()
-        .filter(|l| l.bbox.y0 >= block.y1 - 0.5 && overlaps(&l.bbox, &block))
+        .filter(|l| {
+            l.bbox.y0 >= block.y1 - 0.5 * big
+                && l.bbox.y1 > block.y1 + 0.5
+                && overlaps(&l.bbox, &block)
+        })
         .filter(|l| l.size < big - 0.5)
         .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))?;
     let gap = next.bbox.y0 - block.y1;
@@ -952,6 +960,78 @@ fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             "leave space between the text and the block with the line (a v(1fr) shrinks to \
              nothing when the page is full; add a fixed gap such as v(1.5em) next to it), or \
              shorten the text"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// A key figure ("60 h", "£35") needs its caption within this many caption
+/// sizes below it. Measured on 150 generated documents: captions read with
+/// their figure at 0.9 to 1.7 caption sizes; at 3.0 to 3.5 they drift off.
+const MAX_FIGURE_CAPTION_GAP: f64 = 2.5;
+
+/// A figure is at least this many times its caption's size.
+const FIGURE_CAPTION_RATIO: f64 = 1.8;
+
+/// A key figure whose caption sits far below it, so the two fall apart.
+fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let texts: Vec<&Item> = geometry.items.iter().filter(|i| is_text(i)).collect();
+    let mut out = Vec::new();
+    for figure in &texts {
+        let value = figure.text.as_deref().map(str::trim).unwrap_or_default();
+        let size = figure.font_size.unwrap_or_default();
+        if value.chars().count() > 12 || !value.chars().any(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        let f = figure.bbox;
+        // The caption: smaller text starting at the figure's left edge, below
+        // it, with nothing in between.
+        let Some(caption) = texts
+            .iter()
+            .filter(|c| {
+                c.page == figure.page
+                    && c.font_size.unwrap_or_default() * FIGURE_CAPTION_RATIO <= size
+                    && (c.bbox.x0 - f.x0).abs() <= 3.0
+                    && c.bbox.y0 >= f.y1 - 0.5
+            })
+            .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
+        else {
+            continue;
+        };
+        let c = caption.bbox;
+        let blocked = texts.iter().any(|t| {
+            t.page == figure.page
+                && t.bbox.y0 >= f.y1 - 0.5
+                && t.bbox.y0 < c.y0 - 0.5
+                && overlaps(&t.bbox, &c)
+        });
+        let gap = c.y0 - f.y1;
+        let caption_size = caption.font_size.unwrap_or_default();
+        if blocked || gap <= MAX_FIGURE_CAPTION_GAP * caption_size {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            DETACHED_FIGURE_CAPTION,
+            Severity::Warning,
+            format!(
+                "the caption under {value:?} on page {} sits {}pt below it, more than {} \
+                 times its own size, so figure and caption fall apart",
+                figure.page + 1,
+                round1(gap),
+                MAX_FIGURE_CAPTION_GAP
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, caption));
+        diagnostic.page = Some(figure.page + 1);
+        diagnostic.bbox = Some(f.union(&c).rounded());
+        diagnostic.measured = Some(round1(gap));
+        diagnostic.limit = Some(round1(MAX_FIGURE_CAPTION_GAP * caption_size));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "set the caption directly under its figure (about half to one caption size \
+             between them), e.g. with a smaller block(below: ..) or par(spacing: ..)"
                 .into(),
         );
         out.push(diagnostic);

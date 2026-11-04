@@ -43,6 +43,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(box_padding(world, geometry));
     out.extend(dangling_separators(world, geometry));
     out.extend(uneven_boxes(world, geometry));
+    out.extend(off_centre_panel(world, geometry));
     out
 }
 
@@ -647,6 +648,73 @@ fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             );
             out.push(diagnostic);
         }
+    }
+    out
+}
+
+pub const OFF_CENTRE_PANEL: &str = "L075.off-centre-panel";
+
+/// A panel holding a one-page document should sit with even space above and
+/// below it; more than this ratio between the two looks off-centre.
+const MAX_PANEL_OFFSET_RATIO: f64 = 1.5;
+
+/// The framed panel of a one-page card, invitation or certificate that sits
+/// higher or lower on the page than its centre.
+fn off_centre_panel(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let [page] = geometry.pages.as_slice() else { return Vec::new() };
+    let texts: Vec<&crate::geom::Item> = geometry
+        .items
+        .iter()
+        .filter(|i| {
+            i.kind == ItemKind::Text && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+        })
+        .collect();
+    if texts.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for panel in &geometry.containers {
+        let b = panel.bbox;
+        if !panel.visible || b.width() < 0.7 * page.width {
+            continue;
+        }
+        let held = texts
+            .iter()
+            .filter(|t| b.y0 <= t.bbox.y0 && t.bbox.y1 <= b.y1 + 1.0)
+            .count();
+        if (held as f64) < 0.9 * texts.len() as f64 {
+            continue;
+        }
+        let (above, below) = (b.y0, page.height - b.y1);
+        if above <= 0.0 || below <= 0.0 {
+            continue;
+        }
+        let ratio = above.max(below) / above.min(below);
+        if ratio <= MAX_PANEL_OFFSET_RATIO {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            OFF_CENTRE_PANEL,
+            Severity::Warning,
+            format!(
+                "the panel holding the page sits {}pt below the top edge but {}pt above \
+                 the bottom edge, so it looks off-centre",
+                round1(above),
+                round1(below)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, panel.span);
+        diagnostic.page = Some(1);
+        diagnostic.bbox = Some(b.rounded());
+        diagnostic.measured = Some(round1(ratio));
+        diagnostic.limit = Some(MAX_PANEL_OFFSET_RATIO);
+        diagnostic.unit = Some("ratio");
+        diagnostic.hints.push(
+            "centre the panel on the page (e.g. align(horizon) around it, or v(1fr) above \
+             and below it), or let it fill the page height"
+                .into(),
+        );
+        out.push(diagnostic);
     }
     out
 }

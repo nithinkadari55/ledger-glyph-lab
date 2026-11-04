@@ -660,6 +660,24 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L074.detached-figure-caption",
+        "warning",
+        "The caption under a key figure (a short number set at least 1.8 times larger) \
+         sits more than 2.5 caption sizes below it, so figure and caption fall apart.",
+        "2.5 caption sizes",
+        "Set the caption directly under its figure.",
+        false,
+    ),
+    rule(
+        "L075.off-centre-panel",
+        "warning",
+        "The framed panel holding a one-page document has more than 1.5 times as much \
+         space on one side (top or bottom) as on the other.",
+        "1.5",
+        "Centre the panel on the page, or let it fill the page height.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -783,6 +801,8 @@ mod tests {
             titles::DETACHED_LABEL,
             titles::TEXT_ON_RULE,
             titles::CROWDED_SUBTITLE,
+            titles::DETACHED_FIGURE_CAPTION,
+            boxes::OFF_CENTRE_PANEL,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
