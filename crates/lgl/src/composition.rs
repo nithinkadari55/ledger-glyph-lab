@@ -353,6 +353,12 @@ pub const PARAGRAPH_SPACING: &str = "L055.paragraph-spacing";
 /// Text at least this large is display text: titles and headlines.
 const DISPLAY_PT: f64 = 14.0;
 
+/// The text below a multi-line title needs at least this many times the gap
+/// between the title's own lines. Measured on 125 generated documents with
+/// the text's boxes: titles read as separate from 2 times on; at 1.2 and 1.47
+/// the text below reads as another title line.
+const MIN_TITLE_AFTER_RATIO: f64 = 1.5;
+
 /// Paragraphs without a first-line indent need at least this much more space
 /// between them than between their lines (Typst's default is about 0.55em).
 const MIN_PARAGRAPH_GAP_EM: f64 = 0.5;
@@ -394,18 +400,25 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             continue;
         }
         // Clear space between the title's lines, and between its last line
-        // and the next text (descent 0.25em, ascent 0.75em).
-        let inside = within - size;
-        let after = below - 0.25 * size - 0.75 * next_size;
-        if after >= inside - 0.5 {
+        // and the next text, measured on the text's own boxes (display faces
+        // differ widely in ascent and descent).
+        let (Some(top), Some(bottom), Some(below_ink)) =
+            (ink(geometry, first), ink(geometry, last), ink(geometry, next))
+        else {
+            continue;
+        };
+        let inside = bottom.y0 - top.y1;
+        let after = below_ink.y0 - bottom.y1;
+        if inside <= 0.0 || after >= MIN_TITLE_AFTER_RATIO * inside - 0.5 {
             continue;
         }
         let mut diagnostic = Diagnostic::new(
             TITLE_PROXIMITY,
             Severity::Warning,
             format!(
-                "the text below a {}pt title on page {} starts {}pt under it, closer than \
-                 the title's own lines ({}pt apart), so it reads as part of the title",
+                "the text below a {}pt title on page {} starts {}pt under it, less than \
+                 1.5 times the gap between the title's own lines ({}pt), so it reads as \
+                 part of the title",
                 round1(size),
                 next.page + 1,
                 round1(after.max(0.0)),
@@ -417,10 +430,10 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.page = Some(next.page + 1);
         diagnostic.bbox = Some(last.bbox.union(&next.bbox).rounded());
         diagnostic.measured = Some(round1(after));
-        diagnostic.limit = Some(round1(inside));
+        diagnostic.limit = Some(round1(MIN_TITLE_AFTER_RATIO * inside));
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
-            "leave more space below the title than between its lines, e.g. \
+            "leave clearly more space below the title than between its lines, e.g. \
              block(below: 0.8em) around the title or v(..) before the text that follows"
                 .into(),
         );
@@ -620,10 +633,12 @@ fn lopsided_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 struct Ink {
     x0: f64,
     x1: f64,
+    y0: f64,
+    y1: f64,
     size: f64,
 }
 
-/// The horizontal extent and largest size of the text on a line.
+/// The extent and largest size of the text on a line.
 fn ink(geometry: &Geometry, line: &Line) -> Option<Ink> {
     let b = &line.bbox;
     let mut out: Option<Ink> = None;
@@ -641,9 +656,17 @@ fn ink(geometry: &Geometry, line: &Line) -> Option<Ink> {
             Some(ink) => Ink {
                 x0: ink.x0.min(item.bbox.x0),
                 x1: ink.x1.max(item.bbox.x1),
+                y0: ink.y0.min(item.bbox.y0),
+                y1: ink.y1.max(item.bbox.y1),
                 size: ink.size.max(size),
             },
-            None => Ink { x0: item.bbox.x0, x1: item.bbox.x1, size },
+            None => Ink {
+                x0: item.bbox.x0,
+                x1: item.bbox.x1,
+                y0: item.bbox.y0,
+                y1: item.bbox.y1,
+                size,
+            },
         });
     }
     out

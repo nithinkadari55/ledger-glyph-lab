@@ -484,10 +484,11 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L054.title-too-close",
         "warning",
-        "Text below a multi-line title or headline (14pt or larger) starts closer to it \
-         than the title's own lines are to each other, so it reads as part of the title.",
-        "the clear space between the title's lines, less 0.5pt",
-        "Leave more space below the title than between its lines.",
+        "Text below a multi-line title or headline (14pt or larger) starts less than 1.5 \
+         times the gap between the title's own lines below it, so it reads as part of the \
+         title.",
+        "1.5 times the gap between the title's lines",
+        "Leave clearly more space below the title than between its lines.",
         false,
     ),
     rule(
