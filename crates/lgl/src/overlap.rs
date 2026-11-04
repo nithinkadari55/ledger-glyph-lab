@@ -16,6 +16,11 @@ pub const ALLOW_OVERLAP: &str = "allow-overlap";
 /// either direction are kerning, italic overhang or tight leading.
 const TEXT_SLACK_EM: f64 = 0.25;
 
+/// Glyphs of an inline equation are not kerned against text or another
+/// equation, so a smaller overlap is already a collision: stacked fractions
+/// on neighbouring lines run into each other by only a couple of points.
+const MATH_SLACK_PT: f64 = 0.5;
+
 /// Overlaps involving images smaller than this in either direction are ignored.
 const IMAGE_SLACK_PT: f64 = 2.0;
 
@@ -99,6 +104,7 @@ fn conflict(a: &Candidate, b: &Candidate) -> Option<(f64, f64)> {
     let overlap = a.bbox.intersect(&b.bbox)?;
     let (width, height) = (overlap.width(), overlap.height());
     let slack = match (a.item.font_size, b.item.font_size) {
+        (Some(_), Some(_)) if a.equation.is_some() || b.equation.is_some() => MATH_SLACK_PT,
         (Some(x), Some(y)) => TEXT_SLACK_EM * x.min(y),
         _ => IMAGE_SLACK_PT,
     };
