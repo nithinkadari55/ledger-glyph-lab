@@ -886,9 +886,14 @@ fn split_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .items
             .iter()
             .any(|i| i.kind == ItemKind::Image && inside(i.container));
-        let lines = geometry.lines.iter().filter(|l| inside(l.container)).count();
-        // An empty piece is an empty continuation, reported by L039.
-        if has_image || lines == 0 || lines >= MIN_FRAGMENT_LINES {
+        let lines: Vec<&crate::geom::Line> =
+            geometry.lines.iter().filter(|l| inside(l.container)).collect();
+        // An empty piece, or one mostly empty below its lines, is a hollow
+        // box, reported by L039.
+        let bottom = lines.iter().map(|l| l.bbox.y1).fold(f64::MIN, f64::max);
+        let hollow = container.bbox.y1 - bottom > MAX_EMPTY_PT;
+        let lines = lines.len();
+        if has_image || lines == 0 || hollow || lines >= MIN_FRAGMENT_LINES {
             continue;
         }
         let side = if piece == 0 { "starts" } else { "ends" };
