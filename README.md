@@ -130,7 +130,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | L075 off-centre-panel | one-page framed panel with uneven space above and below | |
 | L076 wrong-page-label | "Page N of M" label that does not match the page or the page count | |
 | L077 spread-banner | title banner whose title and subtitle are pushed to its edges | |
-| L078 near-empty-page | inner page using less than a quarter of its text area | |
+| L078 near-empty-page | inner page holding under a quarter of its text area spilled from a full page | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

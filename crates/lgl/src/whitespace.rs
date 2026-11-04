@@ -11,6 +11,9 @@ pub const NEAR_EMPTY_PAGE: &str = "L078.near-empty-page";
 /// inner page uses at least 35% of its text area except one at 4%.
 const MIN_INNER_PAGE_USE: f64 = 0.25;
 
+/// A page whose content reaches this share of its text area is full.
+const FULL_PAGE_USE: f64 = 0.9;
+
 /// The share of the text area that may stay empty at the bottom of a page that
 /// was ended for lack of space. Convention, tunable.
 const MAX_EMPTY_SHARE: f64 = 0.2;
@@ -33,9 +36,9 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-/// An inner page that holds only a sliver of content, even when a page
-/// break follows it (the break is meant to start a new page, not to leave
-/// one almost blank).
+/// An inner page that holds only a sliver of content spilled over from a
+/// full page before it, even when a page break follows it (the break is
+/// meant to start a new page, not to leave one almost blank).
 fn near_empty_pages(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let last = geometry.pages.len().saturating_sub(1);
     let mut out = Vec::new();
@@ -46,6 +49,18 @@ fn near_empty_pages(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let Some(bottom) = content_bottom(geometry, index) else { continue };
         let used = (bottom - region.bbox.y0) / region.bbox.height();
         if used >= MIN_INNER_PAGE_USE {
+            continue;
+        }
+        // Only a spill: the page before is full. A short page that ends on
+        // purpose (a cover, a section end) is followed by a page break too.
+        let previous = geometry.regions.iter().enumerate().find(|(_, r)| {
+            r.kind == "page-body" && region.page > 0 && r.page == region.page - 1
+        });
+        let Some((before, previous)) = previous else { continue };
+        let full = content_bottom(geometry, before).is_some_and(|b| {
+            (b - previous.bbox.y0) / previous.bbox.height() >= FULL_PAGE_USE
+        });
+        if !full {
             continue;
         }
         let first = first_item(geometry, region.page).map(|i| &geometry.items[i]);
