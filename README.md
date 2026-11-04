@@ -135,6 +135,7 @@ different and still pass. `lgl rules` prints the full catalog.
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |
 | S004 disabled-protection | source: orphan/widow costs or sticky headings disabled | yes |
+| S005 math-letter-call | source: one-letter function written as f(..) inside math | |
 
 Intended overlays such as watermarks are exempt from L006 when labelled
 `<allow-overlap>`.

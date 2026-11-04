@@ -740,6 +740,14 @@ pub const CATALOG: &[RuleInfo] = &[
         "Remove the rule and keep Typst's defaults.",
         true,
     ),
+    rule(
+        "S005.math-letter-call",
+        "error",
+        "Source lint: a one-letter function the document defines, written as f(..) inside          math, where it prints the letter and brackets instead of calling the function.",
+        "any",
+        "Call it with #f(..), or give the function a longer name.",
+        false,
+    ),
 ];
 
 /// Typst's own diagnostics are reported with these rule names.
@@ -840,6 +848,7 @@ mod tests {
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
             lint::DISABLED_PROTECTION,
+            lint::MATH_LETTER_CALL,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");

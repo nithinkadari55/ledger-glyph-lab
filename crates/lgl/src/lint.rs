@@ -1,5 +1,5 @@
 use typst::syntax::ast::{self, AstNode, Unit};
-use typst::syntax::{LinkedNode, Source};
+use typst::syntax::{LinkedNode, Source, SyntaxKind, SyntaxNode};
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::overlap::ALLOW_OVERLAP;
@@ -9,6 +9,7 @@ pub const NEGATIVE_SPACING: &str = "S001.negative-spacing";
 pub const ABSOLUTE_PLACEMENT: &str = "S002.absolute-placement";
 pub const NO_REFLOW: &str = "S003.transform-without-reflow";
 pub const DISABLED_PROTECTION: &str = "S004.disabled-protection";
+pub const MATH_LETTER_CALL: &str = "S005.math-letter-call";
 
 /// Negative spacing smaller than this is a typographic adjustment (kerning,
 /// tightening a rule under a heading) rather than a layout hack.
@@ -21,7 +22,69 @@ const MAX_NEGATIVE_H_PT: f64 = 5.0;
 pub fn run(world: &LabWorld, source: &Source) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     visit(world, &LinkedNode::new(source.root()), &mut out);
+    let mut letters = Vec::new();
+    letter_functions(source.root(), &mut letters);
+    if !letters.is_empty() {
+        letter_calls(world, &LinkedNode::new(source.root()), &letters, &mut out);
+    }
     out
+}
+
+/// One-letter names the document binds to functions (`let f(a, b) = ..` or
+/// `let f = (a, b) => ..`).
+fn letter_functions(node: &SyntaxNode, out: &mut Vec<String>) {
+    if let Some(binding) = node.cast::<ast::LetBinding>() {
+        let name = match binding.kind() {
+            ast::LetBindingKind::Closure(name) => Some(name),
+            ast::LetBindingKind::Normal(ast::Pattern::Normal(ast::Expr::Ident(name)))
+                if matches!(binding.init(), Some(ast::Expr::Closure(_))) =>
+            {
+                Some(name)
+            }
+            _ => None,
+        };
+        if let Some(name) = name
+            && name.get().chars().count() == 1
+        {
+            out.push(name.get().to_string());
+        }
+    }
+    for child in node.children() {
+        letter_functions(child, out);
+    }
+}
+
+/// In math, a single letter is always a letter: `$f(2, 3)$` prints "f(2, 3)"
+/// even when the document defines a function `f`. Only `#f(2, 3)` calls it.
+fn letter_calls(
+    world: &LabWorld,
+    node: &LinkedNode,
+    letters: &[String],
+    out: &mut Vec<Diagnostic>,
+) {
+    if node.kind() == SyntaxKind::MathLetter
+        && letters.iter().any(|l| l.as_str() == node.text().as_str())
+        && let Some(next) = node.next_sibling()
+        && next.kind() == SyntaxKind::MathDelimited
+        && next.offset() == node.offset() + node.len()
+        && next.children().next().is_some_and(|open| open.text() == "(")
+    {
+        let name = node.text();
+        let mut diagnostic = finding(
+            world,
+            node,
+            MATH_LETTER_CALL,
+            format!(
+                "{name}(..) inside math prints the letter {name} and the brackets: a                  one-letter name in math is never a function call"
+            ),
+            &format!("write #{name}(..) to call the function, or give it a longer name"),
+        );
+        diagnostic.severity = Severity::Error;
+        out.push(diagnostic);
+    }
+    for child in node.children() {
+        letter_calls(world, &child, letters, out);
+    }
 }
 
 fn visit(world: &LabWorld, node: &LinkedNode, out: &mut Vec<Diagnostic>) {
