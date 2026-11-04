@@ -104,7 +104,9 @@ fn conflict(a: &Candidate, b: &Candidate) -> Option<(f64, f64)> {
     let overlap = a.bbox.intersect(&b.bbox)?;
     let (width, height) = (overlap.width(), overlap.height());
     let slack = match (a.item.font_size, b.item.font_size) {
-        (Some(_), Some(_)) if a.equation.is_some() || b.equation.is_some() => MATH_SLACK_PT,
+        (Some(_), Some(_)) if a.equation.is_some() || b.equation.is_some() => {
+            MATH_SLACK_PT
+        }
         (Some(x), Some(y)) => TEXT_SLACK_EM * x.min(y),
         _ => IMAGE_SLACK_PT,
     };

@@ -67,7 +67,10 @@ fn letter_calls(
         && let Some(next) = node.next_sibling()
         && next.kind() == SyntaxKind::MathDelimited
         && next.offset() == node.offset() + node.get().len()
-        && next.children().next().is_some_and(|open| open.get().leaf_text() == "(")
+        && next
+            .children()
+            .next()
+            .is_some_and(|open| open.get().leaf_text() == "(")
     {
         let name = node.get().leaf_text();
         let mut diagnostic = finding(
