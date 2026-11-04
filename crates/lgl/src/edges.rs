@@ -65,3 +65,82 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     }
     out
 }
+
+pub const PAGE_LABEL: &str = "L076.wrong-page-label";
+
+/// A "Page N of M" label in a header or footer whose numbers do not match the
+/// page it is on or the document's page count (often a typed-in total).
+pub fn page_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let total = geometry.pages.len();
+    let mut out = Vec::new();
+    for page in 0..total {
+        for kind in ["header", "footer"] {
+            let mut items: Vec<&crate::geom::Item> = geometry
+                .items
+                .iter()
+                .filter(|i| {
+                    i.page == page
+                        && i.kind == ItemKind::Text
+                        && i.region.is_some_and(|r| geometry.regions[r].kind == kind)
+                })
+                .collect();
+            items.sort_by(|a, b| {
+                (a.bbox.y0.round(), a.bbox.x0).partial_cmp(&(b.bbox.y0.round(), b.bbox.x0)).unwrap()
+            });
+            let text: String = items
+                .iter()
+                .filter_map(|i| i.text.as_deref())
+                .map(str::trim)
+                .collect::<Vec<_>>()
+                .join(" ");
+            for (number, of) in page_of_pairs(&text) {
+                if number == page + 1 && of == total {
+                    continue;
+                }
+                let Some(first) = items.first() else { continue };
+                let mut diagnostic = Diagnostic::new(
+                    PAGE_LABEL,
+                    Severity::Error,
+                    format!(
+                        "the {kind} on page {} reads \"{number} of {of}\", but this is page {} \
+                         of {total}",
+                        page + 1,
+                        page + 1
+                    ),
+                );
+                diagnostic.loc =
+                    diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+                diagnostic.page = Some(page + 1);
+                diagnostic.hints.push(
+                    "number pages with the counter instead of typed numbers: \
+                     context counter(page).display(\"1 of 1\", both: true)"
+                        .into(),
+                );
+                out.push(diagnostic);
+            }
+        }
+    }
+    out
+}
+
+/// The "N of M" and "N / M" pairs in a text.
+fn page_of_pairs(text: &str) -> Vec<(usize, usize)> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut out = Vec::new();
+    for (k, word) in words.iter().enumerate() {
+        // "3/4" written without spaces.
+        if let Some((a, b)) = word.split_once('/')
+            && let (Ok(a), Ok(b)) = (a.parse::<usize>(), b.parse::<usize>())
+        {
+            out.push((a, b));
+            continue;
+        }
+        if k + 2 < words.len()
+            && (words[k + 1] == "of" || words[k + 1] == "/")
+            && let (Ok(a), Ok(b)) = (word.parse::<usize>(), words[k + 2].parse::<usize>())
+        {
+            out.push((a, b));
+        }
+    }
+    out
+}

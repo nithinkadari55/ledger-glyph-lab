@@ -126,8 +126,10 @@ different and still pass. `lgl rules` prints the full catalog.
 | L071 detached-label | label more than five times its size above the document title | |
 | L072 text-on-rule | text sitting on a line that runs on both sides of it | |
 | L073 crowded-subtitle | subtitle less than 0.2 title sizes below a one-line title | |
-| L074 detached-figure-caption | caption more than 2.5 of its sizes below a key figure | |
+| L074 detached-figure-caption | caption under a key figure further than 2.5 or closer than 0.3 of its sizes | |
 | L075 off-centre-panel | one-page framed panel with uneven space above and below | |
+| L076 wrong-page-label | "Page N of M" label that does not match the page or the page count | |
+| L077 spread-banner | title banner whose title and subtitle are pushed to its edges | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

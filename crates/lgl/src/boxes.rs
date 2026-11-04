@@ -44,6 +44,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(dangling_separators(world, geometry));
     out.extend(uneven_boxes(world, geometry));
     out.extend(off_centre_panel(world, geometry));
+    out.extend(spread_banners(world, geometry));
     out
 }
 
@@ -718,6 +719,102 @@ fn off_centre_panel(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.hints.push(
             "centre the panel on the page (e.g. align(horizon) around it, or v(1fr) above \
              and below it), or let it fill the page height"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+pub const SPREAD_BANNER: &str = "L077.spread-banner";
+
+/// In a title banner holding a title and one subtitle line, the gap between
+/// the two may be at most this many times the banner's top or bottom
+/// padding. Measured on 168 generated documents: approved banners sit at 2.0
+/// to 2.1, the cramped ones at 2.8 to 4.9.
+const MAX_BANNER_SPREAD: f64 = 2.5;
+
+/// A filled title banner at the top of the first page whose title and
+/// subtitle are pushed apart towards its edges, so the edges look cramped.
+fn spread_banners(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let Some(page) = geometry.pages.first() else { return Vec::new() };
+    let mut out = Vec::new();
+    for banner in &geometry.containers {
+        let frame = banner.bbox;
+        if banner.page != 0
+            || banner.kind != "block"
+            || !banner.visible
+            || frame.y0 > 0.25 * page.height
+        {
+            continue;
+        }
+        let filled = geometry.items.iter().any(|i| {
+            i.page == 0
+                && i.kind == ItemKind::Shape
+                && !i.patterned
+                && (i.bbox.x0 - frame.x0).abs() < 1.0
+                && (i.bbox.y0 - frame.y0).abs() < 1.0
+                && (i.bbox.x1 - frame.x1).abs() < 1.0
+                && (i.bbox.y1 - frame.y1).abs() < 1.0
+        });
+        if !filled {
+            continue;
+        }
+        let inside: Vec<&crate::geom::Item> = geometry
+            .items
+            .iter()
+            .filter(|i| {
+                i.page == 0
+                    && i.kind == ItemKind::Text
+                    && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+                    && i.bbox.x0 >= frame.x0 - 1.0
+                    && i.bbox.x1 <= frame.x1 + 1.0
+                    && i.bbox.y0 >= frame.y0 - 1.0
+                    && i.bbox.y1 <= frame.y1 + 1.0
+            })
+            .collect();
+        // The bands of text inside: runs of items that overlap vertically.
+        let mut bands: Vec<(f64, f64, f64)> = Vec::new();
+        let mut sorted = inside.clone();
+        sorted.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+        for item in sorted {
+            let size = item.font_size.unwrap_or_default();
+            match bands.last_mut() {
+                Some(band) if item.bbox.y0 <= band.1 + 0.5 => {
+                    band.1 = band.1.max(item.bbox.y1);
+                    band.2 = band.2.max(size);
+                }
+                _ => bands.push((item.bbox.y0, item.bbox.y1, size)),
+            }
+        }
+        let [title, subtitle] = bands.as_slice() else { continue };
+        if title.2 < 18.0 || subtitle.2 >= title.2 {
+            continue;
+        }
+        let edge = (title.0 - frame.y0).min(frame.y1 - subtitle.1);
+        let gap = subtitle.0 - title.1;
+        if edge <= 0.5 || gap <= MAX_BANNER_SPREAD * edge {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            SPREAD_BANNER,
+            Severity::Warning,
+            format!(
+                "the title and subtitle in the banner on page 1 are {}pt apart but only {}pt \
+                 from the banner's edges, so they look pushed to the edges",
+                round1(gap),
+                round1(edge)
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, banner.span);
+        diagnostic.page = Some(1);
+        diagnostic.bbox = Some(frame.rounded());
+        diagnostic.measured = Some(round1(gap / edge));
+        diagnostic.limit = Some(MAX_BANNER_SPREAD);
+        diagnostic.unit = Some("ratio");
+        diagnostic.hints.push(
+            "bring the subtitle closer to the title (a small gap) and give the banner more \
+             top and bottom inset, at least half the title size"
                 .into(),
         );
         out.push(diagnostic);

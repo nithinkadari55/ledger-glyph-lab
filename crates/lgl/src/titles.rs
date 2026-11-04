@@ -972,6 +972,10 @@ fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// their figure at 0.9 to 1.7 caption sizes; at 3.0 to 3.5 they drift off.
 const MAX_FIGURE_CAPTION_GAP: f64 = 2.5;
 
+/// Closer than this many caption sizes, the caption crowds its figure (its
+/// letters can touch the figure's descenders).
+const MIN_FIGURE_CAPTION_GAP: f64 = 0.3;
+
 /// A figure is at least this many times its caption's size.
 const FIGURE_CAPTION_RATIO: f64 = 1.8;
 
@@ -994,7 +998,8 @@ fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagno
                 c.page == figure.page
                     && c.font_size.unwrap_or_default() * FIGURE_CAPTION_RATIO <= size
                     && (c.bbox.x0 - f.x0).abs() <= 3.0
-                    && c.bbox.y0 >= f.y1 - 0.5
+                    && c.bbox.y0 >= f.y0 + 0.5 * f.height()
+                    && c.bbox.y1 > f.y1 + 0.5
             })
             .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
         else {
@@ -1009,25 +1014,37 @@ fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagno
         });
         let gap = c.y0 - f.y1;
         let caption_size = caption.font_size.unwrap_or_default();
-        if blocked || gap <= MAX_FIGURE_CAPTION_GAP * caption_size {
+        let crowded = gap < MIN_FIGURE_CAPTION_GAP * caption_size;
+        if blocked || (!crowded && gap <= MAX_FIGURE_CAPTION_GAP * caption_size) {
             continue;
         }
         let mut diagnostic = Diagnostic::new(
             DETACHED_FIGURE_CAPTION,
             Severity::Warning,
-            format!(
-                "the caption under {value:?} on page {} sits {}pt below it, more than {} \
-                 times its own size, so figure and caption fall apart",
-                figure.page + 1,
-                round1(gap),
-                MAX_FIGURE_CAPTION_GAP
-            ),
+            if crowded {
+                format!(
+                    "the caption under {value:?} on page {} sits only {}pt below it, so it \
+                     crowds the figure",
+                    figure.page + 1,
+                    round1(gap)
+                )
+            } else {
+                format!(
+                    "the caption under {value:?} on page {} sits {}pt below it, more than {} \
+                     times its own size, so figure and caption fall apart",
+                    figure.page + 1,
+                    round1(gap),
+                    MAX_FIGURE_CAPTION_GAP
+                )
+            },
         );
         diagnostic.loc = diag::resolve_span(world, report_span(geometry, caption));
         diagnostic.page = Some(figure.page + 1);
         diagnostic.bbox = Some(f.union(&c).rounded());
         diagnostic.measured = Some(round1(gap));
-        diagnostic.limit = Some(round1(MAX_FIGURE_CAPTION_GAP * caption_size));
+        diagnostic.limit = Some(round1(
+            if crowded { MIN_FIGURE_CAPTION_GAP } else { MAX_FIGURE_CAPTION_GAP } * caption_size,
+        ));
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
             "set the caption directly under its figure (about half to one caption size \

@@ -663,8 +663,9 @@ pub const CATALOG: &[RuleInfo] = &[
         "L074.detached-figure-caption",
         "warning",
         "The caption under a key figure (a short number set at least 1.8 times larger) \
-         sits more than 2.5 caption sizes below it, so figure and caption fall apart.",
-        "2.5 caption sizes",
+         sits more than 2.5 caption sizes below it, or less than 0.3, so figure and caption \
+         fall apart or crowd each other.",
+        "0.3 to 2.5 caption sizes",
         "Set the caption directly under its figure.",
         false,
     ),
@@ -675,6 +676,25 @@ pub const CATALOG: &[RuleInfo] = &[
          more than 1.5 times as much space on one side (top or bottom) as on the other.",
         "1.5",
         "Centre the panel on the page, or let it fill the page height.",
+        false,
+    ),
+    rule(
+        "L076.wrong-page-label",
+        "error",
+        "A \"Page N of M\" label in a header or footer does not match the page it is on or \
+         the document's page count.",
+        "exact",
+        "Number pages with counter(page), not typed numbers.",
+        false,
+    ),
+    rule(
+        "L077.spread-banner",
+        "warning",
+        "In a title banner holding a title and one subtitle line, the gap between them is \
+         more than 2.5 times the banner's top or bottom padding, so they look pushed to the \
+         edges.",
+        "2.5",
+        "Bring the subtitle closer to the title and give the banner more inset.",
         false,
     ),
     rule(
@@ -803,6 +823,8 @@ mod tests {
             titles::CROWDED_SUBTITLE,
             titles::DETACHED_FIGURE_CAPTION,
             boxes::OFF_CENTRE_PANEL,
+            edges::PAGE_LABEL,
+            boxes::SPREAD_BANNER,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

@@ -57,6 +57,7 @@ pub fn run(
     out.extend(crate::marks::run(world, geometry));
     out.extend(crate::titles::run(world, geometry));
     out.extend(crate::edges::run(world, geometry));
+    out.extend(crate::edges::page_labels(world, geometry));
     out
 }
 
