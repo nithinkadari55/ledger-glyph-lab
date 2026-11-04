@@ -123,6 +123,8 @@ different and still pass. `lgl rules` prints the full catalog.
 | L068 drop-cap-hole | drop cap more than one line taller than the text beside it | |
 | L069 uneven-boxes | boxes side by side in a row with heights more than 10% apart | |
 | L070 pair-spacing | repeated pairs spaced wider inside each pair than between pairs | |
+| L071 detached-label | label more than five times its size above the document title | |
+| L072 text-on-rule | text sitting on a line that runs on both sides of it | |
 | S001 negative-spacing | source: large negative h()/v() | |
 | S002 absolute-placement | source: place() without float, move() | |
 | S003 transform-without-reflow | source: rotate/scale/skew without reflow | yes |

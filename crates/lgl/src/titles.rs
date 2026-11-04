@@ -12,6 +12,8 @@ pub const DETACHED_UNDERLINE: &str = "L065.detached-underline";
 pub const FLOATING_ARROW: &str = "L066.floating-arrow";
 pub const DROP_CAP_HOLE: &str = "L068.drop-cap-hole";
 pub const PAIR_SPACING: &str = "L070.pair-spacing";
+pub const DETACHED_LABEL: &str = "L071.detached-label";
+pub const TEXT_ON_RULE: &str = "L072.text-on-rule";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -46,6 +48,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(floating_arrows(world, geometry));
     out.extend(drop_cap_holes(world, geometry));
     out.extend(pair_spacing(world, geometry));
+    out.extend(detached_label(world, geometry));
+    out.extend(text_on_rule(world, geometry));
     out
 }
 
@@ -720,6 +724,140 @@ fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 k = j;
             }
         }
+    }
+    out
+}
+
+/// A label above a title (a kicker like "FEATURE · CITIES") further above it
+/// than this many times its own size floats free of the title. Measured on
+/// 121 generated documents: labels at 3.1 to 4.3 times their size read as
+/// part of the title; at 6.1 and 7.6 they float.
+const MAX_LABEL_GAP: f64 = 5.0;
+
+/// A small label above the document title, so far above it that it floats.
+fn detached_label(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let (Some(body), Some(page)) = (body_size(geometry), geometry.pages.first()) else {
+        return Vec::new();
+    };
+    let lines = text_lines(geometry, 0);
+    let top: Vec<&TextLine> = lines
+        .iter()
+        .filter(|l| l.bbox.y0 < TITLE_ZONE * page.height && letters(geometry, l) >= 3)
+        .collect();
+    let Some(big) = top.iter().map(|l| l.size).reduce(f64::max) else {
+        return Vec::new();
+    };
+    if big < DISPLAY_PT.max(DISPLAY_RATIO * body) {
+        return Vec::new();
+    }
+    let Some(title) = top
+        .iter()
+        .filter(|l| (l.size - big).abs() < 0.5)
+        .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
+    else {
+        return Vec::new();
+    };
+    let Some(label) = lines
+        .iter()
+        .filter(|l| l.bbox.y1 <= title.bbox.y0 + 0.5 && overlaps(&l.bbox, &title.bbox))
+        .filter(|l| l.size < big - 0.5)
+        .max_by(|a, b| a.bbox.y1.total_cmp(&b.bbox.y1))
+    else {
+        return Vec::new();
+    };
+    let item = &geometry.items[label.items[0]];
+    let gap = title.bbox.y0 - label.bbox.y1;
+    let between = |b: &BBox| {
+        label.bbox.y1 - 0.5 <= b.y0 && b.y1 <= title.bbox.y0 + 0.5 && overlaps(b, &title.bbox)
+    };
+    // A rule or box in between makes the label a separate header.
+    let divided = geometry
+        .containers
+        .iter()
+        .any(|c| c.visible && c.page == 0 && between(&c.bbox))
+        || geometry
+            .items
+            .iter()
+            .any(|i| i.page == 0 && i.kind == ItemKind::Shape && between(&i.bbox));
+    if divided
+        || inside(geometry, item.elem, &["heading", "table", "grid"])
+        || gap <= MAX_LABEL_GAP * label.size
+    {
+        return Vec::new();
+    }
+    let mut diagnostic = Diagnostic::new(
+        DETACHED_LABEL,
+        Severity::Warning,
+        format!(
+            "the {}pt label above the title on page 1 sits {}pt above it, more than {} \
+             times its own size, so it floats free of the title",
+            round1(label.size),
+            round1(gap),
+            MAX_LABEL_GAP
+        ),
+    );
+    diagnostic.loc = diag::resolve_span(world, report_span(geometry, item));
+    diagnostic.page = Some(1);
+    diagnostic.bbox = Some(label.bbox.union(&title.bbox).rounded());
+    diagnostic.measured = Some(round1(gap));
+    diagnostic.limit = Some(round1(MAX_LABEL_GAP * label.size));
+    diagnostic.unit = Some("pt");
+    diagnostic.hints.push(
+        "set the label about two to four times its own size above the title".into(),
+    );
+    vec![diagnostic]
+}
+
+/// A text line sitting on a horizontal rule that runs on both sides of it,
+/// level with its bottom: two blocks have collapsed into each other (often a
+/// v(1fr) that shrank to nothing).
+fn text_on_rule(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let rules: Vec<&Item> = geometry
+        .items
+        .iter()
+        .filter(|r| r.kind == ItemKind::Shape && r.bbox.height() < 3.0 && r.bbox.width() > 30.0)
+        .collect();
+    let mut out = Vec::new();
+    for text in &geometry.items {
+        let Some(size) = text.font_size else { continue };
+        let visible = text.text.as_deref().map(str::trim).unwrap_or_default();
+        if !is_text(text) || visible.chars().count() < 3 {
+            continue;
+        }
+        let t = text.bbox;
+        let level = |r: &&&Item| {
+            r.page == text.page && (t.y1 - 0.3 * size..=t.y1 + 1.0).contains(&r.bbox.y0)
+        };
+        let left = rules
+            .iter()
+            .filter(level)
+            .any(|r| (0.0..=2.0 * size).contains(&(t.x0 - r.bbox.x1)));
+        let right = rules
+            .iter()
+            .filter(level)
+            .any(|r| (0.0..=2.0 * size).contains(&(r.bbox.x0 - t.x1)));
+        if !left || !right {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            TEXT_ON_RULE,
+            Severity::Warning,
+            format!(
+                "text on page {} sits on a line that runs on both sides of it: the block \
+                 below has run into the text",
+                text.page + 1
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, text));
+        diagnostic.page = Some(text.page + 1);
+        diagnostic.bbox = Some(t.rounded());
+        diagnostic.hints.push(
+            "leave space between the text and the block with the line (a v(1fr) shrinks to \
+             nothing when the page is full; add a fixed gap such as v(1.5em) next to it), or \
+             shorten the text"
+                .into(),
+        );
+        out.push(diagnostic);
     }
     out
 }
