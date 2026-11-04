@@ -83,6 +83,18 @@ fn overlaps(a: &BBox, b: &BBox) -> bool {
     a.x0 < b.x1 && b.x0 < a.x1
 }
 
+/// The nearest element named `name` that holds the element.
+fn enclosing(geometry: &Geometry, mut elem: Option<usize>, name: &str) -> Option<usize> {
+    while let Some(index) = elem {
+        let element = &geometry.elements[index];
+        if element.name == name {
+            return Some(index);
+        }
+        elem = element.parent;
+    }
+    None
+}
+
 /// Whether the element or one of its ancestors has one of the `names`.
 fn inside(geometry: &Geometry, mut elem: Option<usize>, names: &[&str]) -> bool {
     while let Some(index) = elem {
@@ -588,6 +600,9 @@ const MIN_PAIRS: usize = 3;
 const PAIR_SLACK_PT: f64 = 1.5;
 const PAIR_RATIO: f64 = 1.25;
 
+/// Left edges this close belong to one column.
+const COLUMN_INDENT_PT: f64 = 8.0;
+
 /// A run of text in one style: a line or a paragraph.
 struct Unit {
     key: (i64, [i32; 4]),
@@ -603,10 +618,30 @@ fn median(mut values: Vec<f64>) -> f64 {
 
 /// Repeated pairs (command and description, label and value, term and
 /// definition) whose second part sits closer to the next pair than to its own
-/// first part, so every pair reads wrongly grouped. Headings and code are left
-/// out: heading spacing has its own rules. Measured on 121 generated
-/// documents: 13 have runs of pairs, the 2 inverted ones were confirmed by eye.
+/// first part, so every pair reads wrongly grouped. Headings, equations and
+/// multi-line code are left out: heading spacing has its own rules. Measured
+/// on 125 generated documents: the 4 flagged ones were confirmed by eye.
 fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    // Code that spans several lines: its syntax colours alternate like pairs.
+    // A one-line code span (a command) takes part.
+    let mut code_lines: BTreeMap<usize, Vec<(usize, i64)>> = BTreeMap::new();
+    for item in &geometry.items {
+        if let Some(raw) = enclosing(geometry, item.elem, "raw")
+            && is_text(item)
+        {
+            let key = (item.page, item.bbox.y1.round() as i64);
+            let lines = code_lines.entry(raw).or_default();
+            if !lines.contains(&key) {
+                lines.push(key);
+            }
+        }
+    }
+    let skipped = |item: &Item| {
+        inside(geometry, item.elem, &["heading", "equation"])
+            || enclosing(geometry, item.elem, "raw")
+                .is_some_and(|raw| code_lines.get(&raw).is_some_and(|l| l.len() > 1))
+    };
+
     let mut out = Vec::new();
     for page in 0..geometry.pages.len() {
         // Visual lines: text items sharing a baseline.
@@ -615,7 +650,7 @@ fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if item.page != page
                 || !is_text(item)
                 || !geometry.is_body(item.region)
-                || inside(geometry, item.elem, &["raw", "heading"])
+                || skipped(item)
             {
                 continue;
             }
@@ -654,12 +689,20 @@ fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             paragraphs.push(line);
         }
 
-        // Columns: paragraphs sharing a left edge.
-        let mut columns: BTreeMap<i64, Vec<&Unit>> = BTreeMap::new();
-        for p in &paragraphs {
-            columns.entry((p.bbox.x0 / 4.0).round() as i64).or_default().push(p);
+        // Columns: paragraphs whose left edges lie within a small indent of
+        // each other (text in a padded chip starts a little further right).
+        let mut by_edge: Vec<&Unit> = paragraphs.iter().collect();
+        by_edge.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
+        let mut columns: Vec<Vec<&Unit>> = Vec::new();
+        let mut anchor = f64::NEG_INFINITY;
+        for p in by_edge {
+            if p.bbox.x0 - anchor > COLUMN_INDENT_PT || columns.is_empty() {
+                anchor = p.bbox.x0;
+                columns.push(Vec::new());
+            }
+            columns.last_mut().unwrap().push(p);
         }
-        for column in columns.values_mut() {
+        for column in &mut columns {
             column.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
             let mut k = 0;
             while k + 2 * MIN_PAIRS - 1 < column.len() {
@@ -690,6 +733,17 @@ fn pair_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     run.windows(2).map(|w| w[1].bbox.y0 - w[0].bbox.y1).collect();
                 let within = median(gaps.iter().step_by(2).copied().collect());
                 let between = median(gaps.iter().skip(1).step_by(2).copied().collect());
+                // The run must start after a clear break (a heading, the top of
+                // the column); a run that starts inside a list pairs ambiguously.
+                let before = if k > 0 {
+                    column[k].bbox.y0 - column[k - 1].bbox.y1
+                } else {
+                    f64::INFINITY
+                };
+                if before <= within.max(between) {
+                    k += 1;
+                    continue;
+                }
                 if within > between + PAIR_SLACK_PT && within > PAIR_RATIO * between {
                     let second = &geometry.items[run[1].item];
                     let mut diagnostic = Diagnostic::new(
