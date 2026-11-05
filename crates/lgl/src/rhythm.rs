@@ -422,8 +422,8 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let own = || {
             items_on(geometry, line).filter(|item| !allowed_overlay(geometry, item.elem))
         };
-        let drop_cap =
-            own().any(|item| caps.iter().any(|&cap| std::ptr::eq(&geometry.items[cap], item)));
+        let drop_cap = own()
+            .any(|item| caps.iter().any(|&cap| std::ptr::eq(&geometry.items[cap], item)));
         let ink = own()
             .filter_map(|item| Some((item.visible()?, item.font_size?)))
             .fold(None, |acc: Option<(BBox, f64)>, (bbox, size)| match acc {
