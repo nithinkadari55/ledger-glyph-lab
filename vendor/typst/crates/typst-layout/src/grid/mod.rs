@@ -65,7 +65,9 @@ pub fn layout_cell(
             cell.body.span(),
             false,
             true,
-            false,
+            // The grid paints the cell's fill behind it: the cell owns that
+            // visible box.
+            cell.fill.is_some(),
             (i, count),
         );
     }
