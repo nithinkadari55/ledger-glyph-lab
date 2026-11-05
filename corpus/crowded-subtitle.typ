@@ -1,4 +1,5 @@
 // expect: L073.crowded-subtitle
+// expect: L038.cramped-lines
 #set page(paper: "a4", margin: 2cm)
 #set text(size: 10pt)
 #block(below: 12pt, text(44pt, weight: "bold")[Up on the Roof])

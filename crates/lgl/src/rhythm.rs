@@ -418,10 +418,13 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if allowed_overlay(geometry, line.elem) {
             continue;
         }
-        let drop_cap = items_on(geometry, line).any(|item| {
-            caps.iter().any(|&cap| std::ptr::eq(&geometry.items[cap], item))
-        });
-        let ink = items_on(geometry, line)
+        // Intended overlays (a watermark) are not part of the lines they cross.
+        let own = || {
+            items_on(geometry, line).filter(|item| !allowed_overlay(geometry, item.elem))
+        };
+        let drop_cap =
+            own().any(|item| caps.iter().any(|&cap| std::ptr::eq(&geometry.items[cap], item)));
+        let ink = own()
             .filter_map(|item| Some((item.visible()?, item.font_size?)))
             .fold(None, |acc: Option<(BBox, f64)>, (bbox, size)| match acc {
                 Some((a, s)) => Some((a.union(&bbox), s.max(size))),
@@ -429,10 +432,13 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             });
         if let Some((ink, size)) = ink {
             let baseline = line.bbox.y0 + line.baseline;
-            by_page
-                .entry(line.page)
-                .or_default()
-                .push(Row { line, ink, size, baseline, drop_cap });
+            by_page.entry(line.page).or_default().push(Row {
+                line,
+                ink,
+                size,
+                baseline,
+                drop_cap,
+            });
         }
     }
 
