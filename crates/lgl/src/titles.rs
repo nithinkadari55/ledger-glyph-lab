@@ -1092,8 +1092,9 @@ struct InkLine {
 }
 
 fn ink_lines(geometry: &Geometry) -> Vec<InkLine> {
-    let texts: Vec<usize> =
-        (0..geometry.items.len()).filter(|&i| is_text(&geometry.items[i])).collect();
+    let texts: Vec<usize> = (0..geometry.items.len())
+        .filter(|&i| is_text(&geometry.items[i]))
+        .collect();
     let mut out = Vec::new();
     for line in &geometry.lines {
         let b = &line.bbox;
@@ -1271,7 +1272,8 @@ fn detached_group_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
         diagnostic.page = Some(a.page + 1);
         diagnostic.bbox = Some(a.ink.union(&value.ink).rounded());
         diagnostic.measured = Some(round1(gap));
-        diagnostic.limit = Some(round1((MAX_LABEL_DRIFT * above).max(MIN_LABEL_DRIFT_EM * a.size)));
+        diagnostic.limit =
+            Some(round1((MAX_LABEL_DRIFT * above).max(MIN_LABEL_DRIFT_EM * a.size)));
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
             "keep the label and its value together, about a third of the value's size \
