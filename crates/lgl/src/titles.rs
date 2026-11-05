@@ -457,9 +457,12 @@ fn floating_arrows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for arrow in &geometry.items {
         let Some(text) = arrow.text.as_deref().map(str::trim) else { continue };
+        // An arrow in an equation (a reaction, a mapping) is notation, not a
+        // connector between boxes.
         if arrow.kind != ItemKind::Text
             || text.is_empty()
             || !text.chars().all(|c| ARROWS.contains(c))
+            || inside(geometry, arrow.elem, &["equation"])
         {
             continue;
         }
