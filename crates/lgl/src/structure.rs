@@ -58,10 +58,26 @@ fn spread(values: impl Iterator<Item = f64> + Clone) -> f64 {
 }
 
 /// Table columns of text whose cells share neither a left nor a right edge.
+/// The label of the agent kit's spec table, whose indented sub-rows are
+/// intended (see the kit's `sub`).
+const KIT_SPEC_TABLE: &str = "kit-spec-table";
+
+/// Whether the element or one of its ancestors carries the label.
+fn labelled(geometry: &Geometry, mut cursor: Option<usize>, label: &str) -> bool {
+    while let Some(index) = cursor {
+        if geometry.elements[index].label.as_deref() == Some(label) {
+            return true;
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    false
+}
+
 fn ragged_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut cells: BTreeMap<usize, (String, f64, f64, usize)> = BTreeMap::new();
     for (index, item) in geometry.items.iter().enumerate() {
-        if item.kind != ItemKind::Text {
+        // A kit spec table indents its sub-rows on purpose.
+        if item.kind != ItemKind::Text || labelled(geometry, item.elem, KIT_SPEC_TABLE) {
             continue;
         }
         let Some(cell) = enclosing_cell(geometry, item.container) else { continue };
