@@ -409,13 +409,18 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         ink: BBox,
         size: f64,
         baseline: f64,
+        drop_cap: bool,
     }
 
+    let caps = crate::titles::drop_caps(geometry);
     let mut by_page: BTreeMap<usize, Vec<Row>> = BTreeMap::new();
     for line in &geometry.lines {
         if allowed_overlay(geometry, line.elem) {
             continue;
         }
+        let drop_cap = items_on(geometry, line).any(|item| {
+            caps.iter().any(|&cap| std::ptr::eq(&geometry.items[cap], item))
+        });
         let ink = items_on(geometry, line)
             .filter_map(|item| Some((item.visible()?, item.font_size?)))
             .fold(None, |acc: Option<(BBox, f64)>, (bbox, size)| match acc {
@@ -427,7 +432,7 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             by_page
                 .entry(line.page)
                 .or_default()
-                .push(Row { line, ink, size, baseline });
+                .push(Row { line, ink, size, baseline, drop_cap });
         }
     }
 
@@ -436,9 +441,10 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         rows.sort_by(|a, b| a.baseline.total_cmp(&b.baseline));
         for (i, upper) in rows.iter().enumerate() {
             // The nearest line stacked below whose ink shares horizontal space.
-            // Lines side by side, or overlapping, are not stacked.
+            // Lines on the same row (baselines within half the smaller size)
+            // are not stacked.
             let Some(lower) = rows[i + 1..].iter().find(|r| {
-                r.baseline - upper.baseline >= 0.5 * r.size.max(upper.size)
+                r.baseline - upper.baseline >= 0.5 * r.size.min(upper.size)
                     && r.ink.x0 < upper.ink.x1
                     && upper.ink.x0 < r.ink.x1
             }) else {
@@ -449,6 +455,18 @@ pub fn cramped_lines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 - DESCENT_EM * upper.size
                 - ASCENT_EM * lower.size;
             if clearance >= MIN_CLEARANCE_EM * size {
+                continue;
+            }
+            // A line closer than half the larger size below large text (a
+            // subtitle tucked under a title) collides only where the ink
+            // really meets: capitals-only display text has no descenders, and
+            // a drop cap spans the lines beside it by design.
+            let close = lower.baseline - upper.baseline < 0.5 * size;
+            if close
+                && (upper.drop_cap
+                    || lower.drop_cap
+                    || lower.ink.y0 - upper.ink.y1 >= MIN_CLEARANCE_EM * size)
+            {
                 continue;
             }
             // Lines that overlap in their typical extent collide; lines with a
