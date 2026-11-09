@@ -255,7 +255,9 @@ fn check_title(
     let title_item = lines
         .iter()
         .find(|l| {
-            (l.size - big).abs() < 0.5 && l.bbox.y0 >= block.y0 - 0.5 && l.bbox.y1 <= block.y1 + 0.5
+            (l.size - big).abs() < 0.5
+                && l.bbox.y0 >= block.y0 - 0.5
+                && l.bbox.y1 <= block.y1 + 0.5
         })
         .map(|l| &geometry.items[l.items[0]]);
     if let Some(title_item) = title_item

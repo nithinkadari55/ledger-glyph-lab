@@ -1,6 +1,9 @@
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{BBox, Geometry, ItemKind, Line, round1};
 use crate::world::LabWorld;
+use typst::World;
+use typst::syntax::ast::{self, AstNode};
+use typst::syntax::{LinkedNode, Span, SyntaxKind};
 
 pub const BROKEN_ADDRESS: &str = "L049.broken-address";
 pub const LINE_THROUGH_TEXT: &str = "L050.line-through-text";
@@ -135,7 +138,11 @@ fn leaked_value(text: &str) -> Option<&str> {
             continue;
         }
         let after = &rest[name..];
-        if after.len() >= 3 && after[0] == b':' && after[1] == b' ' && matches!(after[2], b'[' | b'"') {
+        if after.len() >= 3
+            && after[0] == b':'
+            && after[1] == b' '
+            && matches!(after[2], b'[' | b'"')
+        {
             let end = text[start..].find(')').map_or(text.len(), |i| start + i + 1);
             return Some(&text[start..end]);
         }
@@ -148,13 +155,19 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let mut reported = std::collections::BTreeSet::new();
     for item in &geometry.items {
-        if item.kind != ItemKind::Text || in_code(geometry, item.elem) {
+        if item.kind != ItemKind::Text {
             continue;
         }
         let text = item.text.as_deref().unwrap_or_default();
-        let (found, value) = match leaked_value(text) {
+        // Typst prints a value that is not content (a dictionary, an array) in
+        // its code form, as an inline raw element; code the author wrote is
+        // meant literally.
+        let code = code_element(geometry, item.elem);
+        let printed_value =
+            code.is_none_or(|index| !written_code(world, geometry.elements[index].span));
+        let (found, value) = match leaked_value(text).filter(|_| printed_value) {
             Some(found) => (found, true),
-            None => match leaked_markup(text) {
+            None => match leaked_markup(text).filter(|_| code.is_none()) {
                 Some(found) => (found, false),
                 None => continue,
             },
@@ -197,14 +210,35 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 }
 
 /// Whether the content is code, where such text is meant literally.
-fn in_code(geometry: &Geometry, mut cursor: Option<usize>) -> bool {
+fn in_code(geometry: &Geometry, cursor: Option<usize>) -> bool {
+    code_element(geometry, cursor).is_some()
+}
+
+/// The raw (code) element that holds the content, if any.
+fn code_element(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
     while let Some(index) = cursor {
         if geometry.elements[index].name == "raw" {
-            return true;
+            return Some(index);
         }
         cursor = geometry.elements[index].parent;
     }
-    false
+    None
+}
+
+/// Whether a raw element is code the author wrote, in backticks or with a call
+/// of raw, rather than a value Typst printed in code form because it is not
+/// content. Anything that cannot be traced to its source counts as written.
+fn written_code(world: &LabWorld, span: Span) -> bool {
+    let Some(source) = span.id().and_then(|id| world.source(id).ok()) else {
+        return true;
+    };
+    let Some(node) = LinkedNode::new(source.root()).find(span) else {
+        return true;
+    };
+    node.kind() == SyntaxKind::Raw
+        || ast::FuncCall::from_untyped(&node).is_some_and(|call| {
+            call.callee().to_untyped().clone().into_text().ends_with("raw")
+        })
 }
 
 /// The text items of a line, from left to right.

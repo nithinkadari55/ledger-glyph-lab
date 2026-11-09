@@ -53,16 +53,15 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     edits: vec![set_named(world, &source, &call, "fit", "\"contain\"")?],
                 })
             }),
-            COLUMN_IMBALANCE | EMPTY_COLUMN => {
-                enclosing_call(&source, anchor, "columns").and_then(|call| {
+            COLUMN_IMBALANCE | EMPTY_COLUMN => enclosing_call(&source, anchor, "columns")
+                .and_then(|call| {
                     Some(Fix {
                         description: "balance the columns".into(),
                         edits: vec![set_named(
                             world, &source, &call, "balanced", "true",
                         )?],
                     })
-                })
-            }
+                }),
             NO_REFLOW => {
                 call_at(&source, anchor, &["rotate", "scale", "skew"]).and_then(|call| {
                     Some(Fix {
