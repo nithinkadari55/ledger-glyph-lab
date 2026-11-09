@@ -7,7 +7,7 @@ use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::diag::{Diagnostic, SourceLoc};
 use crate::lint::{DISABLED_PROTECTION, NO_REFLOW};
-use crate::pagecheck::COLUMN_IMBALANCE;
+use crate::pagecheck::{COLUMN_IMBALANCE, EMPTY_COLUMN};
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
 use crate::spacing::SPACING;
@@ -53,7 +53,7 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                     edits: vec![set_named(world, &source, &call, "fit", "\"contain\"")?],
                 })
             }),
-            COLUMN_IMBALANCE => {
+            COLUMN_IMBALANCE | EMPTY_COLUMN => {
                 enclosing_call(&source, anchor, "columns").and_then(|call| {
                     Some(Fix {
                         description: "balance the columns".into(),

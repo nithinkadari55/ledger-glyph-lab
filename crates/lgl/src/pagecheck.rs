@@ -27,13 +27,13 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = empty_pages(geometry);
     out.extend(column_imbalance(world, geometry));
     out.extend(line_length(world, geometry));
-    out.extend(empty_columns(geometry));
+    out.extend(empty_columns(world, geometry));
     out
 }
 
 /// Pages of a multi-column layout that leave whole columns empty, typically
 /// the last page, where the text runs out in the first column.
-fn empty_columns(geometry: &Geometry) -> Vec<Diagnostic> {
+fn empty_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for body in geometry.regions.iter().filter(|r| r.kind == "page-body") {
         let width = body.bbox.width();
@@ -63,6 +63,14 @@ fn empty_columns(geometry: &Geometry) -> Vec<Diagnostic> {
                 lefts.len()
             ),
         );
+        // Anchor at the columns' content, so the balancing autofix finds the
+        // columns() call.
+        if let Some(item) = geometry.items.iter().find(|item| {
+            item.page == body.page && item.column.is_some() && !item.span.is_detached()
+        }) {
+            diagnostic.anchor = Some(item.span);
+            diagnostic.loc = diag::resolve_span(world, item.span);
+        }
         diagnostic.page = Some(body.page + 1);
         diagnostic.bbox = Some(body.bbox.rounded());
         diagnostic.measured = Some(lefts.len() as f64);

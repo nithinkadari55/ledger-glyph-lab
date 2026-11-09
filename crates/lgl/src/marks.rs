@@ -121,6 +121,28 @@ fn leaked_markup(text: &str) -> Option<&str> {
     text.find("**").map(|i| &text[i..i + 2])
 }
 
+/// A Typst value printed as text, such as a dictionary "(name: [..])": a
+/// function returned data where content was expected, or a name was shadowed.
+fn leaked_value(text: &str) -> Option<&str> {
+    let bytes = text.as_bytes();
+    for (start, _) in text.match_indices('(') {
+        let rest = &bytes[start + 1..];
+        let name = rest
+            .iter()
+            .take_while(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || **b == b'-')
+            .count();
+        if name == 0 || !rest[0].is_ascii_lowercase() {
+            continue;
+        }
+        let after = &rest[name..];
+        if after.len() >= 3 && after[0] == b':' && after[1] == b' ' && matches!(after[2], b'[' | b'"') {
+            let end = text[start..].find(')').map_or(text.len(), |i| start + i + 1);
+            return Some(&text[start..end]);
+        }
+    }
+    None
+}
+
 /// HTML entities and Markdown markers that ended up in the printed text.
 fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
@@ -129,28 +151,46 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if item.kind != ItemKind::Text || in_code(geometry, item.elem) {
             continue;
         }
-        let Some(found) = item.text.as_deref().and_then(leaked_markup) else { continue };
+        let text = item.text.as_deref().unwrap_or_default();
+        let (found, value) = match leaked_value(text) {
+            Some(found) => (found, true),
+            None => match leaked_markup(text) {
+                Some(found) => (found, false),
+                None => continue,
+            },
+        };
         if !reported.insert((item.page, found.to_string())) {
             continue;
         }
-        let mut diagnostic = Diagnostic::new(
-            MARKUP_LEAK,
-            Severity::Error,
+        let message = if value {
+            format!(
+                "\"{found}\" is printed on page {}: a Typst value (a dictionary) was \
+                 placed where text belongs, so a function returned data or a name was \
+                 shadowed by an import",
+                item.page + 1
+            )
+        } else {
             format!(
                 "\"{found}\" is printed literally on page {}: Typst does not interpret HTML \
                  entities or Markdown markers",
                 item.page + 1
-            ),
-        );
+            )
+        };
+        let mut diagnostic = Diagnostic::new(MARKUP_LEAK, Severity::Error, message);
         diagnostic.loc =
             diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         diagnostic.page = Some(item.page + 1);
         diagnostic.bbox = item.visible().map(|b| b.rounded());
-        diagnostic.hints.push(
+        diagnostic.hints.push(if value {
+            "call the function that produces the text, and import helper libraries as a \
+             module (#import \"x.typ\") so their names cannot replace Typst's own (sub, \
+             super, line, ..)"
+                .into()
+        } else {
             "use Typst syntax: ~ for a non-breaking space, the character itself (– — ’ ×) \
              or sym.*, and *bold* or _italic_ markup"
-                .into(),
-        );
+                .into()
+        });
         out.push(diagnostic);
     }
     out
