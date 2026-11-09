@@ -236,8 +236,10 @@ fn written_code(world: &LabWorld, span: Span) -> bool {
         return true;
     };
     node.kind() == SyntaxKind::Raw
-        || ast::FuncCall::from_untyped(&node).is_some_and(|call| {
-            call.callee().to_untyped().clone().into_text().ends_with("raw")
+        || ast::FuncCall::from_untyped(&node).is_some_and(|call| match call.callee() {
+            ast::Expr::Ident(name) => name.get() == "raw",
+            ast::Expr::FieldAccess(access) => access.field().get() == "raw",
+            _ => false,
         })
 }
 
