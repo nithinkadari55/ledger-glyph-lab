@@ -29,10 +29,19 @@ const CLIP_TOLERANCE_EM: f64 = 0.1;
 const SEPARATORS: &[char] = &['·', '|', '•', '⋅', '∙', '◦', '‧'];
 
 /// A heading is crowded from above when the space above it is less than this
-/// share of the space below it, and less than its own size. Measured on 1,900
-/// headings of 440 generated documents: only headings that read as part of the
-/// content above fall below both.
+/// share of the space below it, and less than its own size (or the body size,
+/// for a label set smaller). Measured on 1,900 headings of 440 generated
+/// documents: only headings that read as part of the content above fall
+/// below both.
 const MAX_HEADING_ABOVE_SHARE: f64 = 0.75;
+
+/// A label known by its style alone introduces what follows closely: further
+/// above the next content than this many sizes, the line ends a block instead.
+const MAX_LABEL_LEAD_EM: f64 = 2.0;
+
+/// Such a label is at least as large as the body text, and heavier, set in
+/// another family, or larger by this much.
+const LABEL_SIZE_STEP_PT: f64 = 0.4;
 
 /// Rows of built-up fractions need at least this much clear space between
 /// their ink, in text sizes. Measured on 440 generated documents: answer grids
@@ -347,10 +356,135 @@ fn stranded_separators(
 
 // --- L084: a heading closer to the content above than to its own ----------------
 
+/// How a line was recognised as a heading.
+#[derive(Clone, Copy, PartialEq)]
+enum Label {
+    /// A Typst heading.
+    Heading,
+    /// A single line with a rule as wide as it right under it.
+    Underlined,
+    /// A single line in a label style of its own.
+    Styled,
+}
+
+/// The style of text as far as the geometry knows it: family, weight, size
+/// in tenths of a point, and colour in hundredths.
+type Style<'a> = (Option<&'a str>, Option<u16>, i64, Option<[i64; 4]>);
+
+fn style_of(item: &Item) -> Style<'_> {
+    (
+        item.font.as_deref(),
+        item.weight,
+        (item.font_size.unwrap_or_default() * 10.0).round() as i64,
+        item.color.map(|c| c.map(|v| (f64::from(v) * 100.0).round() as i64)),
+    )
+}
+
+/// Lines that are labels by their style alone (a section title set in small
+/// capitals, the role line above each job of a resume): single lines standing
+/// apart that start their row, set at least as large as the body text and
+/// heavier, larger or in another family, in a style that recurs on other such
+/// lines and never follows itself (the items of a list do). `candidates` are
+/// the lines standing apart, each with whether a rule already makes it a
+/// label.
+fn styled_labels<'a>(
+    geometry: &Geometry,
+    candidates: &[(&'a Row, bool)],
+    body: f64,
+) -> Vec<&'a Row> {
+    let items = &geometry.items;
+    // The style of the running text: the one most characters are set in.
+    let mut weights: BTreeMap<Style<'_>, usize> = BTreeMap::new();
+    for item in items.iter().filter(|i| nonblank(i)) {
+        *weights.entry(style_of(item)).or_default() +=
+            item.text.as_deref().map_or(0, |text| text.chars().count());
+    }
+    let Some((&running, _)) = weights.iter().max_by_key(|&(_, &count)| count) else {
+        return Vec::new();
+    };
+
+    let mut by_style: BTreeMap<Style<'_>, Vec<(&'a Row, bool)>> = BTreeMap::new();
+    for &(row, underlined) in candidates {
+        let first = &items[row.items[0]];
+        let style = style_of(first);
+        let letters = row.text.chars().filter(|c| c.is_alphabetic()).count();
+        let stands_out = style.1.unwrap_or_default() > running.1.unwrap_or_default()
+            || row.size > body + LABEL_SIZE_STEP_PT
+            || style.0 != running.0;
+        // Text to its left on the same row: the line does not start its row.
+        let ink = &row.ink;
+        let beside = items.iter().any(|i| {
+            nonblank(i)
+                && i.page == row.page
+                && i.region == first.region
+                && i.bbox.x1 <= ink.x0 + 0.5
+                && i.bbox.y0 < ink.y1
+                && ink.y0 < i.bbox.y1
+        });
+        if !geometry.is_body(first.region)
+            || letters < 3
+            || row.size < body - 0.01
+            || !stands_out
+            || beside
+        {
+            continue;
+        }
+        by_style.entry(style).or_default().push((row, underlined));
+    }
+
+    // The style of the text that follows a row: the first item of the nearest
+    // row below it, within the width of its line.
+    let next_style = |row: &Row| {
+        let lb = &geometry.lines[row.line].bbox;
+        let below: Vec<&Item> = items
+            .iter()
+            .filter(|i| {
+                nonblank(i)
+                    && i.page == row.page
+                    && i.bbox.y0 >= row.ink.y1 - 0.5
+                    && i.bbox.x0 < lb.x1
+                    && i.bbox.x1 > lb.x0
+            })
+            .collect();
+        let top = below.iter().map(|i| i.bbox.y0).fold(f64::INFINITY, f64::min);
+        below
+            .iter()
+            .copied()
+            .filter(|i| i.bbox.y0 <= top + 0.3 * i.font_size.unwrap_or_default())
+            .min_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0))
+            .map(style_of)
+    };
+
+    let mut out = Vec::new();
+    for (style, rows) in by_style {
+        let places: BTreeSet<(usize, i64, i64)> = rows
+            .iter()
+            .map(|(row, _)| {
+                (row.page, row.ink.y0.round() as i64, row.ink.x0.round() as i64)
+            })
+            .collect();
+        // A label introduces content set differently; a style that follows
+        // itself is a list of items.
+        if style == running
+            || places.len() < 2
+            || rows.iter().any(|&(row, _)| next_style(row) == Some(style))
+        {
+            continue;
+        }
+        for (row, underlined) in rows {
+            if !underlined {
+                out.push(row);
+            }
+        }
+    }
+    out
+}
+
 /// A heading that sits closer to the content above it than to the content it
 /// introduces, so it reads as the end of the previous section. Headings are
-/// Typst headings and single lines underlined by a rule whose style recurs on
-/// other lines (a section label, not a subtitle).
+/// Typst headings, single lines underlined by a rule whose style recurs on
+/// other lines (a section label, not a subtitle), and single lines in a label
+/// style of their own (see `styled_labels`).
 fn crowded_headings(
     world: &LabWorld,
     geometry: &Geometry,
@@ -359,19 +493,25 @@ fn crowded_headings(
 ) -> Vec<Diagnostic> {
     let items = &geometry.items;
     let rules: Vec<usize> = (0..items.len()).filter(|&k| is_rule(&items[k])).collect();
-    // The rule directly under a block of text, as wide as it.
-    let rule_under = |page: usize, ink: &BBox, size: f64| {
+    // The rule directly under a block of text: as wide as it (an underline,
+    // which makes a line a section label), or under any part of it (a short
+    // ornament, which belongs to the label it stands under).
+    let rule_under = |page: usize, ink: &BBox, size: f64, wide: bool| {
         rules.iter().copied().find(|&r| {
             let b = &items[r].bbox;
+            let under = if wide {
+                b.x0 <= ink.x0 + 2.0 && b.x1 >= ink.x1 - 2.0
+            } else {
+                overlaps_x(b, ink)
+            };
             items[r].page == page
                 && b.y0 - ink.y1 >= 0.0
                 && b.y0 - ink.y1 <= 0.8 * size
-                && b.x0 <= ink.x0 + 2.0
-                && b.x1 >= ink.x1 - 2.0
+                && under
         })
     };
 
-    let mut groups: Vec<(bool, Vec<usize>)> = Vec::new();
+    let mut groups: Vec<(Label, Vec<usize>)> = Vec::new();
     let mut explicit: BTreeMap<(usize, usize), Vec<usize>> = BTreeMap::new();
     for (k, item) in items.iter().enumerate() {
         if !nonblank(item) {
@@ -381,7 +521,9 @@ fn crowded_headings(
             explicit.entry((heading, item.page)).or_default().push(k);
         }
     }
-    groups.extend(explicit.into_values().map(|group| (false, group)));
+    groups.extend(explicit.into_values().map(|group| (Label::Heading, group)));
+    // Single lines standing apart, each with whether a rule underlines it.
+    let mut apart: Vec<(&Row, bool)> = Vec::new();
     for row in rows {
         let first = &items[row.items[0]];
         if row.text.trim().chars().count() > 60
@@ -402,9 +544,17 @@ fn crowded_headings(
                 && ((0.0..0.8 * row.size).contains(&(lb.y0 - o.y1))
                     || (0.0..0.8 * row.size).contains(&(o.y0 - lb.y1)))
         });
-        if !near && rule_under(row.page, &row.ink, row.size).is_some() {
-            groups.push((true, row.items.clone()));
+        if near {
+            continue;
         }
+        let underlined = rule_under(row.page, &row.ink, row.size, true).is_some();
+        if underlined {
+            groups.push((Label::Underlined, row.items.clone()));
+        }
+        apart.push((row, underlined));
+    }
+    for row in styled_labels(geometry, &apart, body) {
+        groups.push((Label::Styled, row.items.clone()));
     }
 
     // A section label's style recurs on other rows; a subtitle's does not.
@@ -425,8 +575,8 @@ fn crowded_headings(
     }
 
     let mut out = Vec::new();
-    for (underlined, group) in &groups {
-        if *underlined && recurring[&style(group)].len() < 2 {
+    for (label, group) in &groups {
+        if *label == Label::Underlined && recurring[&style(group)].len() < 2 {
             continue;
         }
         let head = &items[group[0]];
@@ -437,7 +587,7 @@ fn crowded_headings(
             continue;
         };
         let text_ink = h;
-        let under = rule_under(page, &text_ink, size);
+        let under = rule_under(page, &text_ink, size, false);
         if let Some(r) = under {
             h.y1 = items[r].bbox.y1;
         }
@@ -492,8 +642,10 @@ fn crowded_headings(
         };
         let gap_above = h.y0 - above.bbox.y1;
         let gap_below = below.bbox.y0 - h.y1;
-        // A divider rule above a heading belongs close to it.
-        if is_rule(above) {
+        // A divider rule above a heading belongs close to it. A label known
+        // by its style alone is judged against text only: under the edge of
+        // a box or a band it starts a new area.
+        if is_rule(above) || (*label == Label::Styled && above.kind != ItemKind::Text) {
             continue;
         }
         // Writing lines below a heading (a notes area) leave space to write in.
@@ -542,9 +694,14 @@ fn crowded_headings(
                 continue;
             }
         }
+        // A label known by its style alone introduces what follows closely.
+        let reference = size.max(body);
+        if *label == Label::Styled && gap_below > MAX_LABEL_LEAD_EM * reference {
+            continue;
+        }
         if gap_below <= 0.0
             || gap_above >= MAX_HEADING_ABOVE_SHARE * gap_below
-            || gap_above >= size
+            || gap_above >= reference
         {
             continue;
         }
@@ -575,7 +732,9 @@ fn crowded_headings(
         diagnostic.unit = Some("pt");
         diagnostic.hints.push(
             "leave clearly more space above a heading than below it, about 1.5 to 2 times \
-             (e.g. a larger block(above: ..) on the heading, or less space below it)"
+             (e.g. a larger block(above: ..) on the heading, or less space below it); on \
+             a full page a v(1fr) adds nothing, so make room by reducing display sizes \
+             or moving a part to another page"
                 .into(),
         );
         out.push(located(world, diagnostic, item_span(geometry, head), page, h));

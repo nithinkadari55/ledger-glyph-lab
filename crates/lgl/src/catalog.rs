@@ -747,9 +747,10 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L084.heading-crowded-above",
         "warning",
-        "A heading sits closer to the content above it than to its own content, so it \
-         reads as part of what comes before.",
-        "space above under 0.75 of the space below and under the heading size",
+        "A heading, a section label or the header line of a repeated group (a role line \
+         in a resume) sits closer to the content above it than to its own content, so \
+         it reads as part of what comes before.",
+        "space above under 0.75 of the space below and under the heading (or body) size",
         "Leave about 1.5 to 2 times more space above a heading than below it.",
         false,
     ),
