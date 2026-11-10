@@ -370,11 +370,8 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             let start = words.iter().rposition(|w| w.starts_with('+')).unwrap_or(0);
             format!("{} {rest}", words[start..].join(" "))
         };
-        let hyphen = if line.hyphenated {
-            ", with a hyphen that is not part of it"
-        } else {
-            ""
-        };
+        let hyphen =
+            if line.hyphenated { ", with a hyphen that is not part of it" } else { "" };
         let mut diagnostic = Diagnostic::new(
             BROKEN_ADDRESS,
             Severity::Warning,
