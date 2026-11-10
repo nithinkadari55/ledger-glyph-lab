@@ -87,11 +87,9 @@ fn stranded_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         // cells from left to right.
         let mut pieces: BTreeMap<usize, Vec<Vec<String>>> = BTreeMap::new();
         for (&(page, _), cells) in &rows {
+            let left = |cell: &usize| geometry.containers[*cell].bbox.x0;
             let mut cells = cells.clone();
-            cells.sort_by(|a, b| {
-                let (a, b) = (&geometry.containers[*a].bbox, &geometry.containers[*b].bbox);
-                a.x0.total_cmp(&b.x0)
-            });
+            cells.sort_by(|a, b| left(a).total_cmp(&left(b)));
             let row = cells
                 .iter()
                 .map(|cell| {
@@ -111,7 +109,11 @@ fn stranded_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .take_while(|(a, b)| a == b && a.iter().any(|text| !text.is_empty()))
                 .count()
         };
-        let repeated = pieces[1..].iter().map(|(_, rows)| header(rows)).max().unwrap_or(0);
+        let repeated = pieces[1..]
+            .iter()
+            .map(|(_, rows)| header(rows))
+            .max()
+            .unwrap_or(0);
         let body: Vec<(usize, usize)> = pieces
             .iter()
             .enumerate()
