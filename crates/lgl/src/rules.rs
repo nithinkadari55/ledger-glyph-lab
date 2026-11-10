@@ -155,6 +155,12 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let Some(bbox) = item.visible() else { continue };
         let tolerance = match (item.kind, item.font_size) {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
+            // A line's stroke is centred on its path, so a line drawn along a
+            // cell or box edge (a connector, a rule) reaches half its
+            // thickness beyond it.
+            (ItemKind::Shape, _) if line_thickness(&bbox).is_some() => {
+                TOLERANCE_PT.max(line_thickness(&bbox).unwrap_or_default() / 2.0 + 0.1)
+            }
             _ => TOLERANCE_PT,
         };
         // A trailing space is part of the item's box but invisible, so only
@@ -288,15 +294,17 @@ fn classify(
 }
 
 /// Typst sizes a row by its lines' text edges, so inline math such as a
-/// stacked fraction hangs a few points above or below a grid cell. A cell
-/// without fill or stroke shows no edge, so such an overhang is a defect only
-/// where it meets other ink (a neighbouring row, a rule, another fill).
+/// stacked fraction hangs a few points above or below a grid cell, the
+/// descenders of a script name hang below the block that holds it. A cell or
+/// block without fill or stroke shows no edge, and one that does not clip
+/// cuts nothing, so such an overhang is a defect only where it meets other ink
+/// (a neighbouring row, a rule, another fill).
 fn invisible_overhang(geometry: &Geometry, subject: &Subject, cell: usize) -> bool {
     let container = &geometry.containers[cell];
     let Some(index) = subject.item else { return false };
     let (b, c) = (&subject.bbox, &container.bbox);
-    if container.kind != "cell"
-        || container.visible
+    if container.visible
+        || container.clip
         || c.x0 - b.x0 > subject.sides[0]
         || b.x1 - c.x1 > subject.sides[1]
     {
@@ -326,6 +334,15 @@ fn invisible_overhang(geometry: &Geometry, subject: &Subject, cell: usize) -> bo
                 .iter()
                 .any(|&(top, bottom)| top < bottom && o.y0 < bottom && o.y1 > top)
     })
+}
+
+/// The thickness of a straight horizontal or vertical line, if the shape is
+/// one: thinner than this in one direction.
+fn line_thickness(bbox: &BBox) -> Option<f64> {
+    const MAX_LINE_THICKNESS_PT: f64 = 3.0;
+    let thin = bbox.width().min(bbox.height());
+    let long = bbox.width().max(bbox.height());
+    (thin < MAX_LINE_THICKNESS_PT && long >= 3.0 * thin.max(0.1)).then_some(thin)
 }
 
 /// Whether the subject extends beyond `bounds` by more than its tolerance on

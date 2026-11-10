@@ -1018,6 +1018,17 @@ const MIN_FIGURE_CAPTION_GAP: f64 = 0.3;
 /// A figure is at least this many times its caption's size.
 const FIGURE_CAPTION_RATIO: f64 = 1.8;
 
+/// The innermost box with a fill or stroke that holds a container, if any.
+fn visible_box(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
+    while let Some(index) = cursor {
+        if geometry.containers[index].visible {
+            return Some(index);
+        }
+        cursor = geometry.containers[index].parent;
+    }
+    None
+}
+
 /// A key figure whose caption sits far below it, so the two fall apart.
 fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let texts: Vec<&Item> = geometry.items.iter().filter(|i| is_text(i)).collect();
@@ -1045,12 +1056,15 @@ fn detached_figure_captions(world: &LabWorld, geometry: &Geometry) -> Vec<Diagno
             continue;
         };
         let c = caption.bbox;
+        // Text in between, or a box edge between them (a caption belongs to a
+        // figure in the same card, cell or ticket, never one in another box).
         let blocked = texts.iter().any(|t| {
             t.page == figure.page
                 && t.bbox.y0 >= f.y1 - 0.5
                 && t.bbox.y0 < c.y0 - 0.5
                 && overlaps(&t.bbox, &c)
-        });
+        }) || visible_box(geometry, figure.container)
+            != visible_box(geometry, caption.container);
         let gap = c.y0 - f.y1;
         let caption_size = caption.font_size.unwrap_or_default();
         let crowded = gap < MIN_FIGURE_CAPTION_GAP * caption_size;

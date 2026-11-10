@@ -282,8 +282,10 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && i.bbox.x0 < band.x1
                     && i.bbox.x1 > band.x0
             });
-            let writing =
-                |r: &crate::geom::Item| line_labels(geometry, r, None) != (false, false);
+            let writing = |r: &crate::geom::Item| {
+                line_labels(geometry, r, None) != (false, false)
+                    || in_ruled_area(&rules, r)
+            };
             if !empty || writing(a) || writing(b) {
                 continue;
             }
@@ -311,6 +313,37 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Rules spaced this evenly (within this many points) form a ruled area.
+const RULED_AREA_TOLERANCE_PT: f64 = 1.0;
+
+/// Whether a rule belongs to a ruled area: three or more rules of the same
+/// width, one under the other at an even spacing, such as the writing lines
+/// of a notes box. Such rules are lines to write on, not separators.
+fn in_ruled_area(rules: &[&crate::geom::Item], rule: &crate::geom::Item) -> bool {
+    let r = &rule.bbox;
+    let mut column: Vec<&BBox> = rules
+        .iter()
+        .filter(|o| {
+            let b = &o.bbox;
+            o.page == rule.page
+                && (b.width() - r.width()).abs() <= 0.1 * b.width().max(r.width())
+                && b.x1.min(r.x1) - b.x0.max(r.x0) >= 0.9 * b.width().min(r.width())
+        })
+        .map(|o| &o.bbox)
+        .collect();
+    column.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+    let Some(at) = column.iter().position(|b| std::ptr::eq(*b, r)) else {
+        return false;
+    };
+    // Any run of three consecutive rules that includes this one, evenly spaced.
+    (at.saturating_sub(2)..=at).any(|start| {
+        let Some(run) = column.get(start..start + 3) else { return false };
+        let first = run[1].y0 - run[0].y0;
+        let second = run[2].y0 - run[1].y0;
+        first > 0.0 && (first - second).abs() <= RULED_AREA_TOLERANCE_PT
+    })
 }
 
 /// Filled boxes whose text nearly touches the top or bottom edge of the fill.

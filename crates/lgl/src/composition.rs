@@ -359,6 +359,10 @@ const DISPLAY_PT: f64 = 14.0;
 /// the text below reads as another title line.
 const MIN_TITLE_AFTER_RATIO: f64 = 1.5;
 
+/// A subtitle further below its title than this many title sizes stands apart
+/// from it (L064).
+const MAX_SUBTITLE_GAP_EM: f64 = 0.9;
+
 /// Paragraphs without a first-line indent need at least this much more space
 /// between them than between their lines (Typst's default is about 0.55em).
 const MIN_PARAGRAPH_GAP_EM: f64 = 0.5;
@@ -412,9 +416,21 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if inside <= 0.0 || after >= MIN_TITLE_AFTER_RATIO * inside - 0.5 {
             continue;
         }
-        let mut diagnostic = Diagnostic::new(
-            TITLE_PROXIMITY,
-            Severity::Warning,
+        // Lines set so far apart that the text below cannot be clearly further
+        // away and still belong to the title (L064 wants a subtitle within
+        // MAX_SUBTITLE_GAP_EM title sizes): the title's own leading is at fault.
+        let loose = MIN_TITLE_AFTER_RATIO * inside > MAX_SUBTITLE_GAP_EM * size;
+        let message = if loose {
+            format!(
+                "the lines of a {}pt title on page {} are {}pt apart, so loose that the \
+                 text {}pt below it cannot stand clearly apart from the title and still \
+                 belong to it",
+                round1(size),
+                next.page + 1,
+                round1(inside),
+                round1(after.max(0.0))
+            )
+        } else {
             format!(
                 "the text below a {}pt title on page {} starts {}pt under it, less than \
                  1.5 times the gap between the title's own lines ({}pt), so it reads as \
@@ -423,8 +439,9 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 next.page + 1,
                 round1(after.max(0.0)),
                 round1(inside)
-            ),
-        );
+            )
+        };
+        let mut diagnostic = Diagnostic::new(TITLE_PROXIMITY, Severity::Warning, message);
         diagnostic.loc =
             diag::resolve_span(world, geometry.span_for(next.span, next.elem));
         diagnostic.page = Some(next.page + 1);
@@ -432,11 +449,16 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.measured = Some(round1(after));
         diagnostic.limit = Some(round1(MIN_TITLE_AFTER_RATIO * inside));
         diagnostic.unit = Some("pt");
-        diagnostic.hints.push(
+        diagnostic.hints.push(if loose {
+            "tighten the title's own leading in its own size (set par(leading: ..) \
+             inside the text(size: ..) block, a line pitch of about 1.1 to 1.2 times the \
+             size), then leave about 0.3 to 0.6 title sizes below it"
+                .into()
+        } else {
             "leave clearly more space below the title than between its lines, e.g. \
              block(below: 0.8em) around the title or v(..) before the text that follows"
-                .into(),
-        );
+                .into()
+        });
         out.push(diagnostic);
     }
     out
@@ -813,7 +835,30 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .iter()
                 .filter(|l| l.bbox.y1 <= frame.y0 + 1.0)
                 .max_by(|a, b| a.bbox.y1.total_cmp(&b.bbox.y1));
-            if let Some(line) = before {
+            // A figure placed beside text (in another column) that starts level
+            // with it shares that text's space below the line above, so the
+            // gap is judged on the text, not on the figure.
+            let beside = |line: &Line| {
+                let size = ink(geometry, line).map_or(10.0, |i| i.size);
+                geometry.lines.iter().any(|l| {
+                    l.page == page
+                        && geometry.is_body(l.region)
+                        && !within(geometry, l.elem, index)
+                        && (l.bbox.x1 <= frame.x0 || l.bbox.x0 >= frame.x1)
+                        && l.bbox.y0 > line.bbox.y1
+                        && (l.bbox.y0 - frame.y0).abs() <= size
+                        && !geometry.lines.iter().any(|m| {
+                            m.page == page
+                                && m.bbox.x0 < l.bbox.x1
+                                && l.bbox.x0 < m.bbox.x1
+                                && m.bbox.y0 > line.bbox.y1
+                                && m.bbox.y1 < l.bbox.y0
+                        })
+                })
+            };
+            if let Some(line) = before
+                && !beside(line)
+            {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
                 // A single-line paragraph has no pitch of its own; the nearest
                 // line of its block may lie across the figure.
