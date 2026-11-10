@@ -435,9 +435,9 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L049.broken-address",
         "warning",
-        "A web or email address wraps onto the next line without a hyphen, such as \
-         \"www.example.\" followed by \"com\", or an international phone number is split \
-         across lines.",
+        "A web or email address is split across two lines, by wrapping (\"www.example.\" \
+         followed by \"com\") or by hyphenation, which prints a hyphen that is not part \
+         of it, or an international phone number is split across lines.",
         "any split address or number",
         "Keep the address on one line: shorten the text around it or wrap it in box().",
         false,

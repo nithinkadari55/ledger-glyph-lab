@@ -12,6 +12,10 @@ pub const LINE_THROUGH_TEXT: &str = "L050.line-through-text";
 /// as a manual break; word widths are estimated, so near misses are wraps.
 const MANUAL_BREAK_MARGIN: f64 = 1.3;
 
+/// The characters a line may end with where a word was hyphenated: the soft
+/// hyphen Typst sets at the break, or a hyphen.
+const HYPHENS: &[char] = &['\u{ad}', '-', '\u{2010}'];
+
 /// A shape thinner than this in one direction is a line: a rule, a tick, a
 /// gridline (heading and card rules are often 2pt).
 const MAX_LINE_THICKNESS_PT: f64 = 3.0;
@@ -299,9 +303,10 @@ fn splits_phone(text: &str, rest: &str) -> bool {
     words.len() - start <= 4 && words[start..].iter().all(|w| numeric(w)) && numeric(rest)
 }
 
-/// Web and email addresses that wrap onto the next line without a hyphen,
-/// such as "www.example." followed by "com", and phone numbers split across
-/// lines.
+/// Web and email addresses that wrap onto the next line, such as
+/// "www.example." followed by "com", or broken by hyphenation, such as
+/// "dispatch@merid-" followed by "ian.example" (the hyphen printed at the
+/// break is not part of the address), and phone numbers split across lines.
 fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for pair in geometry.lines.windows(2) {
@@ -312,7 +317,6 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if line.page != next.page
             || line.container != next.container
             || (line.bbox.x0 - next.bbox.x0).abs() > 1.0
-            || line.hyphenated
             || step <= 0.0
             || step > 2.5 * line.bbox.height()
         {
@@ -322,6 +326,16 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let following = line_text(geometry, next);
         let Some(token) = text.split_whitespace().last() else { continue };
         let Some(rest) = following.split_whitespace().next() else { continue };
+        // Hyphenation breaks one word in two: it broke an address when the
+        // two parts together are one.
+        let hyphenated = if line.hyphenated {
+            Some(format!("{}{rest}", token.trim_end_matches(HYPHENS)))
+        } else {
+            None
+        };
+        if hyphenated.as_deref().is_some_and(|whole| !is_address(whole)) {
+            continue;
+        }
         let ends = token
             .chars()
             .last()
@@ -342,22 +356,30 @@ fn broken_addresses(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             && continues
             && is_address(token);
         let phone = splits_phone(&text, rest);
-        if forced || !(address || phone) {
+        if hyphenated.is_none() && (forced || !(address || phone)) {
             continue;
         }
+        let address = address || hyphenated.is_some();
         let what = if address { "address" } else { "phone number" };
-        let shown = if address {
+        let shown = if let Some(whole) = hyphenated {
+            whole
+        } else if address {
             format!("{token}{rest}")
         } else {
             let words: Vec<&str> = text.split_whitespace().collect();
             let start = words.iter().rposition(|w| w.starts_with('+')).unwrap_or(0);
             format!("{} {rest}", words[start..].join(" "))
         };
+        let hyphen = if line.hyphenated {
+            ", with a hyphen that is not part of it"
+        } else {
+            ""
+        };
         let mut diagnostic = Diagnostic::new(
             BROKEN_ADDRESS,
             Severity::Warning,
             format!(
-                "the {what} \"{shown}\" on page {} is split across two lines",
+                "the {what} \"{shown}\" on page {} is split across two lines{hyphen}",
                 line.page + 1
             ),
         );
