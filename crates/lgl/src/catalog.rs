@@ -758,7 +758,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "Stacked rows of grid or table cells that both hold built-up fractions are so \
          close that numerators and denominators crowd each other.",
         "0.5 text sizes of clear space",
-        "Raise the grid's row-gutter (about 0.8 to 1em) or the cells' inset.",
+        "Raise the row-gutter of the grid or table by the amount the diagnostic names.",
         false,
     ),
     rule(

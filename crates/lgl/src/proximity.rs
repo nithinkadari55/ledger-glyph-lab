@@ -585,64 +585,103 @@ fn crowded_headings(
 
 // --- L085: rows of fractions crowding each other -------------------------------
 
+/// A text line of one cell that holds a built-up fraction, with the ink of
+/// the cell's own text on it.
+struct FractionRow {
+    line: usize,
+    page: usize,
+    cell: usize,
+    ink: BBox,
+    size: f64,
+}
+
 /// Stacked rows of separate items (grid or table cells) that both hold
 /// built-up fractions, set so close that numerators and denominators crowd.
 fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let items = &geometry.items;
-    // Fractions reach above and below a line's box, so take in more of them.
-    let all = rows(geometry, |line| 0.5 * line.bbox.height() + 1.0);
-    let mut fractions: Vec<(&Row, usize)> = Vec::new();
-    for row in &all {
-        let Some(cell) =
-            ancestor(geometry, items[row.items[0]].elem, |e| e.name == "cell")
+    let cell_of = |elem| ancestor(geometry, elem, |e| e.name == "cell");
+    let equation_of = |elem| ancestor(geometry, elem, |e| e.name == "equation");
+    let mut fractions: Vec<FractionRow> = Vec::new();
+    // Fractions reach above and below a line's box, so take in more of them,
+    // but only what the line's own cell holds: a tall line would otherwise
+    // take in digits of the rows above and below it.
+    for row in rows(geometry, |line| 0.5 * line.bbox.height() + 1.0) {
+        let line = &geometry.lines[row.line];
+        let Some(cell) = cell_of(line.elem) else { continue };
+        let own: Vec<usize> = row
+            .items
+            .iter()
+            .copied()
+            .filter(|&k| cell_of(items[k].elem) == Some(cell))
+            .collect();
+        let Some(ink) = own.iter().map(|&k| items[k].bbox).reduce(|a, b| a.union(&b))
         else {
             continue;
         };
-        let lb = &geometry.lines[row.line].bbox;
-        let small = |i: &Item| i.font_size.unwrap_or_default() < 0.85 * row.size;
+        let size = own.iter().filter_map(|&k| items[k].font_size).fold(0.0, f64::max);
+        let lb = &line.bbox;
         let has_fraction = items.iter().any(|bar| {
             let b = &bar.bbox;
-            bar.kind == ItemKind::Shape
-                && bar.page == row.page
-                && b.height() < 1.2
-                && b.width() < 4.0 * row.size
-                && lb.x0 - 1.0 <= b.x0
-                && b.x1 <= lb.x1 + 1.0
-                && row.ink.y0 - 1.0 <= b.y0
-                && b.y0 <= row.ink.y1 + 1.0
-                && row.items.iter().any(|&k| {
-                    let i = &items[k];
-                    small(i) && i.bbox.y1 <= b.y0 + 0.5 && overlaps_x(&i.bbox, b)
-                })
-                && row.items.iter().any(|&k| {
-                    let i = &items[k];
-                    small(i) && i.bbox.y0 >= b.y1 - 0.5 && overlaps_x(&i.bbox, b)
-                })
+            if bar.kind != ItemKind::Shape
+                || bar.page != row.page
+                || cell_of(bar.elem) != Some(cell)
+                || b.height() >= 1.2
+                || b.width() >= 4.0 * size
+                || b.x0 < lb.x0 - 1.0
+                || b.x1 > lb.x1 + 1.0
+                || b.y0 < ink.y0 - 1.0
+                || b.y0 > ink.y1 + 1.0
+            {
+                return false;
+            }
+            // The parts of a fraction are smaller than the text around it, or,
+            // at any size (display style, a cell holding only the fraction),
+            // they belong to the equation that draws the bar.
+            let equation = equation_of(bar.elem);
+            let part = |i: &Item| {
+                i.font_size.unwrap_or_default() < 0.85 * size
+                    || (equation.is_some() && equation_of(i.elem) == equation)
+            };
+            let parts: Vec<&BBox> = own
+                .iter()
+                .map(|&k| &items[k])
+                .filter(|i| part(i) && overlaps_x(&i.bbox, b))
+                .map(|i| &i.bbox)
+                .collect();
+            parts.iter().any(|p| p.y1 <= b.y0 + 0.5)
+                && parts.iter().any(|p| p.y0 >= b.y1 - 0.5)
         });
         if has_fraction {
-            fractions.push((row, cell));
+            fractions.push(FractionRow {
+                line: row.line,
+                page: row.page,
+                cell,
+                ink,
+                size,
+            });
         }
     }
-    let mut out = Vec::new();
-    let mut seen = BTreeSet::new();
-    for &(upper, cell) in &fractions {
+
+    // Each pair of crowded rows, with the space it lacks.
+    let mut found: Vec<(f64, &FractionRow, &FractionRow)> = Vec::new();
+    for upper in &fractions {
         let a = &upper.ink;
-        let Some(&(lower, _)) = fractions
+        let Some(lower) = fractions
             .iter()
-            .filter(|(r, c)| {
+            .filter(|r| {
                 r.page == upper.page
-                    && *c != cell
+                    && r.cell != upper.cell
                     && r.ink.y0 > a.y0 + 0.5 * upper.size
                     && overlaps_x(&r.ink, a)
             })
-            .min_by(|x, y| x.0.ink.y0.total_cmp(&y.0.ink.y0))
+            .min_by(|x, y| x.ink.y0.total_cmp(&y.ink.y0))
         else {
             continue;
         };
         let b = &lower.ink;
-        let size = upper.size.max(lower.size);
+        let limit = MIN_FRACTION_ROW_GAP_EM * upper.size.max(lower.size);
         let gap = b.y0 - a.y1;
-        if gap >= MIN_FRACTION_ROW_GAP_EM * size {
+        if gap >= limit {
             continue;
         }
         let divided = items.iter().any(|s| {
@@ -654,9 +693,22 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
                 && s.bbox.x0 < a.x1.min(b.x1)
                 && s.bbox.x1 > a.x0.max(b.x0)
         });
-        if divided || !seen.insert((upper.page, a.y1.round() as i64)) {
-            continue;
+        if !divided {
+            found.push((limit - gap, upper, lower));
         }
+    }
+    // One report per band of rows: the pair that lacks the most space, so
+    // that the amount the hint names is enough for the whole band.
+    found.sort_by(|x, y| y.0.total_cmp(&x.0));
+    let mut seen = BTreeSet::new();
+    found.retain(|(_, upper, _)| seen.insert((upper.page, upper.ink.y1.round() as i64)));
+    found.sort_by_key(|(_, upper, _)| (upper.page, upper.line));
+
+    let mut out = Vec::new();
+    for (shortfall, upper, lower) in found {
+        let (a, b) = (&upper.ink, &lower.ink);
+        let limit = MIN_FRACTION_ROW_GAP_EM * upper.size.max(lower.size);
+        let gap = b.y0 - a.y1;
         let mut diagnostic = Diagnostic::new(
             CRAMPED_FRACTIONS,
             Severity::Warning,
@@ -668,14 +720,14 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
             ),
         );
         diagnostic.measured = Some(round1(gap));
-        diagnostic.limit = Some(round1(MIN_FRACTION_ROW_GAP_EM * size));
+        diagnostic.limit = Some(round1(limit));
         diagnostic.unit = Some("pt");
-        diagnostic.hints.push(
-            "rows holding built-up fractions need more space than rows of text: raise the \
-             grid's row-gutter (about 0.8 to 1em) or the cells' inset; the leading of \
-             paragraphs with an inline fraction can stay as it is"
-                .into(),
-        );
+        diagnostic.hints.push(format!(
+            "a row is as tall as its text line, and a built-up fraction reaches above \
+             and below that line: raise the row-gutter of the grid or table by at least \
+             {}pt; the leading of paragraphs with an inline fraction can stay as it is",
+            (shortfall * 10.0).ceil() / 10.0
+        ));
         let line = &geometry.lines[lower.line];
         out.push(located(
             world,
