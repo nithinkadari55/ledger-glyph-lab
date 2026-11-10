@@ -7,6 +7,7 @@ use typst::layout::{
 };
 use typst::model::RefElem;
 use typst::syntax::Span;
+use typst::text::FontInstance;
 use typst::visualize::{ImageKind, Paint};
 use typst_layout::PagedDocument;
 
@@ -136,6 +137,12 @@ pub struct Item {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub font_size: Option<f64>,
+    /// The family of the font a text item is set in.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
+    /// The weight a text item is set in, from 100 to 900.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weight: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub missing: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -148,6 +155,16 @@ pub struct Item {
     pub patterned: bool,
     #[serde(skip)]
     pub span: Span,
+}
+
+/// The weight text is set in: the position on a variable font's weight axis,
+/// or the weight of a static font.
+fn font_weight(font: &FontInstance) -> u16 {
+    let axis = typst::text::Tag::from_bytes(b"wght");
+    match font.variations().0.iter().find(|(tag, _)| *tag == axis) {
+        Some((_, value)) => value.0.round() as u16,
+        None => font.info().variant.weight.to_number(),
+    }
 }
 
 fn solid(paint: &Paint) -> Option<[f32; 4]> {
@@ -414,6 +431,8 @@ impl Walker {
                         Some(text.size.to_pt()),
                     ) {
                         item.color = solid(&text.fill);
+                        item.font = Some(text.font.info().family.clone());
+                        item.weight = Some(font_weight(&text.font));
                         if !missing.is_empty() {
                             item.missing = Some(missing);
                         }
@@ -613,6 +632,8 @@ impl Walker {
             column: self.columns.last().copied(),
             text,
             font_size,
+            font: None,
+            weight: None,
             missing: None,
             pixels: None,
             color: None,
