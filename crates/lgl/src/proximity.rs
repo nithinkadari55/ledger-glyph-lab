@@ -66,7 +66,11 @@ const SHORT_LABEL_CHARS: usize = 28;
 /// The label of the agent kit's section headings.
 const KIT_HEADING: &str = "kit-section-heading";
 
-pub fn run(world: &LabWorld, geometry: &Geometry, earlier: &[Diagnostic]) -> Vec<Diagnostic> {
+pub fn run(
+    world: &LabWorld,
+    geometry: &Geometry,
+    earlier: &[Diagnostic],
+) -> Vec<Diagnostic> {
     let body = body_size(geometry);
     let tight = rows(geometry, |_| 1.0);
     let mut out = clipped_text(world, geometry);
@@ -121,7 +125,9 @@ fn rows(geometry: &Geometry, tolerance: impl Fn(&Line) -> f64) -> Vec<Row> {
         if items.is_empty() {
             continue;
         }
-        items.sort_by(|a, b| geometry.items[*a].bbox.x0.total_cmp(&geometry.items[*b].bbox.x0));
+        items.sort_by(|a, b| {
+            geometry.items[*a].bbox.x0.total_cmp(&geometry.items[*b].bbox.x0)
+        });
         let ink = items
             .iter()
             .map(|&k| geometry.items[k].bbox)
@@ -135,7 +141,14 @@ fn rows(geometry: &Geometry, tolerance: impl Fn(&Line) -> f64) -> Vec<Row> {
             .iter()
             .filter_map(|&k| geometry.items[k].text.as_deref())
             .collect::<String>();
-        out.push(Row { line: index, page: line.page, items, ink, size, text });
+        out.push(Row {
+            line: index,
+            page: line.page,
+            items,
+            ink,
+            size,
+            text,
+        });
     }
     out
 }
@@ -232,7 +245,10 @@ fn clipped_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let Some(clip) = item.clip else { continue };
         let b = &item.bbox;
         let size = item.font_size.unwrap_or(10.0);
-        let cut = (clip.x0 - b.x0).max(b.x1 - clip.x1).max(clip.y0 - b.y0).max(b.y1 - clip.y1);
+        let cut = (clip.x0 - b.x0)
+            .max(b.x1 - clip.x1)
+            .max(clip.y0 - b.y0)
+            .max(b.y1 - clip.y1);
         let limit = CLIP_TOLERANCE_PT.max(CLIP_TOLERANCE_EM * size);
         let span = item_span(geometry, item);
         if cut <= limit || !seen.insert((item.page, span)) {
@@ -266,7 +282,11 @@ fn clipped_text(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 /// An inline list joined by separators ("Bristol · +44 7700 900123 · ..") that
 /// wraps, leaving a separator at the end or the start of a line.
-fn stranded_separators(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> Vec<Diagnostic> {
+fn stranded_separators(
+    world: &LabWorld,
+    geometry: &Geometry,
+    rows: &[Row],
+) -> Vec<Diagnostic> {
     let by_line: BTreeMap<usize, &Row> = rows.iter().map(|r| (r.line, r)).collect();
     let mut out = Vec::new();
     for (k, pair) in geometry.lines.windows(2).enumerate() {
@@ -310,8 +330,13 @@ fn stranded_separators(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> V
                 if at_end { "end" } else { "start" }
             ),
         );
-        let mut diagnostic =
-            located(world, diagnostic, line_span(geometry, a), a.page, ra.ink.union(&rb.ink));
+        let mut diagnostic = located(
+            world,
+            diagnostic,
+            line_span(geometry, a),
+            a.page,
+            ra.ink.union(&rb.ink),
+        );
         diagnostic.hints.push(
             "a list joined by separators must fit on its line: shorten it or make its text \
              smaller, or set its items one per line (a stack or grid) instead of letting \
@@ -448,7 +473,9 @@ fn crowded_headings(
                     && !group.contains(k)
                     && Some(*k) != under
                     && i.region == head.region
-                    && (head.column.is_none() || i.column.is_none() || i.column == head.column)
+                    && (head.column.is_none()
+                        || i.column.is_none()
+                        || i.column == head.column)
                     && i.bbox.x0 < cx1
                     && i.bbox.x1 > cx0
                     && !(i.bbox.y0 <= h.y0 + 0.5 && i.bbox.y1 >= h.y1 - 0.5)
@@ -535,7 +562,8 @@ fn crowded_headings(
                 .total_cmp(&items[*b].bbox.y0)
                 .then(items[*a].bbox.x0.total_cmp(&items[*b].bbox.x0))
         });
-        let text: String = ordered.iter().filter_map(|&k| items[k].text.as_deref()).collect();
+        let text: String =
+            ordered.iter().filter_map(|&k| items[k].text.as_deref()).collect();
         let mut diagnostic = Diagnostic::new(
             CROWDED_HEADING,
             Severity::Warning,
@@ -571,7 +599,8 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
     let all = rows(geometry, |line| 0.5 * line.bbox.height() + 1.0);
     let mut fractions: Vec<(&Row, usize)> = Vec::new();
     for row in &all {
-        let Some(cell) = ancestor(geometry, items[row.items[0]].elem, |e| e.name == "cell")
+        let Some(cell) =
+            ancestor(geometry, items[row.items[0]].elem, |e| e.name == "cell")
         else {
             continue;
         };
@@ -654,7 +683,13 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
                 .into(),
         );
         let line = &geometry.lines[lower.line];
-        out.push(located(world, diagnostic, line_span(geometry, line), upper.page, a.union(b)));
+        out.push(located(
+            world,
+            diagnostic,
+            line_span(geometry, line),
+            upper.page,
+            a.union(b),
+        ));
     }
     out
 }
@@ -717,7 +752,13 @@ fn loose_display_lines(
              text(size: ..) block that holds it)"
                 .into(),
         );
-        out.push(located(world, diagnostic, line_span(geometry, a), ra.page, ra.ink.union(&rb.ink)));
+        out.push(located(
+            world,
+            diagnostic,
+            line_span(geometry, a),
+            ra.page,
+            ra.ink.union(&rb.ink),
+        ));
     }
     out
 }
@@ -736,8 +777,10 @@ fn drifting_subtitles(
 ) -> Vec<Diagnostic> {
     let items = &geometry.items;
     let all = rows(geometry, |line| 0.3 * line.bbox.height() + 1.0);
-    let boxes: Vec<Option<usize>> =
-        all.iter().map(|r| visible_box(geometry, items[r.items[0]].container)).collect();
+    let boxes: Vec<Option<usize>> = all
+        .iter()
+        .map(|r| visible_box(geometry, items[r.items[0]].container))
+        .collect();
     let judged: Vec<(usize, BBox)> = earlier
         .iter()
         .filter(|d| d.rule == crate::titles::DETACHED_SUBTITLE)
@@ -758,7 +801,9 @@ fn drifting_subtitles(
                     && a.x0 < r.ink.x1 + 2.0
             })
             .collect();
-        let Some(&next) = below.iter().min_by(|x, y| all[**x].ink.y0.total_cmp(&all[**y].ink.y0))
+        let Some(&next) = below
+            .iter()
+            .min_by(|x, y| all[**x].ink.y0.total_cmp(&all[**y].ink.y0))
         else {
             continue;
         };
@@ -786,8 +831,8 @@ fn drifting_subtitles(
                 && s.bbox.y1 >= a.y1
                 && s.bbox.y1 < nb.y1
         });
-        let aligned = (nb.x0 - a.x0).abs() <= 3.0
-            || ((nb.x0 + nb.x1) - (a.x0 + a.x1)).abs() <= 6.0;
+        let aligned =
+            (nb.x0 - a.x0).abs() <= 3.0 || ((nb.x0 + nb.x1) - (a.x0 + a.x1)).abs() <= 6.0;
         let divided = items.iter().any(|i| {
             i.kind != ItemKind::Text
                 && i.kind != ItemKind::Link
@@ -866,13 +911,20 @@ fn drifting_subtitles(
 /// A short label in the first column of a grid or table ("Maid of Honour",
 /// "Frequency response") that wraps onto a second line while the other labels
 /// of its column fit on one: the label column is too narrow.
-fn wrapped_labels(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> Vec<Diagnostic> {
+fn wrapped_labels(
+    world: &LabWorld,
+    geometry: &Geometry,
+    rows: &[Row],
+) -> Vec<Diagnostic> {
     let items = &geometry.items;
-    let grid_of = |elem| ancestor(geometry, elem, |e| e.name == "grid" || e.name == "table");
+    let grid_of =
+        |elem| ancestor(geometry, elem, |e| e.name == "grid" || e.name == "table");
     // The text lines of each cell.
     let mut cells: BTreeMap<(usize, usize), Vec<&Row>> = BTreeMap::new();
     for row in rows {
-        if let Some(cell) = ancestor(geometry, items[row.items[0]].elem, |e| e.name == "cell") {
+        if let Some(cell) =
+            ancestor(geometry, items[row.items[0]].elem, |e| e.name == "cell")
+        {
             cells.entry((cell, row.page)).or_default().push(row);
         }
     }
@@ -881,13 +933,19 @@ fn wrapped_labels(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> Vec<Di
     for ((_, page), mut lines) in cells {
         lines.sort_by(|a, b| a.ink.y0.total_cmp(&b.ink.y0));
         let left = lines[0].ink.x0;
-        columns.entry((page, (left / 2.0).round() as i64)).or_default().push(lines);
+        columns
+            .entry((page, (left / 2.0).round() as i64))
+            .or_default()
+            .push(lines);
     }
     let mut out = Vec::new();
     for ((page, _), members) in columns {
         let single: Vec<&Vec<&Row>> = members.iter().filter(|m| m.len() == 1).collect();
         if members.len() < 3
-            || single.iter().filter(|m| m[0].text.trim().chars().count() <= SHORT_LABEL_CHARS).count()
+            || single
+                .iter()
+                .filter(|m| m[0].text.trim().chars().count() <= SHORT_LABEL_CHARS)
+                .count()
                 < 2
         {
             continue;

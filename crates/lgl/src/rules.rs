@@ -60,7 +60,56 @@ pub fn run(
     out.extend(crate::edges::page_labels(world, geometry));
     let grouping = crate::proximity::run(world, geometry, &out);
     out.extend(grouping);
+    reanchor(world, geometry, &mut out);
     out
+}
+
+/// Points diagnostics that landed inside an imported helper file (a layout
+/// kit, a template) at the document's own content they concern: the first
+/// content of the main file inside the measured area, or else the content
+/// that follows it on the next page (what did not fit). An author can only
+/// edit the document, not the helper's internals.
+fn reanchor(world: &LabWorld, geometry: &Geometry, diagnostics: &mut [Diagnostic]) {
+    let main = world.display_name(typst::World::main(world));
+    let in_main = |item: &crate::geom::Item| {
+        let span = geometry.span_for(item.span, item.elem);
+        diag::resolve_span(world, span).filter(|loc| loc.file == main)
+    };
+    for diagnostic in diagnostics.iter_mut() {
+        let Some(file) = diagnostic.loc.as_ref().map(|loc| loc.file.clone()) else {
+            continue;
+        };
+        let Some(page) = diagnostic.page.and_then(|p| p.checked_sub(1)) else { continue };
+        if file == main {
+            continue;
+        }
+        let first = |page: usize, area: Option<BBox>| {
+            geometry
+                .items
+                .iter()
+                .filter(|item| {
+                    item.page == page
+                        && item.kind != ItemKind::Link
+                        && area.is_none_or(|a| item.bbox.intersect(&a).is_some())
+                })
+                .filter_map(|item| in_main(item).map(|loc| (item.bbox, loc)))
+                .min_by(|(a, _), (b, _)| {
+                    a.y0.total_cmp(&b.y0).then(a.x0.total_cmp(&b.x0))
+                })
+                .map(|(_, loc)| loc)
+        };
+        let found = diagnostic
+            .bbox
+            .and_then(|area| first(page, Some(area)))
+            .or_else(|| first(page + 1, None));
+        if let Some(loc) = found {
+            diagnostic.hints.push(format!(
+                "measured inside {file}, a helper file; the location given is the \
+                 document's own content it concerns"
+            ));
+            diagnostic.loc = Some(loc);
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

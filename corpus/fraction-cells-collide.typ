@@ -1,4 +1,5 @@
 // expect: L002.container-overflow
+// expect: L085.cramped-fraction-rows
 // expect: L006.overlap
 // expect: L038.cramped-lines
 #set page(paper: "a5", margin: 2cm)
