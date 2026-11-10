@@ -109,11 +109,8 @@ fn stranded_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 .take_while(|(a, b)| a == b && a.iter().any(|text| !text.is_empty()))
                 .count()
         };
-        let repeated = pieces[1..]
-            .iter()
-            .map(|(_, rows)| header(rows))
-            .max()
-            .unwrap_or(0);
+        let repeated =
+            pieces[1..].iter().map(|(_, rows)| header(rows)).max().unwrap_or(0);
         let body: Vec<(usize, usize)> = pieces
             .iter()
             .enumerate()

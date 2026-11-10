@@ -713,8 +713,12 @@ fn crowded_headings(
                 .total_cmp(&items[*b].bbox.y0)
                 .then(items[*a].bbox.x0.total_cmp(&items[*b].bbox.x0))
         });
-        let text: String =
-            ordered.iter().filter_map(|&k| items[k].text.as_deref()).collect();
+        let text = ordered
+            .iter()
+            .filter_map(|&k| items[k].text.as_deref())
+            .map(str::trim)
+            .collect::<Vec<_>>()
+            .join(" ");
         let mut diagnostic = Diagnostic::new(
             CROWDED_HEADING,
             Severity::Warning,
