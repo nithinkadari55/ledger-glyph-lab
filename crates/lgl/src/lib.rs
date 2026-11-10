@@ -11,6 +11,7 @@ pub mod lint;
 pub mod marks;
 pub mod overlap;
 pub mod pagecheck;
+pub mod proximity;
 pub mod quality;
 pub mod resources;
 pub mod rhythm;

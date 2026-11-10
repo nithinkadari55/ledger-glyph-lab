@@ -726,6 +726,70 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L082.clipped-text",
+        "error",
+        "Text runs past the edge of a box that clips its content (often a box clipped \
+         only to round its corners), so part of it is not printed.",
+        "0.5pt or 0.1em",
+        "Give the text room inside the box: a smaller size, shorter text or a wider box.",
+        false,
+    ),
+    rule(
+        "L083.stranded-separator",
+        "warning",
+        "An inline list joined by separators (·, |, •) wraps and leaves a separator at \
+         the end or the start of a line.",
+        "any",
+        "Make the list fit on its line, or set its items one per line (a stack or grid).",
+        false,
+    ),
+    rule(
+        "L084.heading-crowded-above",
+        "warning",
+        "A heading sits closer to the content above it than to its own content, so it \
+         reads as part of what comes before.",
+        "space above under 0.75 of the space below and under the heading size",
+        "Leave about 1.5 to 2 times more space above a heading than below it.",
+        false,
+    ),
+    rule(
+        "L085.cramped-fraction-rows",
+        "warning",
+        "Stacked rows of grid or table cells that both hold built-up fractions are so \
+         close that numerators and denominators crowd each other.",
+        "0.5 text sizes of clear space",
+        "Raise the grid's row-gutter (about 0.8 to 1em) or the cells' inset.",
+        false,
+    ),
+    rule(
+        "L086.loose-display-lines",
+        "warning",
+        "The lines of a multi-line title, name or headline are set with the leading of \
+         running text, so they fall apart.",
+        "line pitch over 1.35 sizes with over 0.35 sizes of clear space",
+        "Set display text with its own leading in its own size (pitch 1.1 to 1.25).",
+        false,
+    ),
+    rule(
+        "L087.drifting-subtitle",
+        "warning",
+        "Smaller text under a large line (a name, a time, a product name) starts so far \
+         below it, and no closer to it than to what follows, that it drifts away.",
+        "1.3 sizes of the large line",
+        "Keep the two in one stack or block about 0.3 to 0.6 sizes apart; paragraph \
+         spacing in em grows with the large text.",
+        false,
+    ),
+    rule(
+        "L088.wrapped-label",
+        "warning",
+        "A short label in the first column of a grid or table wraps onto two lines while \
+         the other labels of its column fit on one.",
+        "3 words or 28 characters",
+        "Widen the label column (auto or a wider fixed width), or shorten the label.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -864,6 +928,13 @@ mod tests {
             whitespace::NEAR_EMPTY_PAGE,
             overlap::BOX_OVER_TEXT,
             boxes::SPLIT_BOX,
+            proximity::CLIPPED_TEXT,
+            proximity::STRANDED_SEPARATOR,
+            proximity::CROWDED_HEADING,
+            proximity::CRAMPED_FRACTIONS,
+            proximity::LOOSE_DISPLAY,
+            proximity::DRIFTING_SUBTITLE,
+            proximity::WRAPPED_LABEL,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
