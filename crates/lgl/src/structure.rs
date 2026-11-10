@@ -9,6 +9,7 @@ pub const NUMBER_ALIGNMENT: &str = "L017.misaligned-numbers";
 pub const FOOTNOTE_PAGE: &str = "L028.footnote-on-other-page";
 pub const NARROW_COLUMN: &str = "L029.narrow-column";
 pub const MIXED_PRECISION: &str = "L041.mixed-precision";
+pub const STRANDED_ROW: &str = "L089.stranded-table-row";
 
 /// A table column narrower than this, whose text wraps into many lines, is too
 /// narrow to read. Convention.
@@ -31,6 +32,126 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(footnote_pages(world, geometry));
     out.extend(narrow_columns(world, geometry));
     out.extend(ragged_columns(world, geometry));
+    out.extend(stranded_rows(world, geometry));
+    out
+}
+
+/// The table or grid that holds a cell.
+fn holder(geometry: &Geometry, mut cursor: Option<usize>) -> Option<usize> {
+    while let Some(index) = cursor {
+        if matches!(geometry.elements[index].name, "table" | "grid") {
+            return Some(index);
+        }
+        cursor = geometry.elements[index].parent;
+    }
+    None
+}
+
+/// A table broken across pages that leaves a single row, besides a repeated
+/// header, at the end of one page or at the start of the next.
+fn stranded_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let mut out = Vec::new();
+    for (index, table) in geometry.elements.iter().enumerate() {
+        if table.name != "table" {
+            continue;
+        }
+        // The cells of the table, by page and by the top of their row.
+        let mut rows: BTreeMap<(usize, i64), Vec<usize>> = BTreeMap::new();
+        for (k, cell) in geometry.containers.iter().enumerate() {
+            if cell.kind == "cell" && holder(geometry, cell.elem) == Some(index) {
+                let top = (cell.bbox.y0 * 2.0).round() as i64;
+                rows.entry((cell.page, top)).or_default().push(k);
+            }
+        }
+        let pages: BTreeSet<usize> = rows.keys().map(|&(page, _)| page).collect();
+        if pages.len() < 2 {
+            continue;
+        }
+        // The text of each cell.
+        let owned: BTreeSet<usize> = rows.values().flatten().copied().collect();
+        let mut texts: BTreeMap<usize, String> = BTreeMap::new();
+        for item in geometry.items.iter().filter(|i| i.kind == ItemKind::Text) {
+            let mut cursor = item.container;
+            while let Some(container) = cursor {
+                if owned.contains(&container) {
+                    texts
+                        .entry(container)
+                        .or_default()
+                        .push_str(item.text.as_deref().unwrap_or_default());
+                    break;
+                }
+                cursor = geometry.containers[container].parent;
+            }
+        }
+        // The rows of each page from top to bottom, each as the text of its
+        // cells from left to right.
+        let mut pieces: BTreeMap<usize, Vec<Vec<String>>> = BTreeMap::new();
+        for (&(page, _), cells) in &rows {
+            let mut cells = cells.clone();
+            cells.sort_by(|a, b| {
+                let (a, b) = (&geometry.containers[*a].bbox, &geometry.containers[*b].bbox);
+                a.x0.total_cmp(&b.x0)
+            });
+            let row = cells
+                .iter()
+                .map(|cell| {
+                    let text = texts.get(cell).map(String::as_str).unwrap_or_default();
+                    text.split_whitespace().collect::<Vec<_>>().join(" ")
+                })
+                .collect();
+            pieces.entry(page).or_default().push(row);
+        }
+        let pieces: Vec<(usize, Vec<Vec<String>>)> = pieces.into_iter().collect();
+        // Rows at the top of a later page that repeat the first rows of the
+        // table are its header.
+        let first = &pieces[0].1;
+        let header = |rows: &[Vec<String>]| {
+            rows.iter()
+                .zip(first)
+                .take_while(|(a, b)| a == b && a.iter().any(|text| !text.is_empty()))
+                .count()
+        };
+        let repeated = pieces[1..].iter().map(|(_, rows)| header(rows)).max().unwrap_or(0);
+        let body: Vec<(usize, usize)> = pieces
+            .iter()
+            .enumerate()
+            .map(|(k, (page, rows))| {
+                let head = if k == 0 { repeated } else { header(rows) };
+                (*page, rows.len().saturating_sub(head))
+            })
+            .collect();
+        let total: usize = body.iter().map(|&(_, count)| count).sum();
+        for &(page, count) in [&body[0], &body[body.len() - 1]] {
+            if count != 1 || total < 3 {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                STRANDED_ROW,
+                Severity::Warning,
+                format!(
+                    "a table breaks across pages and leaves a single row on page {}, so \
+                     the row stands alone",
+                    page + 1
+                ),
+            );
+            diagnostic.loc =
+                diag::resolve_span(world, geometry.span_for(table.span, Some(index)));
+            diagnostic.elem = Some("table".into());
+            diagnostic.page = Some(page + 1);
+            diagnostic.bbox =
+                table.boxes.iter().find(|b| b.page == page).map(|b| b.bbox.rounded());
+            diagnostic.measured = Some(1.0);
+            diagnostic.limit = Some(2.0);
+            diagnostic.unit = Some("rows");
+            diagnostic.hints.push(
+                "keep at least two rows on each side of the break: tighten or move the \
+                 content before the table so that it ends on one page or takes more rows \
+                 across, or keep a short table whole with block(breakable: false)"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
     out
 }
 

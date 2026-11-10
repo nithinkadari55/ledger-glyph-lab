@@ -792,6 +792,15 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L089.stranded-table-row",
+        "warning",
+        "A table breaks across pages and leaves a single row, besides a repeated header, \
+         at the end of one page or at the start of the next.",
+        "one row",
+        "Keep at least two rows on each side of the break, or keep a short table whole.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -937,6 +946,7 @@ mod tests {
             proximity::LOOSE_DISPLAY,
             proximity::DRIFTING_SUBTITLE,
             proximity::WRAPPED_LABEL,
+            structure::STRANDED_ROW,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
