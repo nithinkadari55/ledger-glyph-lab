@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::diag::{self, Diagnostic, Severity};
 use crate::geom::{BBox, Geometry, ItemKind, round1};
@@ -228,11 +228,17 @@ fn is_numeric(text: &str) -> bool {
 
 fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut cells: BTreeMap<usize, (String, f64, f64, usize)> = BTreeMap::new();
+    // Cells that hold math: the digits of a fraction read as one number, but
+    // the equation sets them, so they do not align like a column of figures.
+    let mut math = BTreeSet::new();
     for (index, item) in geometry.items.iter().enumerate() {
         if item.kind != ItemKind::Text {
             continue;
         }
         let Some(cell) = enclosing_cell(geometry, item.container) else { continue };
+        if has_ancestor(geometry, item.elem, "equation") {
+            math.insert(cell);
+        }
         let entry = cells.entry(cell).or_insert((
             String::new(),
             f64::INFINITY,
@@ -246,7 +252,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
     let mut columns: BTreeMap<(usize, i64, i64), Vec<NumericCell>> = BTreeMap::new();
     for (cell, (text, left, right, item)) in cells {
-        if !is_numeric(&text) {
+        if !is_numeric(&text) || math.contains(&cell) {
             continue;
         }
         let container = &geometry.containers[cell];

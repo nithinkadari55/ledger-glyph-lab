@@ -51,6 +51,7 @@ fn line_words(geometry: &Geometry, line: &Line) -> usize {
 /// Titles and headings whose last line holds a single word under a full line,
 /// as in "Moving Patient Records to the" followed by "Cloud".
 fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let display = crate::titles::display_size(geometry);
     let mut out = Vec::new();
     let lines = &geometry.lines;
     for index in 1..lines.len() {
@@ -77,7 +78,7 @@ fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
         {
             continue;
         }
-        if size < DISPLAY_TEXT_PT
+        if size < display
             || line_words(geometry, last) != 1
             || line_words(geometry, above) < 3
         {
@@ -116,6 +117,7 @@ fn hyphenated_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             && (a.bbox.x0 - b.bbox.x0).abs() < 1.0
             && (a.available - b.available).abs() < 1.0
     };
+    let display = crate::titles::display_size(geometry);
     let lines = &geometry.lines;
     let mut out = Vec::new();
     let mut start = 0;
@@ -131,8 +133,7 @@ fn hyphenated_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
         let Some(line) = block.iter().find(|l| l.hyphenated) else { continue };
         // Large text is reported by L042.
-        if crate::spacing::line_size(geometry, line).is_some_and(|s| s >= DISPLAY_TEXT_PT)
-        {
+        if crate::spacing::line_size(geometry, line).is_some_and(|s| s >= display) {
             continue;
         }
         let mut diagnostic = line_diagnostic(
@@ -158,18 +159,18 @@ fn hyphenated_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 pub const HYPHENATED_DISPLAY: &str = "L042.hyphenated-display-text";
 
-/// Text at least this large is display text (titles, headings, pull quotes),
-/// which is not hyphenated. Convention.
-const DISPLAY_TEXT_PT: f64 = 14.0;
-
+/// Display text (titles, headings, pull quotes) is not hyphenated. What counts
+/// as display text follows the document's body size, so the running text of a
+/// poster is not judged.
 fn hyphenated_display(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let display = crate::titles::display_size(geometry);
     geometry
         .lines
         .iter()
         .filter(|line| line.hyphenated)
         .filter_map(|line| {
             let size = crate::spacing::line_size(geometry, line)?;
-            (size >= DISPLAY_TEXT_PT).then(|| {
+            (size >= display).then(|| {
                 let mut diagnostic = line_diagnostic(
                     world,
                     HYPHENATED_DISPLAY,
@@ -184,7 +185,7 @@ fn hyphenated_display(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
                      wording or width instead",
                 );
                 diagnostic.measured = Some(round1(size));
-                diagnostic.limit = Some(DISPLAY_TEXT_PT);
+                diagnostic.limit = Some(round1(display));
                 diagnostic.unit = Some("pt");
                 diagnostic
             })

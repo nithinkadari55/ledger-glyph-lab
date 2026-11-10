@@ -350,9 +350,6 @@ fn sparse_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 pub const TITLE_PROXIMITY: &str = "L054.title-too-close";
 pub const PARAGRAPH_SPACING: &str = "L055.paragraph-spacing";
 
-/// Text at least this large is display text: titles and headlines.
-const DISPLAY_PT: f64 = 14.0;
-
 /// The text below a multi-line title needs at least this many times the gap
 /// between the title's own lines. Measured on 125 generated documents with
 /// the text's boxes: titles read as separate from 2 times on; at 1.2 and 1.47
@@ -377,6 +374,8 @@ fn baseline(line: &Line) -> f64 {
 /// Text that follows a multi-line title or headline closer than the title's
 /// own lines are to each other, so it reads as part of the title.
 fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    // Titles and headlines: display text, by the document's own body size.
+    let display = crate::titles::display_size(geometry);
     let lines = &geometry.lines;
     let sizes: Vec<Option<f64>> =
         lines.iter().map(|l| crate::spacing::line_size(geometry, l)).collect();
@@ -390,7 +389,7 @@ fn title_proximity(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         };
         if first.page != last.page
             || last.page != next.page
-            || size < DISPLAY_PT
+            || size < display
             || (a - size).abs() > 0.1
             || next_size >= size / 1.15
             || next.bbox.x0 >= last.bbox.x1

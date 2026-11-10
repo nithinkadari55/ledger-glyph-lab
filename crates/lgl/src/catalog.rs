@@ -158,7 +158,8 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L017.misaligned-numbers",
         "warning",
-        "Numbers in a table column do not line up on their digits.",
+        "Numbers in a table column do not line up on their digits. Cells that hold \
+         math, such as fractions, are not judged.",
         "1pt spread of right edges",
         "Right-align numeric columns and use consistent decimals.",
         false,
@@ -370,7 +371,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L042.hyphenated-display-text",
         "warning",
         "A line of display text (title, heading, pull quote) ends with a hyphen.",
-        "14pt text",
+        "display text: at least 14pt and 1.4 times the body size",
         "Turn hyphenation off for display text and break lines by wording or width.",
         false,
     ),
@@ -464,8 +465,8 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L052.lonely-title-word",
         "warning",
-        "The last line of a title or other display text (14pt or larger) holds a single \
-         word below a line of three or more.",
+        "The last line of a title or other display text (at least 14pt and 1.4 times \
+         the body size) holds a single word below a line of three or more.",
         "one word",
         "Balance the title's lines with an earlier line break, a narrower block or new \
          wording.",
@@ -484,9 +485,9 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L054.title-too-close",
         "warning",
-        "Text below a multi-line title or headline (14pt or larger) starts less than 1.5 \
-         times the gap between the title's own lines below it, so it reads as part of the \
-         title.",
+        "Text below a multi-line title or headline (at least 14pt and 1.4 times the body \
+         size) starts less than 1.5 times the gap between the title's own lines below \
+         it, so it reads as part of the title.",
         "1.5 times the gap between the title's lines",
         "Leave clearly more space below the title than between its lines.",
         false,

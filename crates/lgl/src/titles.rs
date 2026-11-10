@@ -62,10 +62,35 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-/// The most common text size of running text, weighted by characters. Code
-/// and headings do not count; table text does, since some documents are
-/// mostly tables.
-fn body_size(geometry: &Geometry) -> Option<f64> {
+/// The smallest size of display text (titles, headlines, names) in this
+/// document: at least `DISPLAY_PT`, and `DISPLAY_RATIO` times the size of its
+/// running text, so that the running text of a poster is not taken for a
+/// title. The running text is the smaller of the most common size and the
+/// size a quarter of the way up all characters: a page that is mostly title
+/// still has its title as display text.
+pub(crate) fn display_size(geometry: &Geometry) -> f64 {
+    let weights = size_weights(geometry);
+    let total: usize = weights.values().sum();
+    let mut quartile = 0;
+    let mut seen = 0;
+    for (&size, &count) in &weights {
+        quartile = size;
+        seen += count;
+        if 4 * seen >= total {
+            break;
+        }
+    }
+    let common = weights
+        .iter()
+        .max_by_key(|&(&size, &count)| (count, -size))
+        .map_or(0, |(&size, _)| size);
+    DISPLAY_PT.max(DISPLAY_RATIO * common.min(quartile) as f64 / 10.0)
+}
+
+/// The characters set in each text size, in tenths of a point. Code and
+/// headings do not count; table text does, since some documents are mostly
+/// tables.
+fn size_weights(geometry: &Geometry) -> BTreeMap<i64, usize> {
     let mut weights: BTreeMap<i64, usize> = BTreeMap::new();
     for item in &geometry.items {
         if inside(geometry, item.elem, &["raw", "heading"]) {
@@ -78,7 +103,14 @@ fn body_size(geometry: &Geometry) -> Option<f64> {
                 text.chars().count();
         }
     }
-    let (size, _) = weights.into_iter().max_by_key(|&(size, count)| (count, -size))?;
+    weights
+}
+
+/// The most common text size of running text, weighted by characters.
+fn body_size(geometry: &Geometry) -> Option<f64> {
+    let (size, _) = size_weights(geometry)
+        .into_iter()
+        .max_by_key(|&(size, count)| (count, -size))?;
     Some(size as f64 / 10.0)
 }
 
@@ -1269,6 +1301,26 @@ fn detached_group_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
         let Some(above) = above else { continue };
         let gap = y1 - y0;
         if gap <= MAX_LABEL_DRIFT * above.max(0.0) || gap <= MIN_LABEL_DRIFT_EM * a.size {
+            continue;
+        }
+        // A subtitle, not a label: the line right above is set like the value
+        // (a title of the same kind, as in a list of acts or products), and
+        // this line sits closer to it than to the value below.
+        let title = lines
+            .iter()
+            .enumerate()
+            .filter(|&(other, o)| {
+                other != index
+                    && o.page == a.page
+                    && o.ink.y1 <= a.ink.y0 + 0.5
+                    && overlaps(&o.ink, &a.ink)
+            })
+            .map(|(_, o)| o)
+            .max_by(|x, y| x.ink.y1.total_cmp(&y.ink.y1));
+        if let Some(title) = title
+            && (title.size - value.size).abs() < 0.5
+            && a.ink.y0 - title.ink.y1 < gap
+        {
             continue;
         }
         let item = &geometry.items[a.item];
