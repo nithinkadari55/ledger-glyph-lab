@@ -63,9 +63,6 @@ const DISPLAY_RATIO: f64 = 1.4;
 const SHORT_LABEL_WORDS: usize = 3;
 const SHORT_LABEL_CHARS: usize = 28;
 
-/// The label of the agent kit's section headings.
-const KIT_HEADING: &str = "kit-section-heading";
-
 pub fn run(
     world: &LabWorld,
     geometry: &Geometry,
@@ -352,8 +349,8 @@ fn stranded_separators(
 
 /// A heading that sits closer to the content above it than to the content it
 /// introduces, so it reads as the end of the previous section. Headings are
-/// Typst headings, the kit's section headings, and single lines underlined by
-/// a rule whose style recurs on other lines (a section label, not a subtitle).
+/// Typst headings and single lines underlined by a rule whose style recurs on
+/// other lines (a section label, not a subtitle).
 fn crowded_headings(
     world: &LabWorld,
     geometry: &Geometry,
@@ -380,9 +377,7 @@ fn crowded_headings(
         if !nonblank(item) {
             continue;
         }
-        if let Some(heading) = ancestor(geometry, item.elem, |e| {
-            e.name == "heading" || e.label.as_deref() == Some(KIT_HEADING)
-        }) {
+        if let Some(heading) = ancestor(geometry, item.elem, |e| e.name == "heading") {
             explicit.entry((heading, item.page)).or_default().push(k);
         }
     }
@@ -392,7 +387,6 @@ fn crowded_headings(
         if row.text.trim().chars().count() > 60
             || ancestor(geometry, first.elem, |e| {
                 ["table", "list", "enum", "terms", "figure", "heading"].contains(&e.name)
-                    || e.label.as_deref() == Some(KIT_HEADING)
             })
             .is_some()
             || row.size > 2.0 * body

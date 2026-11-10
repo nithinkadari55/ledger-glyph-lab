@@ -214,21 +214,6 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out
 }
 
-/// The label of a section of the agent kit's fill-page, whose sections are
-/// spaced apart on purpose.
-const KIT_FILL_SECTION: &str = "kit-fill-section";
-
-/// The kit fill-page section that holds an element, if any.
-fn fill_section(geometry: &Geometry, mut elem: Option<usize>) -> Option<usize> {
-    while let Some(index) = elem {
-        if geometry.elements[index].label.as_deref() == Some(KIT_FILL_SECTION) {
-            return Some(index);
-        }
-        elem = geometry.elements[index].parent;
-    }
-    None
-}
-
 fn check_title(
     world: &LabWorld,
     geometry: &Geometry,
@@ -250,21 +235,6 @@ fn check_title(
         .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))?;
     let gap = next.bbox.y0 - block.y1;
     let first = &geometry.items[next.items[0]];
-    // A title and the next text in two different sections of the agent kit's
-    // fill-page are spaced apart on purpose: they are not title and subtitle.
-    let title_item = lines
-        .iter()
-        .find(|l| {
-            (l.size - big).abs() < 0.5
-                && l.bbox.y0 >= block.y0 - 0.5
-                && l.bbox.y1 <= block.y1 + 0.5
-        })
-        .map(|l| &geometry.items[l.items[0]]);
-    if let Some(title_item) = title_item
-        && fill_section(geometry, title_item.elem) != fill_section(geometry, first.elem)
-    {
-        return None;
-    }
 
     // Only subtitle-like text: larger than the body, not a heading or table.
     // A box or rule in between ends the title block.

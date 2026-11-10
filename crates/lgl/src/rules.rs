@@ -64,8 +64,8 @@ pub fn run(
     out
 }
 
-/// Points diagnostics that landed inside an imported helper file (a layout
-/// kit, a template) at the document's own content they concern: the first
+/// Points diagnostics that landed inside an imported file (a package, a
+/// template) at the document's own content they concern: the first
 /// content of the main file inside the measured area, or else the content
 /// that follows it on the next page (what did not fit). An author can only
 /// edit the document, not the helper's internals.
@@ -104,7 +104,7 @@ fn reanchor(world: &LabWorld, geometry: &Geometry, diagnostics: &mut [Diagnostic
             .or_else(|| first(page + 1, None));
         if let Some(loc) = found {
             diagnostic.hints.push(format!(
-                "measured inside {file}, a helper file; the location given is the \
+                "measured inside {file}, an imported file; the location given is the \
                  document's own content it concerns"
             ));
             diagnostic.loc = Some(loc);
