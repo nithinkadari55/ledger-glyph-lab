@@ -704,6 +704,20 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
     found.retain(|(_, upper, _)| seen.insert((upper.page, upper.ink.y1.round() as i64)));
     found.sort_by_key(|(_, upper, _)| (upper.page, upper.line));
 
+    // The grids and tables around a cell, innermost first.
+    let holders = |cell: usize| {
+        let mut out = Vec::new();
+        let mut cursor = geometry.elements[cell].parent;
+        while let Some(index) = cursor {
+            let element = &geometry.elements[index];
+            if matches!(element.name, "grid" | "table") {
+                out.push(index);
+            }
+            cursor = element.parent;
+        }
+        out
+    };
+
     let mut out = Vec::new();
     for (shortfall, upper, lower) in found {
         let (a, b) = (&upper.ink, &lower.ink);
@@ -728,14 +742,16 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
              {}pt; the leading of paragraphs with an inline fraction can stay as it is",
             (shortfall * 10.0).ceil() / 10.0
         ));
-        let line = &geometry.lines[lower.line];
-        out.push(located(
-            world,
-            diagnostic,
-            line_span(geometry, line),
-            upper.page,
-            a.union(b),
-        ));
+        // Report at the grid or table whose rows these are, the nearest one
+        // that holds both cells: its row-gutter is what must change.
+        let around = holders(upper.cell);
+        let span = holders(lower.cell)
+            .into_iter()
+            .find(|holder| around.contains(holder))
+            .map(|holder| geometry.elements[holder].span)
+            .filter(|span| !span.is_detached())
+            .unwrap_or_else(|| line_span(geometry, &geometry.lines[lower.line]));
+        out.push(located(world, diagnostic, span, upper.page, a.union(b)));
     }
     out
 }
