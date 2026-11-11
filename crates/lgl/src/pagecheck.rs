@@ -8,6 +8,18 @@ pub const COLUMN_IMBALANCE: &str = "L019.column-imbalance";
 pub const LINE_LENGTH: &str = "L020.line-length";
 pub const EMPTY_PAGE: &str = "L021.empty-page";
 pub const EMPTY_COLUMN: &str = "L043.empty-column";
+pub const SHORT_COLUMN: &str = "L091.short-column";
+
+/// A column of running text holds at least this many lines that wrapping
+/// filled; a column of short entries (a menu, a checklist) ends where its
+/// list ends.
+const MIN_COLUMN_TEXT_LINES: usize = 8;
+
+/// On a one-page design, a text column may end this share of the longest
+/// column's height above it. Measured on the one-page documents of 345
+/// generated documents: columns that read as level differ by up to 0.12;
+/// from 0.13 the short column leaves an empty block.
+const MAX_SHORT_COLUMN_SHARE: f64 = 0.125;
 
 /// How many lines the bottoms of side-by-side columns may differ.
 const MAX_COLUMN_DIFF_LINES: f64 = 3.0;
@@ -28,6 +40,130 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(column_imbalance(world, geometry));
     out.extend(line_length(world, geometry));
     out.extend(empty_columns(world, geometry));
+    out.extend(short_columns(world, geometry));
+    out
+}
+
+/// On a one-page design set in columns of running text (a poster, a cheat
+/// sheet), a column that ends far above the longest one, leaving an empty
+/// block under it. Columns are the columns of a multi-column flow, or the
+/// tall cells of one grid row; only columns of the same width are compared (a
+/// narrower side column ends where its content ends).
+fn short_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    if geometry.pages.len() != 1 {
+        return Vec::new();
+    }
+    let Some(body) = geometry.regions.iter().find(|r| r.kind == "page-body") else {
+        return Vec::new();
+    };
+    let height = body.bbox.height();
+    let mut groups: BTreeMap<(u8, i64, i64), Vec<BBox>> = BTreeMap::new();
+    for column in &geometry.columns {
+        let key = (0, column.bbox.y0.round() as i64, 0);
+        groups.entry(key).or_default().push(column.bbox);
+    }
+    for cell in &geometry.containers {
+        let b = cell.bbox;
+        if cell.kind == "cell" && b.height() > 0.3 * height {
+            let key = (1, b.y0.round() as i64, b.y1.round() as i64);
+            groups.entry(key).or_default().push(b);
+        }
+    }
+    // Lines of running text in a column: lines that wrapping filled.
+    let text_lines = |b: &BBox| {
+        geometry
+            .lines
+            .iter()
+            .filter(|l| {
+                let lb = &l.bbox;
+                l.available > 0.0
+                    && l.natural >= 0.6 * l.available
+                    && lb.width() >= 0.6 * b.width()
+                    && lb.x0 >= b.x0 - 1.0
+                    && lb.x1 <= b.x1 + 1.0
+                    && lb.y0 >= b.y0 - 1.0
+                    && lb.y1 <= b.y1 + 1.0
+            })
+            .count()
+    };
+    // Where the content of a column ends; a frame as tall as the column is
+    // not content.
+    let bottom = |b: &BBox| {
+        geometry
+            .items
+            .iter()
+            .filter(|i| {
+                let ib = &i.bbox;
+                i.kind != ItemKind::Link
+                    && ib.x0 >= b.x0 - 1.0
+                    && ib.x1 <= b.x1 + 1.0
+                    && ib.y0 >= b.y0 - 1.0
+                    && ib.y0 < b.y1
+                    && !(i.kind == ItemKind::Shape && ib.height() > 0.9 * b.height())
+            })
+            .map(|i| i.bbox.y1)
+            .fold(f64::NEG_INFINITY, f64::max)
+    };
+
+    let mut out = Vec::new();
+    for columns in groups.into_values() {
+        let columns: Vec<BBox> = columns
+            .into_iter()
+            .filter(|b| text_lines(b) >= MIN_COLUMN_TEXT_LINES)
+            .collect();
+        let widest = columns.iter().map(BBox::width).fold(0.0, f64::max);
+        let ends: Vec<(BBox, f64)> = columns
+            .into_iter()
+            .filter(|b| b.width() >= 0.9 * widest)
+            .map(|b| (b, bottom(&b)))
+            .filter(|(_, end)| end.is_finite())
+            .collect();
+        if ends.len() < 2 {
+            continue;
+        }
+        let top = ends.iter().map(|(b, _)| b.y0).fold(f64::INFINITY, f64::min);
+        let low = ends.iter().map(|&(_, end)| end).fold(f64::NEG_INFINITY, f64::max);
+        for (b, end) in &ends {
+            let share = (low - end) / (low - top);
+            if low <= top || share <= MAX_SHORT_COLUMN_SHARE {
+                continue;
+            }
+            let mut diagnostic = Diagnostic::new(
+                SHORT_COLUMN,
+                Severity::Warning,
+                format!(
+                    "a column on page 1 ends {}pt above the longest column beside it, {}% \
+                     of its height, leaving an empty block under it",
+                    round1(low - end),
+                    (share * 100.0).round()
+                ),
+            );
+            let first = geometry.items.iter().find(|i| {
+                i.kind == ItemKind::Text
+                    && !i.span.is_detached()
+                    && i.bbox.x0 >= b.x0 - 1.0
+                    && i.bbox.x1 <= b.x1 + 1.0
+                    && i.bbox.y0 >= b.y0 - 1.0
+                    && i.bbox.y1 <= b.y1 + 1.0
+            });
+            if let Some(item) = first {
+                diagnostic.loc =
+                    diag::resolve_span(world, geometry.span_for(item.span, item.elem));
+            }
+            diagnostic.page = Some(1);
+            diagnostic.bbox = Some(BBox { y0: *end, y1: low, ..*b }.rounded());
+            diagnostic.measured = Some(round1(share * 100.0));
+            diagnostic.limit = Some(MAX_SHORT_COLUMN_SHARE * 100.0);
+            diagnostic.unit = Some("% of the column height");
+            diagnostic.hints.push(
+                "fill the columns to about the same depth: move a section from the longest \
+                 column into this one, or let the text flow through the columns with \
+                 columns(n) instead of fixing what each column holds"
+                    .into(),
+            );
+            out.push(diagnostic);
+        }
+    }
     out
 }
 

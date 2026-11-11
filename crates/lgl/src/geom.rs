@@ -153,6 +153,9 @@ pub struct Item {
     /// Whether a shape is filled with a gradient or tiling.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub patterned: bool,
+    /// The thickness of a shape's stroke, if it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stroke: Option<f64>,
     #[serde(skip)]
     pub span: Span,
 }
@@ -447,10 +450,13 @@ impl Walker {
                         *span,
                         None,
                         None,
-                    ) && let Some(fill) = &shape.fill
-                    {
-                        item.color = solid(fill);
-                        item.patterned = item.color.is_none();
+                    ) {
+                        item.stroke =
+                            shape.stroke.as_ref().map(|stroke| stroke.thickness.to_pt());
+                        if let Some(fill) = &shape.fill {
+                            item.color = solid(fill);
+                            item.patterned = item.color.is_none();
+                        }
                     }
                 }
                 FrameItem::Image(image, size, span) => {
@@ -638,6 +644,7 @@ impl Walker {
             pixels: None,
             color: None,
             patterned: false,
+            stroke: None,
             span,
         });
         self.geometry.items.last_mut()

@@ -35,7 +35,8 @@ pub const CATALOG: &[RuleInfo] = &[
         "L002.container-overflow",
         "error",
         "Content extends beyond a cell, an explicitly sized box/block, or a box/block \
-         with fill or stroke, without clip.",
+         with fill or stroke, without clip. A stroke drawn along an edge (a border, a \
+         connector) may reach half its thickness beyond it.",
         "0.5pt (text: 0.35em, but 0.15em for a letter or digit at the right end)",
         "Give the container more room (auto, fr, %), let content wrap, or clip on \
          purpose.",
@@ -801,6 +802,25 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L090.text-above-its-line",
+        "warning",
+        "Text that is written on a line with a caption under it (a printed signature \
+         above its signature line) floats far above the line, while the caption sits \
+         right under it.",
+        "0.75 text sizes above the line, and twice the caption's distance",
+        "Set the text right above its line and put the space above the text.",
+        false,
+    ),
+    rule(
+        "L091.short-column",
+        "warning",
+        "On a one-page design set in columns of running text, a column ends far above \
+         the longest column of the same width, leaving an empty block under it.",
+        "an eighth of the longest column's height",
+        "Move a section into the short column, or let the text flow with columns(n).",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -947,6 +967,8 @@ mod tests {
             proximity::DRIFTING_SUBTITLE,
             proximity::WRAPPED_LABEL,
             structure::STRANDED_ROW,
+            titles::TEXT_ABOVE_LINE,
+            pagecheck::SHORT_COLUMN,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

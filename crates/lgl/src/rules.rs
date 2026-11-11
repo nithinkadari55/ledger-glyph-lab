@@ -204,13 +204,15 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             continue;
         }
         let Some(bbox) = item.visible() else { continue };
+        // A stroke is centred on its path, so a border, a connector or a rule
+        // drawn along a cell or box edge reaches half its thickness beyond
+        // it, whatever its thickness. A thin filled bar used as a rule does
+        // the same.
+        let straddle = item.stroke.or_else(|| line_thickness(&bbox));
         let tolerance = match (item.kind, item.font_size) {
             (ItemKind::Text, Some(size)) => TOLERANCE_PT.max(TEXT_TOLERANCE_EM * size),
-            // A line's stroke is centred on its path, so a line drawn along a
-            // cell or box edge (a connector, a rule) reaches half its
-            // thickness beyond it.
-            (ItemKind::Shape, _) if line_thickness(&bbox).is_some() => {
-                TOLERANCE_PT.max(line_thickness(&bbox).unwrap_or_default() / 2.0 + 0.1)
+            (ItemKind::Shape, _) if straddle.is_some() => {
+                TOLERANCE_PT.max(straddle.unwrap_or_default() / 2.0 + 0.1)
             }
             _ => TOLERANCE_PT,
         };

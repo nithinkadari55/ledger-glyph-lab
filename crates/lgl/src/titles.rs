@@ -16,6 +16,7 @@ pub const DETACHED_LABEL: &str = "L071.detached-label";
 pub const TEXT_ON_RULE: &str = "L072.text-on-rule";
 pub const CROWDED_SUBTITLE: &str = "L073.crowded-subtitle";
 pub const DETACHED_FIGURE_CAPTION: &str = "L074.detached-figure-caption";
+pub const TEXT_ABOVE_LINE: &str = "L090.text-above-its-line";
 
 /// Text at least this large, and this many times the body size, is display
 /// text: titles, headlines, names.
@@ -59,6 +60,140 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(detached_group_labels(world, geometry));
     out.extend(text_on_rule(world, geometry));
     out.extend(detached_figure_captions(world, geometry));
+    out.extend(text_above_line(world, geometry));
+    out
+}
+
+/// Text written on a line (a printed signature, a filled-in value) is at
+/// least this many times larger than the caption under the line.
+const LINE_TEXT_RATIO: f64 = 1.4;
+
+/// A line to write on is at most this many times wider than what stands on
+/// it; a wider rule is a section rule under a heading.
+const MAX_LINE_WIDTH_RATIO: f64 = 2.5;
+
+/// Text on a line stands at most this many sizes above it, and no more than
+/// this many times further from it than the caption under the line.
+/// Measured on 342 generated documents: signatures on their line stand 0.2
+/// to 0.4 sizes above it; floating ones 1.2 sizes, five times further than
+/// the caption.
+const MAX_LINE_TEXT_GAP_EM: f64 = 0.75;
+const MAX_LINE_TEXT_DRIFT: f64 = 2.0;
+
+/// The longest text that is a name, a value or a caption rather than a
+/// sentence.
+const MAX_LINE_TEXT_CHARS: usize = 40;
+
+/// Text that belongs on a line with a caption under it (a printed signature
+/// above a signature line with the name below) but floats far above the
+/// line, while the caption sits right under it.
+fn text_above_line(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let texts: Vec<&Item> = geometry.items.iter().filter(|i| is_text(i)).collect();
+    let mut out = Vec::new();
+    for rule in &geometry.items {
+        let b = rule.bbox;
+        if rule.kind != ItemKind::Shape
+            || b.height() >= 1.5
+            || b.width() < 20.0
+            || !geometry.is_body(rule.region)
+        {
+            continue;
+        }
+        // Text within the width of the rule, and text that shares width with it.
+        let on = |t: &Item| {
+            t.page == rule.page && t.bbox.x0 >= b.x0 - 2.0 && t.bbox.x1 <= b.x1 + 2.0
+        };
+        let over = |t: &Item| t.page == rule.page && overlaps(&t.bbox, &b);
+        let caption = texts
+            .iter()
+            .copied()
+            .filter(|t| over(t) && t.bbox.y0 >= b.y1 - 0.5)
+            .min_by(|x, y| x.bbox.y0.total_cmp(&y.bbox.y0));
+        let top = texts
+            .iter()
+            .copied()
+            .filter(|t| over(t) && t.bbox.y1 <= b.y0 + 0.5)
+            .max_by(|x, y| x.bbox.y1.total_cmp(&y.bbox.y1));
+        let (Some(caption), Some(top)) = (caption, top) else { continue };
+        let caption_size = caption.font_size.unwrap_or_default();
+        let size = top.font_size.unwrap_or_default();
+        let under = caption.bbox.y0 - b.y1;
+        let caption_text = caption.text.as_deref().map(str::trim).unwrap_or_default();
+        if !on(caption)
+            || !on(top)
+            || under > 1.2 * caption_size
+            || size < LINE_TEXT_RATIO * caption_size
+            || caption_text.chars().count() > MAX_LINE_TEXT_CHARS
+        {
+            continue;
+        }
+        // The whole line of the text above: it must stand within the rule.
+        let mut line: Vec<&Item> = texts
+            .iter()
+            .copied()
+            .filter(|t| over(t) && (t.bbox.y1 - top.bbox.y1).abs() < 0.5 * size)
+            .collect();
+        line.sort_by(|x, y| x.bbox.x0.total_cmp(&y.bbox.x0));
+        let ink = line.iter().map(|t| t.bbox).fold(top.bbox, |acc, c| acc.union(&c));
+        let text: String = line.iter().filter_map(|t| t.text.as_deref()).collect();
+        let text = text.trim();
+        if !line.iter().all(|t| on(t))
+            || b.width() > MAX_LINE_WIDTH_RATIO * ink.width()
+            || text.chars().count() > MAX_LINE_TEXT_CHARS
+        {
+            continue;
+        }
+        let member = |i: &Item| line.iter().any(|t| std::ptr::eq(*t, i));
+        // A single line: no line in its own size right above it.
+        let paragraph = texts.iter().any(|t| {
+            over(t)
+                && !member(t)
+                && (t.font_size.unwrap_or_default() - size).abs() < 0.5
+                && (0.0..0.8 * size).contains(&(ink.y0 - t.bbox.y1))
+        });
+        // Nothing stands between the text and the rule.
+        let between = geometry.items.iter().any(|i| {
+            !std::ptr::eq(i, rule)
+                && i.kind != ItemKind::Link
+                && i.page == rule.page
+                && !member(i)
+                && i.bbox.y0 >= top.bbox.y1 - 0.5
+                && i.bbox.y1 <= b.y0 + 0.5
+                && overlaps(&i.bbox, &b)
+        });
+        let gap = b.y0 - ink.y1;
+        if paragraph
+            || between
+            || gap <= MAX_LINE_TEXT_GAP_EM * size
+            || gap <= MAX_LINE_TEXT_DRIFT * under
+        {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            TEXT_ABOVE_LINE,
+            Severity::Warning,
+            format!(
+                "\"{text}\" on page {} stands {}pt above the line it belongs on, while the \
+                 text under the line sits {}pt below it, so it floats above its line",
+                rule.page + 1,
+                round1(gap),
+                round1(under.max(0.0))
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, report_span(geometry, top));
+        diagnostic.page = Some(rule.page + 1);
+        diagnostic.bbox = Some(ink.union(&b).rounded());
+        diagnostic.measured = Some(round1(gap));
+        diagnostic.limit = Some(round1(MAX_LINE_TEXT_GAP_EM * size));
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "set text that is written on a line (a printed signature, a filled-in value) \
+             right above the line, at most about half its size away, and put the space \
+             above the text instead (the room to sign is for a line that is left empty)"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
     out
 }
 
