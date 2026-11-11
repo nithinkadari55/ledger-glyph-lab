@@ -48,6 +48,7 @@ pub fn run(
     out.extend(crate::spacing::run(world, geometry));
     out.extend(crate::structure::run(world, geometry));
     out.extend(crate::pagecheck::run(world, geometry));
+    out.extend(crate::diagram::run(world, geometry));
     out.extend(crate::quality::run(world, geometry));
     out.extend(crate::grid::run(world, geometry));
     out.extend(crate::rhythm::run(world, geometry));
@@ -394,7 +395,7 @@ fn invisible_overhang(geometry: &Geometry, subject: &Subject, cell: usize) -> bo
 
 /// The thickness of a straight horizontal or vertical line, if the shape is
 /// one: thinner than this in one direction.
-fn line_thickness(bbox: &BBox) -> Option<f64> {
+pub(crate) fn line_thickness(bbox: &BBox) -> Option<f64> {
     const MAX_LINE_THICKNESS_PT: f64 = 3.0;
     let thin = bbox.width().min(bbox.height());
     let long = bbox.width().max(bbox.height());

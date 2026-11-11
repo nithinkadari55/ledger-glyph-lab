@@ -660,24 +660,68 @@ const MAX_ROW_GUTTER_PT: f64 = 40.0;
 /// Boxes lower than this are chips and labels, not panels.
 const MIN_PANEL_PT: f64 = 30.0;
 
+/// The number of visible panels a container sits inside.
+fn panel_depth(geometry: &Geometry, container: &crate::geom::Container) -> usize {
+    let same = |a: &BBox, b: &BBox| {
+        (a.x0 - b.x0).abs() < 1.0
+            && (a.y0 - b.y0).abs() < 1.0
+            && (a.x1 - b.x1).abs() < 1.0
+            && (a.y1 - b.y1).abs() < 1.0
+    };
+    let mut depth = 0;
+    // A block and a box of one extent are one panel.
+    let mut last = container.bbox;
+    let mut cursor = container.parent;
+    while let Some(index) = cursor {
+        let outer = &geometry.containers[index];
+        if outer.visible && matches!(outer.kind, "block" | "box") && !same(&outer.bbox, &last)
+        {
+            depth += 1;
+            last = outer.bbox;
+        }
+        cursor = outer.parent;
+    }
+    depth
+}
+
+/// Whether a container is drawn as a box: a fill or a frame covers it. A
+/// block with a rule on one side only shows no height.
+fn drawn_as_box(geometry: &Geometry, container: &crate::geom::Container) -> bool {
+    let b = &container.bbox;
+    geometry.items.iter().any(|i| {
+        let near = 1.5 + i.stroke.unwrap_or_default() / 2.0;
+        i.kind == ItemKind::Shape
+            && i.page == container.page
+            && (i.bbox.x0 - b.x0).abs() <= near
+            && (i.bbox.y0 - b.y0).abs() <= near
+            && (i.bbox.x1 - b.x1).abs() <= near
+            && (i.bbox.y1 - b.y1).abs() <= near
+    })
+}
+
 /// Panels next to each other in a row, tops level, with clearly different
-/// heights: the row looks ragged.
+/// heights: the row looks ragged. Only boxes drawn as boxes, at the same
+/// depth of nesting, are compared: the header band inside one card is no
+/// neighbour of the next card.
 fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
-    let panels: Vec<&crate::geom::Container> = geometry
+    let panels: Vec<(usize, &crate::geom::Container)> = geometry
         .containers
         .iter()
         .filter(|c| {
             c.visible
                 && matches!(c.kind, "block" | "box")
                 && c.bbox.height() >= MIN_PANEL_PT
+                && drawn_as_box(geometry, c)
         })
+        .map(|c| (panel_depth(geometry, c), c))
         .collect();
     let mut out = Vec::new();
-    for left in &panels {
-        for right in &panels {
+    for (left_depth, left) in &panels {
+        for (right_depth, right) in &panels {
             let (a, b) = (&left.bbox, &right.bbox);
             let gutter = b.x0 - a.x1;
             if left.page != right.page
+                || left_depth != right_depth
                 || (a.y0 - b.y0).abs() > 2.0
                 || !(0.0..=MAX_ROW_GUTTER_PT).contains(&gutter)
             {

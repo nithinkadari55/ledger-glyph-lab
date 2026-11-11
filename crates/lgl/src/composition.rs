@@ -60,6 +60,26 @@ const MAX_LABEL_GAP_EM: f64 = 2.5;
 /// share of the bar width sits under the wrong place.
 const MAX_LABEL_OFFSET: f64 = 0.3;
 
+/// A bar holds at most this many lines of text (its value); a box that holds
+/// more is a card of a timeline or a row of panels.
+const MAX_BAR_TEXT_LINES: usize = 1;
+
+/// The lines of text a shape holds.
+fn held_lines(texts: &[&crate::geom::Item], shape: &crate::geom::Item) -> usize {
+    let b = &shape.bbox;
+    let mut tops: Vec<f64> = texts
+        .iter()
+        .filter(|t| {
+            let (x, y) = ((t.bbox.x0 + t.bbox.x1) / 2.0, (t.bbox.y0 + t.bbox.y1) / 2.0);
+            t.page == shape.page && b.x0 <= x && x <= b.x1 && b.y0 <= y && y <= b.y1
+        })
+        .map(|t| t.bbox.y0)
+        .collect();
+    tops.sort_by(f64::total_cmp);
+    tops.dedup_by(|next, kept| *next - *kept <= 2.0);
+    tops.len()
+}
+
 /// Bar charts whose category labels are far below the bars or not centred
 /// under them.
 fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
@@ -95,6 +115,9 @@ fn chart_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             - heights.fold(f64::INFINITY, f64::min);
         // Bars of one height are table cells or swatches, not a chart.
         if spread < 1.0 || bars.iter().any(|b| b.bbox.width() > 0.25 * (x1 - x0)) {
+            continue;
+        }
+        if bars.iter().any(|bar| held_lines(&texts, bar) > MAX_BAR_TEXT_LINES) {
             continue;
         }
         let base = bottom as f64 / 2.0;

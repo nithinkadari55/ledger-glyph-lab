@@ -84,10 +84,15 @@ const MAX_LINE_TEXT_DRIFT: f64 = 2.0;
 /// sentence.
 const MAX_LINE_TEXT_CHARS: usize = 40;
 
+/// A rule across this share of the text area is the rule of a masthead or a
+/// section, with the page title above it, not a line to write on.
+const FULL_WIDTH_RULE_SHARE: f64 = 0.9;
+
 /// Text that belongs on a line with a caption under it (a printed signature
 /// above a signature line with the name below) but floats far above the
 /// line, while the caption sits right under it. The bars of fractions and
-/// roots are set by the equation they belong to.
+/// roots are set by the equation they belong to, and a rule across the whole
+/// text area belongs to a masthead or a section.
 fn text_above_line(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let texts: Vec<&Item> = geometry.items.iter().filter(|i| is_text(i)).collect();
     let mut out = Vec::new();
@@ -98,6 +103,11 @@ fn text_above_line(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             || b.width() < 20.0
             || !geometry.is_body(rule.region)
             || inside(geometry, rule.elem, &["equation"])
+            || geometry.regions.iter().any(|r| {
+                r.kind == "page-body"
+                    && r.page == rule.page
+                    && b.width() >= FULL_WIDTH_RULE_SHARE * r.bbox.width()
+            })
         {
             continue;
         }
@@ -244,7 +254,7 @@ fn size_weights(geometry: &Geometry) -> BTreeMap<i64, usize> {
 }
 
 /// The most common text size of running text, weighted by characters.
-fn body_size(geometry: &Geometry) -> Option<f64> {
+pub(crate) fn body_size(geometry: &Geometry) -> Option<f64> {
     let (size, _) = size_weights(geometry)
         .into_iter()
         .max_by_key(|&(size, count)| (count, -size))?;

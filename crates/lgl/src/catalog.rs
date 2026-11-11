@@ -575,7 +575,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "warning",
         "The category labels of a bar chart sit far below the bars (more than 2.5 times \
          their size, detached from the axis), or are not centred under their bars (off by \
-         more than 0.3 bar widths).",
+         more than 0.3 bar widths). Boxes that hold lines of text are cards, not bars.",
         "2.5em gap; 0.3 bar widths offset",
         "Place labels directly under the axis, laid out in the same columns as the bars.",
         false,
@@ -623,7 +623,8 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L069.uneven-boxes",
         "warning",
-        "Boxes side by side in a row, tops level, differ in height by more than 10%, so          the row looks ragged.",
+        "Boxes side by side in a row (filled or framed, at the same depth of nesting), \
+         tops level, differ in height by more than 10%, so the row looks ragged.",
         "0.9 height ratio",
         "Give the boxes one row height, or stack them.",
         false,
@@ -806,7 +807,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "warning",
         "Text that is written on a line with a caption under it (a printed signature \
          above its signature line) floats far above the line, while the caption sits \
-         right under it.",
+         right under it. A rule across the whole text area is no line to write on.",
         "0.75 text sizes above the line, and twice the caption's distance",
         "Set the text right above its line and put the space above the text.",
         false,
@@ -818,6 +819,28 @@ pub const CATALOG: &[RuleInfo] = &[
          the longest column of the same width, leaving an empty block under it.",
         "an eighth of the longest column's height",
         "Move a section into the short column, or let the text flow with columns(n).",
+        false,
+    ),
+    rule(
+        "L092.broken-connector",
+        "warning",
+        "A connector line of a diagram (an organisation chart, a tree, a flow) ends in \
+         the air a short way from a box it does not touch, so the diagram falls apart \
+         there. Judged where at least two lines of the same thickness join boxes.",
+        "2 body text sizes between the loose end and the box",
+        "Make both ends of every connector touch what they join: a drop in the same grid \
+         column as its box, a bar from the first drop to the last.",
+        false,
+    ),
+    rule(
+        "L093.hole-in-column",
+        "warning",
+        "Inside a column or a box of set size, one gap is far larger than every other \
+         gap and more than one row of content follows it: stretched space that tears \
+         the content apart. A last row pinned to the bottom is a footer.",
+        "3 times the next largest gap, and 4 sizes of the text beside the gap",
+        "Do not stretch space (v(1fr)) inside a column or a box of set height; spread \
+         spare space only between whole sections of the page.",
         false,
     ),
     rule(
@@ -969,6 +992,8 @@ mod tests {
             structure::STRANDED_ROW,
             titles::TEXT_ABOVE_LINE,
             pagecheck::SHORT_COLUMN,
+            diagram::BROKEN_CONNECTOR,
+            diagram::COLUMN_HOLE,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

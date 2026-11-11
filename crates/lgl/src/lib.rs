@@ -3,6 +3,7 @@ pub mod catalog;
 pub mod composition;
 pub mod contrast;
 pub mod diag;
+pub mod diagram;
 pub mod edges;
 pub mod fix;
 pub mod geom;

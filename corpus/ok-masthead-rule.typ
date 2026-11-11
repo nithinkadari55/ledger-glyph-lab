@@ -1,0 +1,10 @@
+// expect-none
+#set page(paper: "a4", margin: 2cm)
+#set text(size: 10pt)
+#align(center, text(size: 40pt, weight: "bold")[The Halden Herald])
+#v(50pt, weak: true)
+#line(length: 100%, stroke: 1pt)
+#v(5pt, weak: true)
+#align(center, text(size: 8.5pt)[Rotterdam · Gdańsk · Leeds])
+#v(18pt, weak: true)
+#lorem(300)
