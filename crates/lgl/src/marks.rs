@@ -205,19 +205,18 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let code = code_element(geometry, item.elem);
         let printed_value =
             code.is_none_or(|index| !written_code(world, geometry.elements[index].span));
-        let (found, leak) = if let Some(found) =
-            leaked_value(text).filter(|_| printed_value)
-        {
-            (found, Leak::Value)
-        } else if code.is_some() {
-            continue;
-        } else if let Some(found) = leaked_markup(text) {
-            (found, Leak::Markup)
-        } else if let Some(found) = leaked_tilde(text) {
-            (found, Leak::Tilde)
-        } else {
-            continue;
-        };
+        let (found, leak) =
+            if let Some(found) = leaked_value(text).filter(|_| printed_value) {
+                (found, Leak::Value)
+            } else if code.is_some() {
+                continue;
+            } else if let Some(found) = leaked_markup(text) {
+                (found, Leak::Markup)
+            } else if let Some(found) = leaked_tilde(text) {
+                (found, Leak::Tilde)
+            } else {
+                continue;
+            };
         if !reported.insert((item.page, found.to_string())) {
             continue;
         }

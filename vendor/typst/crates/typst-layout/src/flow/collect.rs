@@ -151,14 +151,10 @@ impl<'a> Collector<'a, '_, '_> {
     /// Collect vertical spacing into a relative or fractional child.
     fn v(&mut self, elem: &'a Packed<VElem>, styles: StyleChain<'a>) {
         self.output.push(match elem.amount {
-            Spacing::Rel(rel) => Child::Rel(
-                rel.resolve(styles),
-                elem.weak.get(styles) as u8,
-                elem.span(),
-            ),
-            Spacing::Fr(fr) => {
-                Child::Fr(fr, elem.weak.get(styles) as u8, elem.span())
+            Spacing::Rel(rel) => {
+                Child::Rel(rel.resolve(styles), elem.weak.get(styles) as u8, elem.span())
             }
+            Spacing::Fr(fr) => Child::Fr(fr, elem.weak.get(styles) as u8, elem.span()),
         });
     }
 

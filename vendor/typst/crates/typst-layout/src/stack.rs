@@ -366,8 +366,8 @@ impl<'a> StackLayouter<'a> {
         for item in self.items.drain(..) {
             match item {
                 StackItem::Mark(amount, replaced, span) => {
-                    let main = ruler.position(size.get(self.axis) - self.used.main)
-                        + cursor;
+                    let main =
+                        ruler.position(size.get(self.axis) - self.used.main) + cursor;
                     let probe = SpacingProbe {
                         size: Size::new(size.get(self.axis.other()), amount),
                         amount,
