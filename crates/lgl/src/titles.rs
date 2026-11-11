@@ -86,7 +86,8 @@ const MAX_LINE_TEXT_CHARS: usize = 40;
 
 /// Text that belongs on a line with a caption under it (a printed signature
 /// above a signature line with the name below) but floats far above the
-/// line, while the caption sits right under it.
+/// line, while the caption sits right under it. The bars of fractions and
+/// roots are set by the equation they belong to.
 fn text_above_line(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let texts: Vec<&Item> = geometry.items.iter().filter(|i| is_text(i)).collect();
     let mut out = Vec::new();
@@ -96,6 +97,7 @@ fn text_above_line(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             || b.height() >= 1.5
             || b.width() < 20.0
             || !geometry.is_body(rule.region)
+            || inside(geometry, rule.elem, &["equation"])
         {
             continue;
         }
