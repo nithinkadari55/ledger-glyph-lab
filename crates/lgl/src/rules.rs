@@ -234,7 +234,9 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         // centred on the edge of that box, so half of it lies outside.
         let own_decoration = item.kind == ItemKind::Shape
             && !item.span.is_detached()
-            && item.container.is_some_and(|c| geometry.containers[c].span == item.span);
+            && item
+                .container
+                .is_some_and(|c| geometry.containers[c].span == item.span);
         if own_decoration {
             continue;
         }
