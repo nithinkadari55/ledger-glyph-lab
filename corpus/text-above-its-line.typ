@@ -6,7 +6,7 @@
 
   Awarded for completing the course in applied statistics with distinction.
 ]
-#v(1fr)
+#v(36pt)
 #grid(columns: (1fr, 1fr), column-gutter: 40pt,
   ..("Helena Voss", "Marcus Okafor").map(name => align(center)[
     #text(font: "Dancing Script", size: 22pt)[#name]

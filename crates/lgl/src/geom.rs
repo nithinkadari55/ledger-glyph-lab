@@ -266,6 +266,35 @@ pub struct Line {
     pub span: Span,
 }
 
+/// Vertical spacing written with `v(..)` between two pieces of content, and
+/// the gap it ended up in.
+#[derive(Debug, Clone, Serialize)]
+pub struct Spacing {
+    pub page: usize,
+    /// The whole gap between the content before and after the spacing.
+    pub bbox: BBox,
+    /// The height the spacing itself takes up.
+    pub amount: f64,
+    /// The height of the spacing in the same gap that no `v` wrote: the
+    /// spacing of paragraphs and blocks.
+    pub inserted: f64,
+    pub weak: bool,
+    /// Whether the spacing is a fraction of the free space.
+    pub fractional: bool,
+    /// In a stack: the stack's own spacing, which this spacing replaced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub replaced: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub container: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<usize>,
+    /// The source line that wrote the spacing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<usize>,
+    #[serde(skip)]
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct PageInfo {
     pub index: usize,
@@ -297,6 +326,7 @@ pub struct Geometry {
     pub columns: Vec<Region>,
     pub lines: Vec<Line>,
     pub items: Vec<Item>,
+    pub spacings: Vec<Spacing>,
 }
 
 impl Geometry {
@@ -582,6 +612,22 @@ impl Walker {
                     region: self.regions.last().copied(),
                     elem: self.current(),
                     span: line.span,
+                });
+            }
+            Probe::Spacing(spacing) => {
+                let Some(bbox) = BBox::sized(spacing.size, ts) else { return };
+                self.geometry.spacings.push(Spacing {
+                    page: self.page,
+                    bbox,
+                    amount: spacing.amount.to_pt(),
+                    inserted: spacing.inserted.to_pt(),
+                    weak: spacing.weak,
+                    fractional: spacing.fractional,
+                    replaced: spacing.replaced.map(|amount| amount.to_pt()),
+                    container: self.containers.last().copied(),
+                    region: self.regions.last().copied(),
+                    line: None,
+                    span: spacing.span,
                 });
             }
         }

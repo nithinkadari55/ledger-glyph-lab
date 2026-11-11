@@ -128,6 +128,41 @@ fn leaked_markup(text: &str) -> Option<&str> {
     text.find("**").map(|i| &text[i..i + 2])
 }
 
+/// A "~" printed between a number or an initial and a word, such as "24~dB"
+/// or "S.~Petrova": a non-breaking space written inside a quoted string, where
+/// Typst does not interpret it. Returns the word that holds it. A "~" after a
+/// letter (HEAD~1) or at the start of a word (~5 km, ~/bin) is meant.
+fn leaked_tilde(text: &str) -> Option<&str> {
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    for k in 1..chars.len().saturating_sub(1) {
+        let (at, c) = chars[k];
+        let before = chars[k - 1].1;
+        let initial = before == '.' && k >= 2 && chars[k - 2].1.is_uppercase();
+        if c != '~'
+            || !(before.is_ascii_digit() || initial)
+            || !chars[k + 1].1.is_alphabetic()
+        {
+            continue;
+        }
+        let start = text[..at]
+            .char_indices()
+            .rev()
+            .find(|(_, c)| c.is_whitespace())
+            .map_or(0, |(i, c)| i + c.len_utf8());
+        let end = text[at..].find(char::is_whitespace).map_or(text.len(), |i| at + i);
+        return Some(&text[start..end]);
+    }
+    None
+}
+
+/// What was printed literally.
+#[derive(Clone, Copy, PartialEq)]
+enum Leak {
+    Value,
+    Markup,
+    Tilde,
+}
+
 /// A Typst value printed as text, such as a dictionary "(name: [..])": a
 /// function returned data where content was expected, or a name was shadowed.
 fn leaked_value(text: &str) -> Option<&str> {
@@ -154,7 +189,8 @@ fn leaked_value(text: &str) -> Option<&str> {
     None
 }
 
-/// HTML entities and Markdown markers that ended up in the printed text.
+/// HTML entities, Markdown markers and "~" from quoted strings that ended up
+/// in the printed text.
 fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let mut reported = std::collections::BTreeSet::new();
@@ -169,45 +205,61 @@ fn markup_leaks(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let code = code_element(geometry, item.elem);
         let printed_value =
             code.is_none_or(|index| !written_code(world, geometry.elements[index].span));
-        let (found, value) = match leaked_value(text).filter(|_| printed_value) {
-            Some(found) => (found, true),
-            None => match leaked_markup(text).filter(|_| code.is_none()) {
-                Some(found) => (found, false),
-                None => continue,
-            },
+        let (found, leak) = if let Some(found) =
+            leaked_value(text).filter(|_| printed_value)
+        {
+            (found, Leak::Value)
+        } else if code.is_some() {
+            continue;
+        } else if let Some(found) = leaked_markup(text) {
+            (found, Leak::Markup)
+        } else if let Some(found) = leaked_tilde(text) {
+            (found, Leak::Tilde)
+        } else {
+            continue;
         };
         if !reported.insert((item.page, found.to_string())) {
             continue;
         }
-        let message = if value {
-            format!(
+        let message = match leak {
+            Leak::Value => format!(
                 "\"{found}\" is printed on page {}: a Typst value (a dictionary) was \
                  placed where text belongs, so a function returned data or a name was \
                  shadowed by an import",
                 item.page + 1
-            )
-        } else {
-            format!(
+            ),
+            Leak::Markup => format!(
                 "\"{found}\" is printed literally on page {}: Typst does not interpret HTML \
                  entities or Markdown markers",
                 item.page + 1
-            )
+            ),
+            Leak::Tilde => format!(
+                "\"{found}\" is printed with its ~ on page {}: ~ is a non-breaking space \
+                 only in markup, not inside a quoted string",
+                item.page + 1
+            ),
         };
         let mut diagnostic = Diagnostic::new(MARKUP_LEAK, Severity::Error, message);
         diagnostic.loc =
             diag::resolve_span(world, geometry.span_for(item.span, item.elem));
         diagnostic.page = Some(item.page + 1);
         diagnostic.bbox = item.visible().map(|b| b.rounded());
-        diagnostic.hints.push(if value {
-            "call the function that produces the text, and import helper libraries as a \
-             module (#import \"x.typ\") so their names cannot replace Typst's own (sub, \
-             super, line, ..)"
-                .into()
-        } else {
-            "use Typst syntax: ~ for a non-breaking space, the character itself (– — ’ ×) \
-             or sym.*, and *bold* or _italic_ markup"
-                .into()
-        });
+        diagnostic.hints.push(match leak {
+            Leak::Value => {
+                "call the function that produces the text, and import helper libraries as \
+                 a module (#import \"x.typ\") so their names cannot replace Typst's own \
+                 (sub, super, line, ..)"
+            }
+            Leak::Markup => {
+                "use Typst syntax: ~ for a non-breaking space, the character itself (– — ’ \
+                 ×) or sym.*, and *bold* or _italic_ markup"
+            }
+            Leak::Tilde => {
+                "write the text as markup ([24~dB]) instead of a string (\"24~dB\"), or \
+                 put a non-breaking space into the string as \\u{a0}"
+            }
+        }
+        .into());
         out.push(diagnostic);
     }
     out

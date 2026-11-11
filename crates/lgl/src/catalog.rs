@@ -476,11 +476,12 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L053.markup-in-text",
         "error",
-        "An HTML entity (&nbsp;, &mdash;, &#8211;) or a Markdown marker (**) is printed \
-         literally, outside code.",
+        "An HTML entity (&nbsp;, &mdash;, &#8211;), a Markdown marker (**) or a ~ between \
+         a number or an initial and a word (24~dB, a non-breaking space written inside a \
+         quoted string) is printed literally, outside code.",
         "any",
-        "Use Typst syntax: ~ for a non-breaking space, the character itself or sym.*, \
-         *bold* and _italic_.",
+        "Use Typst syntax: ~ for a non-breaking space in markup only, the character \
+         itself or sym.*, *bold* and _italic_.",
         false,
     ),
     rule(
@@ -837,10 +838,12 @@ pub const CATALOG: &[RuleInfo] = &[
         "warning",
         "Inside a column or a box of set size, one gap is far larger than every other \
          gap and more than one row of content follows it: stretched space that tears \
-         the content apart. A last row pinned to the bottom is a footer.",
+         the content apart. A last row pinned to the bottom is a footer. On a whole \
+         page the same holds for one gap, or two around a single line such as an \
+         ornament, when content on at least 15% of the page follows.",
         "3 times the next largest gap, and 4 sizes of the text beside the gap",
-        "Do not stretch space (v(1fr)) inside a column or a box of set height; spread \
-         spare space only between whole sections of the page.",
+        "Do not stretch space (v(1fr)) inside a column or a box of set height; on a \
+         page, share spare space between all sections instead of one gap.",
         false,
     ),
     rule(

@@ -2,9 +2,10 @@ use ecow::EcoVec;
 use typst_library::diag::{SourceDiagnostic, SourceResult};
 use typst_library::introspection::Tag;
 use typst_library::layout::{
-    Abs, Axes, FixedAlignment, Fr, Frame, FrameItem, PlacementScope, Point, Region,
-    Regions, Rel, Size,
+    Abs, Axes, FixedAlignment, Fr, Frame, FrameItem, PlacementScope, Point, Probe,
+    Region, Regions, Rel, Size, SpacingProbe,
 };
+use typst_syntax::Span;
 use typst_utils::Numeric;
 
 use super::compose::{Composer, InsertionStop, Migration, RelayoutStop};
@@ -127,10 +128,11 @@ struct DistributionSnapshot<'a, 'b> {
 enum Item<'a, 'b> {
     /// An introspection tag.
     Tag(&'a Tag),
-    /// Absolute spacing and its weakness level.
-    Abs(Abs, u8),
+    /// Absolute spacing, its weakness level and the span of the `v` element
+    /// that wrote it.
+    Abs(Abs, u8, Span),
     /// Fractional spacing or a fractional block.
-    Fr(Fr, u8, Option<&'b SingleChild<'a>>),
+    Fr(Fr, u8, Option<&'b SingleChild<'a>>, Span),
     /// A frame for a laid out line or block.
     Frame(Frame, Axes<FixedAlignment>),
     /// A frame for an absolutely (not floatingly) placed child.
@@ -188,8 +190,8 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     fn child(&mut self, child: &'b Child<'a>) -> Result<(), Stop> {
         match child {
             Child::Tag(tag) => self.tag(tag),
-            Child::Rel(amount, weakness) => self.rel(*amount, *weakness),
-            Child::Fr(fr, weakness) => self.fr(*fr, *weakness),
+            Child::Rel(amount, weakness, span) => self.rel(*amount, *weakness, *span),
+            Child::Fr(fr, weakness, span) => self.fr(*fr, *weakness, *span),
             Child::Line(line) => self.line(line)?,
             Child::Single(single) => self.single(single)?,
             Child::Multi(multi) => self.multi(multi)?,
@@ -221,19 +223,19 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     }
 
     /// Processes relative spacing.
-    fn rel(&mut self, amount: Rel<Abs>, weakness: u8) {
+    fn rel(&mut self, amount: Rel<Abs>, weakness: u8, span: Span) {
         let amount = amount.relative_to(self.regions.base().y);
-        if weakness > 0 && !self.keep_weak_rel_spacing(amount, weakness) {
+        if weakness > 0 && !self.keep_weak_rel_spacing(amount, weakness, span) {
             return;
         }
 
         self.use_height(amount);
-        self.items.push(Item::Abs(amount, weakness));
+        self.items.push(Item::Abs(amount, weakness, span));
     }
 
     /// Processes fractional spacing.
-    fn fr(&mut self, fr: Fr, weakness: u8) {
-        if weakness > 0 && !self.keep_weak_fr_spacing(fr, weakness) {
+    fn fr(&mut self, fr: Fr, weakness: u8, span: Span) {
+        if weakness > 0 && !self.keep_weak_fr_spacing(fr, weakness, span) {
             return;
         }
 
@@ -241,33 +243,33 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         // spacing as no stronger fr spacing can exist.
         self.trim_spacing();
 
-        self.items.push(Item::Fr(fr, weakness, None));
+        self.items.push(Item::Fr(fr, weakness, None, span));
     }
 
     /// Decides whether to keep weak spacing based on previous items. If there
     /// is a preceding weak spacing, it might be patched in place.
-    fn keep_weak_rel_spacing(&mut self, amount: Abs, weakness: u8) -> bool {
+    fn keep_weak_rel_spacing(&mut self, amount: Abs, weakness: u8, span: Span) -> bool {
         for item in self.items.iter_mut().rev() {
             match *item {
                 // When previous weak relative spacing exists that's at most as
                 // weak, we reuse the old item, set it to the maximum of both,
                 // and discard the new item.
-                Item::Abs(prev_amount, prev_weakness @ 1..) => {
+                Item::Abs(prev_amount, prev_weakness @ 1.., _) => {
                     if weakness <= prev_weakness
                         && (weakness < prev_weakness || amount > prev_amount)
                     {
-                        *item = Item::Abs(amount, weakness);
+                        *item = Item::Abs(amount, weakness, span);
                         self.use_height(amount - prev_amount);
                     }
                     return false;
                 }
                 // These are "peeked beyond" for spacing collapsing purposes.
-                Item::Tag(_) | Item::Abs(_, 0) | Item::Placed(..) => {}
+                Item::Tag(_) | Item::Abs(_, 0, _) | Item::Placed(..) => {}
                 // Any kind of fractional spacing destructs weak relative
                 // spacing.
-                Item::Fr(.., None) => return false,
+                Item::Fr(_, _, None, _) => return false,
                 // These naturally support the spacing.
-                Item::Frame(..) | Item::Fr(.., Some(_)) => return true,
+                Item::Frame(..) | Item::Fr(_, _, Some(_), _) => return true,
             }
         }
         false
@@ -275,17 +277,17 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
 
     /// Decides whether to keep weak fractional spacing based on previous items.
     /// If there is a preceding weak spacing, it might be patched in place.
-    fn keep_weak_fr_spacing(&mut self, fr: Fr, weakness: u8) -> bool {
+    fn keep_weak_fr_spacing(&mut self, fr: Fr, weakness: u8, span: Span) -> bool {
         for item in self.items.iter_mut().rev() {
             match *item {
                 // When previous weak fr spacing exists that's at most as weak,
                 // we reuse the old item, set it to the maximum of both, and
                 // discard the new item.
-                Item::Fr(prev_fr, prev_weakness @ 1.., None) => {
+                Item::Fr(prev_fr, prev_weakness @ 1.., None, _) => {
                     if weakness <= prev_weakness
                         && (weakness < prev_weakness || fr > prev_fr)
                     {
-                        *item = Item::Fr(fr, weakness, None);
+                        *item = Item::Fr(fr, weakness, None, span);
                     }
                     return false;
                 }
@@ -295,9 +297,9 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                 Item::Tag(_) | Item::Abs(..) | Item::Placed(..) => {}
                 // For weak + strong fr spacing, we keep both, same as for
                 // weak + strong rel spacing.
-                Item::Fr(.., None) => return true,
+                Item::Fr(_, _, None, _) => return true,
                 // These naturally support the spacing.
-                Item::Frame(..) | Item::Fr(.., Some(_)) => return true,
+                Item::Frame(..) | Item::Fr(_, _, Some(_), _) => return true,
             }
         }
         false
@@ -307,12 +309,12 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     fn trim_spacing(&mut self) {
         for (i, item) in self.items.iter().enumerate().rev() {
             match *item {
-                Item::Abs(amount, 1..) => {
+                Item::Abs(amount, 1.., _) => {
                     self.use_height(-amount);
                     self.items.remove(i);
                     break;
                 }
-                Item::Fr(_, 1.., None) => {
+                Item::Fr(_, 1.., None, _) => {
                     self.items.remove(i);
                     break;
                 }
@@ -326,7 +328,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
     fn weak_spacing(&mut self) -> Abs {
         for item in self.items.iter().rev() {
             match *item {
-                Item::Abs(amount, 1..) => return amount,
+                Item::Abs(amount, 1.., _) => return amount,
                 Item::Tag(_) | Item::Abs(..) | Item::Placed(..) => {}
                 Item::Frame(..) | Item::Fr(..) => break,
             }
@@ -375,7 +377,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         // to stay in this region, so it never carries over to the next one.
         if !pad.is_zero() {
             self.use_height(pad);
-            self.items.push(Item::Abs(pad, 0));
+            self.items.push(Item::Abs(pad, 0, Span::detached()));
         }
 
         self.frame(line.frame.clone(), line.align, false, false)
@@ -409,7 +411,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                 Migration::ALLOW,
             )?;
             self.flush_tags();
-            self.items.push(Item::Fr(fr, 0, Some(single)));
+            self.items.push(Item::Fr(fr, 0, Some(single), Span::detached()));
             return Ok(());
         }
 
@@ -643,7 +645,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         let mut frs = Fr::zero();
         let mut has_fr_child = false;
         for item in &self.items {
-            if let Item::Fr(v, _, child) = item {
+            if let Item::Fr(v, _, child, _) = item {
                 frs += *v;
                 has_fr_child |= child.is_some();
             }
@@ -660,7 +662,7 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         let mut fr_frames = vec![];
         if has_fr_child {
             for item in &self.items {
-                let Item::Fr(v, _, Some(single)) = item else { continue };
+                let Item::Fr(v, _, Some(single), _) = item else { continue };
                 let length = v.share(frs, fr_space);
                 let pod = Region::new(Size::new(region.size.x, length), region.expand);
                 let frame = single.layout(self.composer.engine, pod)?;
@@ -689,6 +691,14 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
         let mut offset = Abs::zero();
         let mut fr_frames = fr_frames.into_iter();
 
+        // For spacing probes: where the last in-flow content ended, the
+        // spacing that `v` elements wrote since then and the height of the
+        // spacing that layout inserted since then.
+        let probes = self.composer.engine.library.probes;
+        let mut last_end: Option<Abs> = None;
+        let mut written: Vec<(Abs, bool, bool, Span)> = vec![];
+        let mut inserted = Abs::zero();
+
         // Position all items.
         let mut baseline_set = false;
         for item in self.items {
@@ -698,10 +708,15 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                     let pos = Point::with_y(y);
                     output.push(pos, FrameItem::Tag(tag.clone()));
                 }
-                Item::Abs(v, _) => {
+                Item::Abs(v, weakness, span) => {
+                    if span.is_detached() {
+                        inserted += v;
+                    } else if probes {
+                        written.push((v, weakness > 0, false, span));
+                    }
                     offset += v;
                 }
-                Item::Fr(v, _, single) => {
+                Item::Fr(v, weakness, single, span) => {
                     let length = v.share(frs, fr_space);
                     if let Some(single) = single {
                         let frame = fr_frames.next().unwrap();
@@ -709,8 +724,17 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                         let pos = Point::new(x, offset);
                         output.push_frame(pos, frame);
                         offset += length;
+                        written.clear();
+                        inserted = Abs::zero();
+                        last_end = Some(offset);
                     } else {
-                        offset += snap(length);
+                        let length = snap(length);
+                        if span.is_detached() {
+                            inserted += length;
+                        } else if probes {
+                            written.push((length, weakness > 0, true, span));
+                        }
+                        offset += length;
                     }
                 }
                 Item::Frame(frame, align) => {
@@ -719,6 +743,42 @@ impl<'a, 'b> Distributor<'a, 'b, '_, '_, '_> {
                     let x = align.x.position(size.x - frame.width());
                     let y = offset + snap(ruler.position(free));
                     let pos = Point::new(x, y);
+
+                    // A frame that only carries tags is not content: the gap
+                    // runs on past it.
+                    let hollow = frame.size().is_zero()
+                        && frame.items().all(|(_, item)| {
+                            matches!(
+                                item,
+                                FrameItem::Link(_, _)
+                                    | FrameItem::Tag(_)
+                                    | FrameItem::Probe(_)
+                            )
+                        });
+                    if !hollow {
+                        if let Some(end) = last_end {
+                            let gap = offset - end;
+                            for (amount, weak, fractional, span) in written.drain(..) {
+                                let probe = SpacingProbe {
+                                    size: Size::new(size.x, gap),
+                                    amount,
+                                    inserted,
+                                    weak,
+                                    fractional,
+                                    replaced: None,
+                                    span,
+                                };
+                                output.push(
+                                    Point::with_y(y - gap),
+                                    FrameItem::Probe(Probe::Spacing(probe)),
+                                );
+                            }
+                        }
+                        written.clear();
+                        inserted = Abs::zero();
+                        last_end = Some(offset + frame.height());
+                    }
+
                     offset += frame.height();
 
                     // The baseline of the whole region will be the set to the

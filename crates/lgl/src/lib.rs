@@ -65,7 +65,10 @@ pub fn check(world: &LabWorld, export_pdf: bool) -> Outcome {
         }
     };
 
-    let geometry = geom::extract(&document);
+    let mut geometry = geom::extract(&document);
+    for spacing in &mut geometry.spacings {
+        spacing.line = diag::resolve_span(world, spacing.span).map(|loc| loc.line);
+    }
     diagnostics.extend(rules::run(world, &document, &geometry));
 
     let pdf = if export_pdf {

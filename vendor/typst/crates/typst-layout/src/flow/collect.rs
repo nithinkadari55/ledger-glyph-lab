@@ -20,6 +20,7 @@ use typst_library::model::ParElem;
 use typst_library::routines::Pair;
 use typst_library::text::TextElem;
 use typst_library::{Library, World};
+use typst_syntax::Span;
 use typst_utils::{LazyHash, Protected, SliceExt};
 
 use super::{FlowMode, layout_multi_block, layout_single_block};
@@ -150,10 +151,14 @@ impl<'a> Collector<'a, '_, '_> {
     /// Collect vertical spacing into a relative or fractional child.
     fn v(&mut self, elem: &'a Packed<VElem>, styles: StyleChain<'a>) {
         self.output.push(match elem.amount {
-            Spacing::Rel(rel) => {
-                Child::Rel(rel.resolve(styles), elem.weak.get(styles) as u8)
+            Spacing::Rel(rel) => Child::Rel(
+                rel.resolve(styles),
+                elem.weak.get(styles) as u8,
+                elem.span(),
+            ),
+            Spacing::Fr(fr) => {
+                Child::Fr(fr, elem.weak.get(styles) as u8, elem.span())
             }
-            Spacing::Fr(fr) => Child::Fr(fr, elem.weak.get(styles) as u8),
         });
     }
 
@@ -178,11 +183,11 @@ impl<'a> Collector<'a, '_, '_> {
         let spacing = elem.spacing.resolve(styles);
         let leading = elem.leading.resolve(styles);
 
-        self.output.push(Child::Rel(spacing.into(), 4));
+        self.output.push(Child::Rel(spacing.into(), 4, Span::detached()));
 
         self.lines(lines, leading, styles);
 
-        self.output.push(Child::Rel(spacing.into(), 4));
+        self.output.push(Child::Rel(spacing.into(), 4, Span::detached()));
         self.par_situation = ParSituation::Consecutive;
 
         Ok(())
@@ -211,7 +216,7 @@ impl<'a> Collector<'a, '_, '_> {
 
         for (i, frame) in lines.into_iter().enumerate() {
             if i > 0 {
-                self.output.push(Child::Rel(leading.into(), 5));
+                self.output.push(Child::Rel(leading.into(), 5, Span::detached()));
             }
 
             // To prevent widows and orphans, we require enough space for
@@ -252,9 +257,11 @@ impl<'a> Collector<'a, '_, '_> {
 
         let fallback = LazyCell::new(|| styles.resolve(ParElem::spacing));
         let spacing = |amount| match amount {
-            Smart::Auto => Child::Rel((*fallback).into(), 4),
-            Smart::Custom(Spacing::Rel(rel)) => Child::Rel(rel.resolve(styles), 3),
-            Smart::Custom(Spacing::Fr(fr)) => Child::Fr(fr, 2),
+            Smart::Auto => Child::Rel((*fallback).into(), 4, Span::detached()),
+            Smart::Custom(Spacing::Rel(rel)) => {
+                Child::Rel(rel.resolve(styles), 3, Span::detached())
+            }
+            Smart::Custom(Spacing::Fr(fr)) => Child::Fr(fr, 2, Span::detached()),
         };
 
         self.output.push(spacing(elem.above.get(styles)));
@@ -355,10 +362,12 @@ impl<'a> Collector<'a, '_, '_> {
 pub enum Child<'a> {
     /// An introspection tag.
     Tag(&'a Tag),
-    /// Relative spacing with a specific weakness level.
-    Rel(Rel<Abs>, u8),
-    /// Fractional spacing with a specific weakness level.
-    Fr(Fr, u8),
+    /// Relative spacing with a specific weakness level, and the span of the
+    /// `v` element that wrote it (detached for spacing that layout inserts).
+    Rel(Rel<Abs>, u8, Span),
+    /// Fractional spacing with a specific weakness level, and the span of the
+    /// `v` element that wrote it.
+    Fr(Fr, u8, Span),
     /// An already layouted line of a paragraph.
     Line(BumpBox<'a, LineChild>),
     /// An unbreakable block.

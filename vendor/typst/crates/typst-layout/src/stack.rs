@@ -3,8 +3,9 @@ use typst_library::engine::Engine;
 use typst_library::foundations::{Content, Packed, Resolve, StyleChain, StyledElem};
 use typst_library::introspection::{Locator, SplitLocator};
 use typst_library::layout::{
-    Abs, AlignElem, Axes, Axis, Dir, FixedAlignment, Fr, Fragment, Frame, HElem, Point,
-    Regions, Size, Spacing, StackChild, StackElem, VElem,
+    Abs, AlignElem, Axes, Axis, Dir, FixedAlignment, Fr, Fragment, Frame, FrameItem,
+    HElem, Point, Probe, Regions, Size, Spacing, SpacingProbe, StackChild, StackElem,
+    VElem,
 };
 use typst_syntax::Span;
 use typst_utils::{Get, Numeric};
@@ -79,6 +80,7 @@ where
     F: Fn(&mut Engine, StyleChain, Regions) -> SourceResult<Fragment>,
 {
     let mut layouter = StackLayouter::new(span, dir, locator, styles, regions);
+    layouter.probes = engine.library.probes;
     let axis = layouter.dir.axis();
     let mut deferred = None;
 
@@ -98,6 +100,7 @@ where
 
                 // Transparently handle `v`.
                 if let (Axis::Y, Some(v)) = (axis, block.to_packed::<VElem>()) {
+                    layouter.mark_spacing(v.amount, deferred, v.span());
                     layouter.layout_spacing(v.amount);
                     deferred = None;
                     continue;
@@ -151,10 +154,15 @@ struct StackLayouter<'a> {
     items: Vec<StackItem>,
     /// Finished frames for previous regions.
     finished: Vec<Frame>,
+    /// Whether to emit probes for spacing written with `v`.
+    probes: bool,
 }
 
 /// A prepared item in a stack layout.
 enum StackItem {
+    /// Marks the spacing item after it as written with `v`: its amount, the
+    /// stack's own spacing that it replaces, and its span.
+    Mark(Abs, Option<Abs>, Span),
     /// Absolute spacing between other items.
     Absolute(Abs),
     /// Fractional spacing between other items.
@@ -191,6 +199,25 @@ impl<'a> StackLayouter<'a> {
             fr: Fr::zero(),
             items: vec![],
             finished: vec![],
+            probes: false,
+        }
+    }
+
+    /// Records that the next spacing was written with `v` and replaces the
+    /// stack's own spacing, for the spacing probe.
+    fn mark_spacing(&mut self, amount: Spacing, replaced: Option<Spacing>, span: Span) {
+        if !self.probes || !self.dir.is_positive() {
+            return;
+        }
+        let base = self.regions.base().get(self.axis);
+        let styles = self.styles;
+        let resolve = |spacing: Spacing| match spacing {
+            Spacing::Rel(v) => Some(v.resolve(styles).relative_to(base)),
+            Spacing::Fr(_) => None,
+        };
+        if let Some(amount) = resolve(amount) {
+            self.items
+                .push(StackItem::Mark(amount, replaced.and_then(resolve), span));
         }
     }
 
@@ -338,6 +365,23 @@ impl<'a> StackLayouter<'a> {
         // Place all frames.
         for item in self.items.drain(..) {
             match item {
+                StackItem::Mark(amount, replaced, span) => {
+                    let main = ruler.position(size.get(self.axis) - self.used.main)
+                        + cursor;
+                    let probe = SpacingProbe {
+                        size: Size::new(size.get(self.axis.other()), amount),
+                        amount,
+                        inserted: Abs::zero(),
+                        weak: false,
+                        fractional: false,
+                        replaced,
+                        span,
+                    };
+                    output.push(
+                        GenericSize::new(Abs::zero(), main).to_point(self.axis),
+                        FrameItem::Probe(Probe::Spacing(probe)),
+                    );
+                }
                 StackItem::Absolute(v) => cursor += v,
                 StackItem::Fractional(v) => cursor += v.share(self.fr, remaining),
                 StackItem::Frame(frame, align) => {

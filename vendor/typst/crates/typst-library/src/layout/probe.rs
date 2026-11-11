@@ -26,6 +26,9 @@ pub enum Probe {
     /// Facts about a single committed line of a paragraph. The probe sits at
     /// the line's top-left corner.
     Line(LineProbe),
+    /// Vertical spacing written with `v` and the gap it ended up in. The
+    /// probe sits at the top-left corner of that gap.
+    Spacing(SpacingProbe),
 }
 
 /// A container whose content is expected to stay within its bounds.
@@ -116,5 +119,26 @@ pub struct LineProbe {
     /// Whether the line ends in a hyphen inserted by hyphenation.
     pub hyphenated: bool,
     /// The span of the line's first text, if any.
+    pub span: Span,
+}
+
+/// Vertical spacing written with `v`, between two pieces of content.
+#[derive(Debug, Clone, PartialEq, Hash)]
+pub struct SpacingProbe {
+    /// The width of the flow and the height of the whole gap between the
+    /// content before and the content after the spacing.
+    pub size: Size,
+    /// The height the spacing itself takes up.
+    pub amount: Abs,
+    /// The height of the spacing in the same gap that no `v` wrote: the
+    /// spacing of paragraphs and blocks.
+    pub inserted: Abs,
+    /// Whether the spacing is weak.
+    pub weak: bool,
+    /// Whether the spacing is a fraction of the free space.
+    pub fractional: bool,
+    /// In a stack: the stack's own spacing, which this spacing replaced.
+    pub replaced: Option<Abs>,
+    /// The span of the element that wrote the spacing.
     pub span: Span,
 }
