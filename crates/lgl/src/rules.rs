@@ -229,15 +229,16 @@ fn bounds(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             _ => [tolerance; 2],
         };
         let element = item.elem.map(|e| &geometry.elements[e]);
-        // A container's own fill and stroke belong to it, and a stroke is
-        // centred on its edge, so they are checked against the parent.
-        let mut container = item.container;
-        if item.kind == ItemKind::Shape
-            && let Some(own) = container
-            && geometry.containers[own].span == item.span
-        {
-            container = geometry.containers[own].parent;
+        // A container's own fill and border belong to it: its box is what
+        // is checked against its surroundings (above), and a border is
+        // centred on the edge of that box, so half of it lies outside.
+        let own_decoration = item.kind == ItemKind::Shape
+            && !item.span.is_detached()
+            && item.container.is_some_and(|c| geometry.containers[c].span == item.span);
+        if own_decoration {
+            continue;
         }
+        let container = item.container;
         let subject = Subject {
             page: item.page,
             bbox,
