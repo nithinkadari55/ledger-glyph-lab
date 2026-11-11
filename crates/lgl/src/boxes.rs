@@ -674,7 +674,9 @@ fn panel_depth(geometry: &Geometry, container: &crate::geom::Container) -> usize
     let mut cursor = container.parent;
     while let Some(index) = cursor {
         let outer = &geometry.containers[index];
-        if outer.visible && matches!(outer.kind, "block" | "box") && !same(&outer.bbox, &last)
+        if outer.visible
+            && matches!(outer.kind, "block" | "box")
+            && !same(&outer.bbox, &last)
         {
             depth += 1;
             last = outer.bbox;

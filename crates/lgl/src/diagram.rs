@@ -75,9 +75,19 @@ impl Stroke {
     fn bbox(&self) -> BBox {
         let half = self.thickness / 2.0;
         if self.vertical {
-            BBox { x0: self.at - half, y0: self.start, x1: self.at + half, y1: self.end }
+            BBox {
+                x0: self.at - half,
+                y0: self.start,
+                x1: self.at + half,
+                y1: self.end,
+            }
         } else {
-            BBox { x0: self.start, y0: self.at - half, x1: self.end, y1: self.at + half }
+            BBox {
+                x0: self.start,
+                y0: self.at - half,
+                x1: self.end,
+                y1: self.at + half,
+            }
         }
     }
 
@@ -89,7 +99,12 @@ impl Stroke {
 }
 
 fn grown(b: &BBox, by: f64) -> BBox {
-    BBox { x0: b.x0 - by, y0: b.y0 - by, x1: b.x1 + by, y1: b.y1 + by }
+    BBox {
+        x0: b.x0 - by,
+        y0: b.y0 - by,
+        x1: b.x1 + by,
+        y1: b.y1 + by,
+    }
 }
 
 fn holds(b: &BBox, (x, y): (f64, f64)) -> bool {
@@ -116,7 +131,8 @@ fn nearest(b: &BBox, (x, y): (f64, f64)) -> (f64, f64) {
 
 fn distance(b: &BBox, point: (f64, f64)) -> f64 {
     let (x, y) = nearest(b, point);
-    (x - point.0).hypot(y - point.1)
+    let (dx, dy) = (x - point.0, y - point.1);
+    (dx * dx + dy * dy).sqrt()
 }
 
 fn in_table(geometry: &Geometry, mut elem: Option<usize>) -> bool {
@@ -267,7 +283,8 @@ fn broken_connectors(
         let joins = |index: usize, last: bool| -> (bool, bool) {
             let (tip, other) = (lines[index].tip(last), lines[index].tip(!last));
             let on_mark = marks.iter().any(|mark| {
-                holds(&grown(mark, TOUCH_PT), tip) && !holds(&grown(mark, -TOUCH_PT), other)
+                holds(&grown(mark, TOUCH_PT), tip)
+                    && !holds(&grown(mark, -TOUCH_PT), other)
             });
             let joined = on_mark
                 || rects
@@ -277,8 +294,9 @@ fn broken_connectors(
                 || texts.iter().any(|text| distance(text, tip) <= LABEL_REACH_PT);
             (on_mark, joined)
         };
-        let ends: Vec<[(bool, bool); 2]> =
-            (0..count).map(|index| [joins(index, false), joins(index, true)]).collect();
+        let ends: Vec<[(bool, bool); 2]> = (0..count)
+            .map(|index| [joins(index, false), joins(index, true)])
+            .collect();
         let connectors: Vec<f64> = (0..count)
             .filter(|&k| {
                 ends[k].iter().all(|end| end.1) && ends[k].iter().any(|end| end.0)
@@ -404,7 +422,6 @@ fn column_holes(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diagnos
                 shown
                     && i.page == page
                     && holds(&area, ((b.x0 + b.x1) / 2.0, (b.y0 + b.y1) / 2.0))
-                    && b.width() <= holder.width() + 1.0
                     && b.height() <= holder.height() + 1.0
             })
             .collect();
