@@ -1,6 +1,7 @@
 // expect: L094.doubled-caption-number
 #set page(paper: "a4", margin: 2cm)
 #set text(size: 10pt)
+#show figure: set block(spacing: 2.2em)
 #lorem(60)
 
 #figure(

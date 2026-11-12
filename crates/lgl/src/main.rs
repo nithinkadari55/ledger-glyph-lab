@@ -171,8 +171,13 @@ fn fix(args: FixArgs) -> Result<bool, String> {
     let text = std::fs::read_to_string(input)
         .map_err(|err| format!("{}: {err}", input.display()))?;
 
-    let (applied_total, rounds) =
-        lgl::repair_rules(&text, out, &options(&args.check), args.max_rounds, &args.only)?;
+    let (applied_total, rounds) = lgl::repair_rules(
+        &text,
+        out,
+        &options(&args.check),
+        args.max_rounds,
+        &args.only,
+    )?;
     eprintln!(
         "lgl: applied {applied_total} edit(s) in {rounds} round(s) to {}",
         out.display()

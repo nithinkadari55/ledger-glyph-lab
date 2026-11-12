@@ -21,8 +21,20 @@ const MARKUP_ONLY_ESCAPES: &[char] =
 /// Functions whose string arguments are patterns, code, data or paths rather
 /// than text to print; a backslash there is meant.
 const LITERAL_FUNCTIONS: &[&str] = &[
-    "regex", "raw", "eval", "read", "json", "yaml", "toml", "csv", "xml", "cbor", "plugin",
-    "image", "bibliography", "decode",
+    "regex",
+    "raw",
+    "eval",
+    "read",
+    "json",
+    "yaml",
+    "toml",
+    "csv",
+    "xml",
+    "cbor",
+    "plugin",
+    "image",
+    "bibliography",
+    "decode",
 ];
 
 /// Negative spacing smaller than this is a typographic adjustment (kerning,

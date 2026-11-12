@@ -143,7 +143,10 @@ mod tests {
 
     #[test]
     fn labels_are_read() {
-        assert_eq!(caption_label("Table\u{a0}1: Table 1. Mean", false), Some((10, "table".into())));
+        assert_eq!(
+            caption_label("Table\u{a0}1: Table 1. Mean", false),
+            Some((10, "table".into()))
+        );
         assert_eq!(caption_label("Table 1. Mean", false), Some((9, "table".into())));
         assert_eq!(caption_label("Fig. 2 — Flow", false), Some((11, "figure".into())));
         assert_eq!(caption_label("Figure~3.2: x", true), Some((12, "figure".into())));
