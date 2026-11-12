@@ -546,7 +546,9 @@ pub const CATALOG: &[RuleInfo] = &[
         "warning",
         "Two parallel horizontal rules of the same length run 3 to 36pt apart with \
          nothing between them, so a separator is doubled (a section's closing rule and \
-         the next section's opening rule or top border).",
+         the next section's opening rule or top border); also a shorter rule 3 to 24pt \
+         under a longer one and within its span (a heading underline and the top rules \
+         of the cards under it), unless it edges a frame or a fill.",
         "any",
         "Keep one of the two rules.",
         false,
