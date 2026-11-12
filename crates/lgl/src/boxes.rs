@@ -433,10 +433,7 @@ fn frame_edge(geometry: &Geometry, rule: &crate::geom::Item, top: bool) -> bool 
 fn on_text_row(geometry: &Geometry, rule: &crate::geom::Item) -> bool {
     let r = &rule.bbox;
     geometry.items.iter().any(|i| {
-        i.page == rule.page
-            && nonblank_text(i)
-            && i.bbox.y0 <= r.y0
-            && r.y0 <= i.bbox.y1
+        i.page == rule.page && nonblank_text(i) && i.bbox.y0 <= r.y0 && r.y0 <= i.bbox.y1
     })
 }
 
