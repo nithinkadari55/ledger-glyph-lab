@@ -790,6 +790,28 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L093.hole-in-column",
+        "warning",
+        "Inside a column or a box of set size, one gap is far larger than every other \
+         gap and more than one row of content follows it: stretched space that tears \
+         the content apart. A last row pinned to the bottom is a footer. On a whole \
+         page the same holds for one gap, or two around a single line such as an \
+         ornament, when content on at least 15% of the page follows.",
+        "3 times the next largest gap, and 4 sizes of the text beside the gap",
+        "Do not stretch space (v(1fr)) inside a column or a box of set height; on a \
+         page, share spare space between all sections instead of one gap.",
+        false,
+    ),
+    rule(
+        "L094.doubled-caption-number",
+        "warning",
+        "A figure or table caption starts with a hand-written label (Table 1.) right \
+         after the label and number the figure prints itself.",
+        "any",
+        "Remove the hand-written label from the caption text.",
+        true,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -829,6 +851,15 @@ pub const CATALOG: &[RuleInfo] = &[
         "any",
         "Call it with #f(..), or give the function a longer name.",
         false,
+    ),
+    rule(
+        "S006.string-escape",
+        "warning",
+        "Source lint: a quoted string holds a markup escape such as \\$ or \\#, whose \
+         backslash a string prints.",
+        "any, except in regex(), raw() and other patterns, code or paths",
+        "Write the character without a backslash inside quotes.",
+        true,
     ),
 ];
 
@@ -935,11 +966,14 @@ mod tests {
             proximity::LOOSE_DISPLAY,
             proximity::DRIFTING_SUBTITLE,
             proximity::WRAPPED_LABEL,
+            holes::COLUMN_HOLE,
+            captions::DOUBLED_CAPTION_NUMBER,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
             lint::DISABLED_PROTECTION,
             lint::MATH_LETTER_CALL,
+            lint::STRING_ESCAPE,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");

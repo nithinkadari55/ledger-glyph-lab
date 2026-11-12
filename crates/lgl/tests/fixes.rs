@@ -142,3 +142,35 @@ fn disabled_orphan_costs_are_restored() {
         "remaining: {rules:?}\n{text}"
     );
 }
+
+#[test]
+fn string_escapes_lose_their_backslash() {
+    let (rules, applied, text) = rules_after_repair("string-escape.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("\"$84.6 M\"") && text.contains("\"$56.9\""), "{text}");
+}
+
+#[test]
+fn hand_written_caption_label_is_removed() {
+    let (rules, applied, text) = rules_after_repair("doubled-caption-number.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("caption: [Quarterly figures by region.]"), "{text}");
+}
+
+#[test]
+fn only_the_named_rules_are_repaired() {
+    let text = std::fs::read_to_string(corpus("string-escape.typ")).unwrap();
+    let out = scratch("only-string-escape.typ");
+    let options = WorldOptions {
+        creation_timestamp: Some(0),
+        ..WorldOptions::default()
+    };
+    let only = ["L019.column-imbalance".to_string()];
+    let (applied, _) = lgl::repair_rules(&text, &out, &options, 5, &only).unwrap();
+    assert_eq!(applied, 0);
+    let only = ["S006.string-escape".to_string()];
+    let (applied, _) = lgl::repair_rules(&text, &out, &options, 5, &only).unwrap();
+    assert!(applied > 0);
+}

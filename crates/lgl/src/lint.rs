@@ -10,6 +10,20 @@ pub const ABSOLUTE_PLACEMENT: &str = "S002.absolute-placement";
 pub const NO_REFLOW: &str = "S003.transform-without-reflow";
 pub const DISABLED_PROTECTION: &str = "S004.disabled-protection";
 pub const MATH_LETTER_CALL: &str = "S005.math-letter-call";
+pub const STRING_ESCAPE: &str = "S006.string-escape";
+
+/// Characters that need a backslash in markup but not inside a quoted
+/// string. A quoted string knows only \\, \", \n, \r, \t and \u{..}; any
+/// other backslash stays in the string and is printed.
+const MARKUP_ONLY_ESCAPES: &[char] =
+    &['$', '#', '*', '_', '@', '~', '<', '>', '[', ']', '`', '='];
+
+/// Functions whose string arguments are patterns, code, data or paths rather
+/// than text to print; a backslash there is meant.
+const LITERAL_FUNCTIONS: &[&str] = &[
+    "regex", "raw", "eval", "read", "json", "yaml", "toml", "csv", "xml", "cbor", "plugin",
+    "image", "bibliography", "decode",
+];
 
 /// Negative spacing smaller than this is a typographic adjustment (kerning,
 /// tightening a rule under a heading) rather than a layout hack.
@@ -99,9 +113,84 @@ fn visit(world: &LabWorld, node: &LinkedNode, out: &mut Vec<Diagnostic>) {
     if let Some(rule) = ast::SetRule::from_untyped(node) {
         check_set_rule(world, node, rule, out);
     }
+    if node.kind() == SyntaxKind::Str {
+        check_string(world, node, out);
+    }
     for child in node.children() {
         visit(world, &child, out);
     }
+}
+
+/// A quoted string with a markup escape such as `\$`: the backslash is not an
+/// escape inside quotes and is printed ("\$84.6 M" shows as \$84.6 M).
+fn check_string(world: &LabWorld, node: &LinkedNode, out: &mut Vec<Diagnostic>) {
+    let text = node.get().leaf_text();
+    let fixed = without_markup_escapes(text);
+    if fixed == text.as_str() || literal_argument(node) {
+        return;
+    }
+    let shown: String = text.chars().take(40).collect();
+    let mut diagnostic = finding(
+        world,
+        node,
+        STRING_ESCAPE,
+        format!(
+            "the quoted string {shown} prints its backslashes: inside quotes only \\\\, \
+             \\\", \\n, \\r, \\t and \\u{{..}} are escapes, so a character such as $ or # \
+             needs no backslash there"
+        ),
+        "write the character without a backslash inside a quoted string (\"$84.6\"); \
+         escape it only in markup",
+    );
+    diagnostic.anchor = Some(node.span());
+    out.push(diagnostic);
+}
+
+/// The text of a quoted string without the backslashes that only markup
+/// needs. Real escapes, including an escaped backslash, are kept.
+pub(crate) fn without_markup_escapes(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\'
+            && let Some(&next) = chars.peek()
+        {
+            if !MARKUP_ONLY_ESCAPES.contains(&next) {
+                out.push(c);
+                out.push(next);
+            } else {
+                out.push(next);
+            }
+            chars.next();
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+/// Whether the string is an argument of a function that reads it as a
+/// pattern, code, data or a path.
+fn literal_argument(node: &LinkedNode) -> bool {
+    let mut cursor = node.parent();
+    while let Some(parent) = cursor {
+        if let Some(call) = ast::FuncCall::from_untyped(parent) {
+            let name = match call.callee() {
+                ast::Expr::Ident(ident) => ident.get().clone(),
+                ast::Expr::FieldAccess(access) => access.field().get().clone(),
+                _ => return false,
+            };
+            return LITERAL_FUNCTIONS.contains(&name.as_str());
+        }
+        if matches!(
+            parent.kind(),
+            SyntaxKind::ContentBlock | SyntaxKind::CodeBlock | SyntaxKind::Closure
+        ) {
+            return false;
+        }
+        cursor = parent.parent();
+    }
+    false
 }
 
 fn check_call(
@@ -361,6 +450,24 @@ mod tests {
     fn transforms_need_reflow() {
         assert_eq!(rules_for("#rotate(90deg)[x]"), [NO_REFLOW]);
         assert!(rules_for("#rotate(90deg, reflow: true)[x]").is_empty());
+    }
+
+    #[test]
+    fn markup_escapes_in_strings_are_flagged() {
+        assert_eq!(rules_for("#let k = (\"\\$84.6 M\",)\n#k.at(0)"), [STRING_ESCAPE]);
+        assert_eq!(rules_for("#table(columns: 1, \"Revenue (\\$ m)\")"), [STRING_ESCAPE]);
+        assert!(rules_for("#\"\\\\$ and \\n\"").is_empty());
+        assert!(rules_for("#\"plain $ text\"").is_empty());
+        assert!(rules_for("#\"a$b\".replace(regex(\"\\$\"), \"\")").is_empty());
+        assert!(rules_for("#raw(\"price: \\$5\")").is_empty());
+        assert!(rules_for("Markup \\$5 is fine.").is_empty());
+    }
+
+    #[test]
+    fn markup_escapes_are_removed() {
+        assert_eq!(without_markup_escapes("\"\\$84.6 \\#1\""), "\"$84.6 #1\"");
+        assert_eq!(without_markup_escapes("\"\\\\$ \\n \\\"\""), "\"\\\\$ \\n \\\"\"");
+        assert_eq!(without_markup_escapes("\"\\d+\""), "\"\\d+\"");
     }
 
     #[test]

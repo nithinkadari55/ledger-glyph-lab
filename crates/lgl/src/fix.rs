@@ -5,8 +5,9 @@ use typst::World;
 use typst::syntax::ast::{self, AstNode};
 use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
+use crate::captions::DOUBLED_CAPTION_NUMBER;
 use crate::diag::{Diagnostic, SourceLoc};
-use crate::lint::{DISABLED_PROTECTION, NO_REFLOW};
+use crate::lint::{DISABLED_PROTECTION, NO_REFLOW, STRING_ESCAPE};
 use crate::pagecheck::{COLUMN_IMBALANCE, EMPTY_COLUMN};
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
@@ -71,6 +72,8 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
                 })
             }
             DISABLED_PROTECTION => protection_fix(world, &source, anchor),
+            STRING_ESCAPE => string_fix(world, &source, anchor),
+            DOUBLED_CAPTION_NUMBER => caption_fix(world, &source, anchor),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
                 Some(Fix {
@@ -153,6 +156,65 @@ fn protection_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix
         description: "remove the rule so that Typst's protection applies".into(),
         edits: vec![edit_range(world, source, start..end, "")?],
     })
+}
+
+/// Removes the backslashes that a quoted string would print.
+fn string_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let node = LinkedNode::new(source.root()).find(anchor)?;
+    if node.kind() != SyntaxKind::Str {
+        return None;
+    }
+    let fixed = crate::lint::without_markup_escapes(node.get().leaf_text());
+    Some(Fix {
+        description: "remove the backslashes the quoted string would print".into(),
+        edits: vec![edit_range(world, source, node.range(), &fixed)?],
+    })
+}
+
+/// Removes the hand-written label at the start of a figure's caption
+/// ("*Table 1.*", "Figure 2:"), which repeats the label the figure prints.
+/// Only a label written as plain or strong/emphasised text directly in the
+/// caption argument is removed.
+fn caption_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let figure = enclosing_call(source, anchor, "figure")?;
+    let args = figure.children().find(|child| child.kind() == SyntaxKind::Args)?;
+    let named = args.children().find(|child| {
+        ast::Named::from_untyped(child).is_some_and(|n| n.name().get() == "caption")
+    })?;
+    let value = named.children().next_back()?;
+    let leaf = first_text(&value)?;
+    let text = source.text();
+    let start = leaf.offset();
+    let (length, _) = crate::captions::caption_label(&text[start..], true)?;
+    // When the whole strong or emphasised text is the label, it goes with its
+    // markers and the space after it; otherwise only the label goes.
+    let mut range = start..start + length;
+    if let Some(markup) = leaf.parent()
+        && markup.kind() == SyntaxKind::Markup
+        && markup.range().start == start
+        && text[markup.range()].trim_end().len() <= length
+        && let Some(marked) = markup.parent()
+        && matches!(marked.kind(), SyntaxKind::Strong | SyntaxKind::Emph)
+    {
+        let end = marked.range().end;
+        let after = text[end..].len() - text[end..].trim_start_matches([' ', '\t']).len();
+        range = marked.range().start..end + after;
+    }
+    if text[range.clone()].contains(['#', '[', ']', '\\', '$', '\n']) {
+        return None;
+    }
+    Some(Fix {
+        description: "remove the hand-written caption label".into(),
+        edits: vec![edit_range(world, source, range, "")?],
+    })
+}
+
+/// The first text of the markup inside a node, in source order.
+fn first_text<'a>(node: &LinkedNode<'a>) -> Option<LinkedNode<'a>> {
+    if node.kind() == SyntaxKind::Text {
+        return Some(node.clone());
+    }
+    node.children().find_map(|child| first_text(&child))
 }
 
 /// Removes a manual vertical spacing call right before the anchored content.

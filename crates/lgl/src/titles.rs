@@ -65,7 +65,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// The most common text size of running text, weighted by characters. Code
 /// and headings do not count; table text does, since some documents are
 /// mostly tables.
-fn body_size(geometry: &Geometry) -> Option<f64> {
+pub(crate) fn body_size(geometry: &Geometry) -> Option<f64> {
     let mut weights: BTreeMap<i64, usize> = BTreeMap::new();
     for item in &geometry.items {
         if inside(geometry, item.elem, &["raw", "heading"]) {

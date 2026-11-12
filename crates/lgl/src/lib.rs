@@ -1,4 +1,5 @@
 pub mod boxes;
+pub mod captions;
 pub mod catalog;
 pub mod composition;
 pub mod contrast;
@@ -7,6 +8,7 @@ pub mod edges;
 pub mod fix;
 pub mod geom;
 pub mod grid;
+pub mod holes;
 pub mod lint;
 pub mod marks;
 pub mod overlap;
@@ -207,6 +209,18 @@ pub fn repair(
     options: &world::WorldOptions,
     max_rounds: usize,
 ) -> Result<(usize, usize), String> {
+    repair_rules(text, out, options, max_rounds, &[])
+}
+
+/// Like [`repair`], but applies only the fixes of the given rules; all rules
+/// when `only` is empty.
+pub fn repair_rules(
+    text: &str,
+    out: &std::path::Path,
+    options: &world::WorldOptions,
+    max_rounds: usize,
+    only: &[String],
+) -> Result<(usize, usize), String> {
     let mut text = text.to_string();
     let mut applied_total = 0;
     let mut rounds = 0;
@@ -221,6 +235,7 @@ pub fn repair(
         let edits: Vec<&fix::Edit> = outcome
             .diagnostics
             .iter()
+            .filter(|d| only.is_empty() || only.contains(&d.rule))
             .filter_map(|d| d.fix.as_ref())
             .flat_map(|f| &f.edits)
             .filter(|e| e.loc.file == main)

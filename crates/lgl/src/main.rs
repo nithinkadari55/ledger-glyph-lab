@@ -42,6 +42,9 @@ struct FixArgs {
     out: PathBuf,
     #[arg(long, default_value_t = 5)]
     max_rounds: usize,
+    /// Apply only the fixes of these rules (comma-separated ids).
+    #[arg(long, value_delimiter = ',')]
+    only: Vec<String>,
 }
 
 #[derive(clap::Args)]
@@ -169,7 +172,7 @@ fn fix(args: FixArgs) -> Result<bool, String> {
         .map_err(|err| format!("{}: {err}", input.display()))?;
 
     let (applied_total, rounds) =
-        lgl::repair(&text, out, &options(&args.check), args.max_rounds)?;
+        lgl::repair_rules(&text, out, &options(&args.check), args.max_rounds, &args.only)?;
     eprintln!(
         "lgl: applied {applied_total} edit(s) in {rounds} round(s) to {}",
         out.display()

@@ -58,6 +58,8 @@ pub fn run(
     out.extend(crate::titles::run(world, geometry));
     out.extend(crate::edges::run(world, geometry));
     out.extend(crate::edges::page_labels(world, geometry));
+    out.extend(crate::holes::run(world, geometry));
+    out.extend(crate::captions::run(world, geometry));
     let grouping = crate::proximity::run(world, geometry, &out);
     out.extend(grouping);
     reanchor(world, geometry, &mut out);
