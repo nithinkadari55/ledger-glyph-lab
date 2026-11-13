@@ -5,7 +5,7 @@
 #align(center)[
   #text(size: 22pt, weight: "bold")[Eleanor and James]
 
-  Saturday, 14 June 2026
+  Saturday, 14 June 2025
 
   St Michael's Church, Hartley Green
 ]

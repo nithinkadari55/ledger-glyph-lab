@@ -2,7 +2,7 @@
 #set page(width: 594mm, height: 420mm, margin: 30mm)
 #set text(size: 20pt)
 #align(center, stack(
-  spacing: 16pt,
+  spacing: 30pt,
   text(size: 60pt, weight: "bold")[The Meridian Dispatch],
   text(size: 18pt, style: "italic")[News and notes from the people of Meridian Works],
 ))
