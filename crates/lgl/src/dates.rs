@@ -113,7 +113,8 @@ fn weekday(year: i32, month: u32, day: u32) -> Option<u32> {
         return None;
     }
     let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
-    let lengths = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let lengths =
+        [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     if day == 0 || day > lengths[month as usize - 1] {
         return None;
     }
@@ -139,7 +140,9 @@ fn mentions(geometry: &Geometry) -> Vec<Mention> {
     }
     let mut out = Vec::new();
     for mut row in rows.into_values() {
-        row.sort_by(|&a, &b| geometry.items[a].bbox.x0.total_cmp(&geometry.items[b].bbox.x0));
+        row.sort_by(|&a, &b| {
+            geometry.items[a].bbox.x0.total_cmp(&geometry.items[b].bbox.x0)
+        });
         let mut line = String::new();
         let mut words = Vec::new();
         for index in row {
@@ -150,7 +153,9 @@ fn mentions(geometry: &Geometry) -> Vec<Mention> {
             let text = geometry.items[index].text.as_deref().unwrap_or_default();
             line.push_str(&text.replace('\u{a0}', " "));
             let mut start = None;
-            for (offset, c) in line[base..].char_indices().chain([(line.len() - base, ' ')]) {
+            for (offset, c) in
+                line[base..].char_indices().chain([(line.len() - base, ' ')])
+            {
                 match (c.is_alphanumeric(), start) {
                     (true, None) => start = Some(base + offset),
                     (false, Some(s)) => {
@@ -176,13 +181,17 @@ fn mentions(geometry: &Geometry) -> Vec<Mention> {
 fn scan(line: &str, words: &[Word], out: &mut Vec<Mention>) {
     // Only spaces, commas and full stops may stand between the parts.
     let joined = |a: &Word, b: &Word| {
-        line[a.end..b.start].chars().all(|c| c.is_whitespace() || c == ',' || c == '.')
+        line[a.end..b.start]
+            .chars()
+            .all(|c| c.is_whitespace() || c == ',' || c == '.')
     };
     let day_of = |word: &Word| {
         let digits = word.text.trim_end_matches(['s', 't', 'n', 'd', 'r', 'h']);
-        (digits.len() <= 2 && !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
-            .then(|| digits.parse::<u32>().ok())
-            .flatten()
+        (digits.len() <= 2
+            && !digits.is_empty()
+            && digits.chars().all(|c| c.is_ascii_digit()))
+        .then(|| digits.parse::<u32>().ok())
+        .flatten()
     };
     let month_of = |word: &Word| {
         MONTHS.iter().position(|m| {
@@ -195,7 +204,8 @@ fn scan(line: &str, words: &[Word], out: &mut Vec<Mention>) {
             .flatten()
     };
     for i in 0..words.len() {
-        let Some(&(_, weekday)) = DAYS.iter().find(|(name, _)| *name == words[i].text) else {
+        let Some(&(_, weekday)) = DAYS.iter().find(|(name, _)| *name == words[i].text)
+        else {
             continue;
         };
         let next = |k: usize| words.get(k).filter(|w| joined(&words[k - 1], w));

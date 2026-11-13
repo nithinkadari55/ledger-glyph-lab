@@ -348,4 +348,3 @@ fn broken_connectors(
     }
     out
 }
-

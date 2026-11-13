@@ -156,10 +156,7 @@ pub(crate) fn stray_delimiter(node: &LinkedNode) -> bool {
     let text = node.get().leaf_text();
     let breaks = |sibling: Option<LinkedNode>| match sibling {
         None => true,
-        Some(s) => {
-            s.kind() == SyntaxKind::Parbreak
-                || (s.kind() == SyntaxKind::Space && s.get().leaf_text().contains('\n'))
-        }
+        Some(s) => matches!(s.kind(), SyntaxKind::Parbreak | SyntaxKind::SpaceWithNewline),
     };
     node.kind() == SyntaxKind::Text
         && node.parent().is_some_and(|p| p.kind() == SyntaxKind::Markup)
