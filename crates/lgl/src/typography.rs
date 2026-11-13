@@ -32,6 +32,25 @@ pub const LONELY_TITLE_WORD: &str = "L052.lonely-title-word";
 
 /// The number of words on a line.
 fn line_words(geometry: &Geometry, line: &Line) -> usize {
+    line_text(geometry, line).split_whitespace().count()
+}
+
+/// The marker of a list or numbered item on a line of its own ("2.", "b)",
+/// "iv.", "•"), which is no word of a title.
+fn list_marker(text: &str) -> bool {
+    let text = text.trim();
+    let body = text.trim_end_matches(['.', ')']);
+    let numbered = body.len() < text.len()
+        && !body.is_empty()
+        && body.len() <= 4
+        && (body.chars().all(|c| c.is_ascii_digit())
+            || (body.len() == 1 && body.chars().all(|c| c.is_ascii_alphabetic()))
+            || body.chars().all(|c| "ivxlcIVXLC".contains(c)));
+    numbered || matches!(text, "•" | "◦" | "▪" | "■" | "‣" | "–" | "-" | "—")
+}
+
+/// The text of a line, its pieces in reading order.
+fn line_text(geometry: &Geometry, line: &Line) -> String {
     let b = &line.bbox;
     let mut items: Vec<_> = geometry
         .items
@@ -44,8 +63,7 @@ fn line_words(geometry: &Geometry, line: &Line) -> usize {
         })
         .collect();
     items.sort_by(|a, b| a.bbox.x0.total_cmp(&b.bbox.x0));
-    let text: String = items.iter().filter_map(|i| i.text.as_deref()).collect();
-    text.split_whitespace().count()
+    items.iter().filter_map(|i| i.text.as_deref()).collect()
 }
 
 /// Titles and headings whose last line holds a single word under a full line,
@@ -80,6 +98,7 @@ fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
         if size < DISPLAY_TEXT_PT
             || line_words(geometry, last) != 1
             || line_words(geometry, above) < 3
+            || list_marker(&line_text(geometry, last))
         {
             continue;
         }
@@ -514,4 +533,19 @@ pub fn uneven_leading(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::list_marker;
+
+    #[test]
+    fn list_markers_are_no_title_words() {
+        for marker in ["2.", "10.", "b)", "iv.", "•", "–"] {
+            assert!(list_marker(marker), "{marker}");
+        }
+        for word in ["Cloud", "Ltd.", "U.S.", "2025", "Sediments"] {
+            assert!(!list_marker(word), "{word}");
+        }
+    }
 }

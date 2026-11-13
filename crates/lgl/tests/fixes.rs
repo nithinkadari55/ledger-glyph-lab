@@ -174,3 +174,11 @@ fn only_the_named_rules_are_repaired() {
     let (applied, _) = lgl::repair_rules(&text, &out, &options, 5, &only).unwrap();
     assert!(applied > 0);
 }
+
+#[test]
+fn stray_delimiter_line_is_deleted() {
+    let (rules, applied, text) = rules_after_repair("stray-delimiter.typ");
+    assert!(applied > 0, "no fix applied");
+    assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("  [#lorem(30)],\n)\n#lorem(60)"), "{text}");
+}

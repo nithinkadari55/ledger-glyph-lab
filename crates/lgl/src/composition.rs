@@ -719,6 +719,15 @@ fn centered_paragraphs(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic>
         if step <= 0.0 || step > 2.5 * above.bbox.height() {
             continue;
         }
+        // The lines of one wrapped paragraph share their text size; a title
+        // above a tagline are two paragraphs.
+        if let (Some(a), Some(b)) = (
+            crate::spacing::line_size(geometry, above),
+            crate::spacing::line_size(geometry, line),
+        ) && (a - b).abs() > 0.1 * a.max(b)
+        {
+            continue;
+        }
         let Some(width) = body_width(geometry, line.page) else { continue };
         if above.available < WIDE_MEASURE_SHARE * width
             || above.natural < WRAPPED_SHARE * above.available

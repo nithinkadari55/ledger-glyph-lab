@@ -790,6 +790,14 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L092.broken-connector",
+        "warning",
+        "A connector line of a diagram (an organisation chart, a tree, a flow) ends in          the air a short way from a box it does not touch, so the diagram falls apart          there. Judged where at least two lines of the same thickness join boxes.",
+        "2 body text sizes between the loose end and the box",
+        "Make both ends of every connector touch what they join: a drop in the same grid          column as its box, a bar from the first drop to the last.",
+        false,
+    ),
+    rule(
         "L093.hole-in-column",
         "warning",
         "Inside a column or a box of set size, one gap is far larger than every other \
@@ -810,6 +818,14 @@ pub const CATALOG: &[RuleInfo] = &[
         "any",
         "Remove the hand-written label from the caption text.",
         true,
+    ),
+    rule(
+        "L095.wrong-weekday",
+        "warning",
+        "A printed weekday does not match its date (Tuesday, 14 May 2025 when 14 May 2025          is a Wednesday). A date without a year takes the document's year when all dated          weekdays name the same one.",
+        "any",
+        "Correct the weekday or the date so that they agree.",
+        false,
     ),
     rule(
         "S001.negative-spacing",
@@ -859,6 +875,14 @@ pub const CATALOG: &[RuleInfo] = &[
          backslash a string prints.",
         "any, except in regex(), raw() and other patterns, code or paths",
         "Write the character without a backslash inside quotes.",
+        true,
+    ),
+    rule(
+        "S007.stray-delimiter",
+        "warning",
+        "Source lint: markup text that is only a closing bracket on a line of its own, left          over from an edit that closed a call or block; Typst prints it.",
+        "any, unless the paragraph leaves a bracket open",
+        "Delete the line.",
         true,
     ),
 ];
@@ -966,14 +990,17 @@ mod tests {
             proximity::LOOSE_DISPLAY,
             proximity::DRIFTING_SUBTITLE,
             proximity::WRAPPED_LABEL,
+            connectors::BROKEN_CONNECTOR,
             holes::COLUMN_HOLE,
             captions::DOUBLED_CAPTION_NUMBER,
+            dates::WRONG_WEEKDAY,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
             lint::DISABLED_PROTECTION,
             lint::MATH_LETTER_CALL,
             lint::STRING_ESCAPE,
+            lint::STRAY_DELIMITER,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");

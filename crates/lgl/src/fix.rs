@@ -7,7 +7,7 @@ use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::captions::DOUBLED_CAPTION_NUMBER;
 use crate::diag::{Diagnostic, SourceLoc};
-use crate::lint::{DISABLED_PROTECTION, NO_REFLOW, STRING_ESCAPE};
+use crate::lint::{DISABLED_PROTECTION, NO_REFLOW, STRAY_DELIMITER, STRING_ESCAPE};
 use crate::pagecheck::{COLUMN_IMBALANCE, EMPTY_COLUMN};
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
@@ -73,6 +73,7 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
             }
             DISABLED_PROTECTION => protection_fix(world, &source, anchor),
             STRING_ESCAPE => string_fix(world, &source, anchor),
+            STRAY_DELIMITER => delimiter_fix(world, &source, anchor),
             DOUBLED_CAPTION_NUMBER => caption_fix(world, &source, anchor),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
@@ -168,6 +169,26 @@ fn string_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
     Some(Fix {
         description: "remove the backslashes the quoted string would print".into(),
         edits: vec![edit_range(world, source, node.range(), &fixed)?],
+    })
+}
+
+/// Deletes the line that holds only a stray closing bracket.
+fn delimiter_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let node = LinkedNode::new(source.root()).find(anchor)?;
+    if !crate::lint::stray_delimiter(&node) {
+        return None;
+    }
+    let text = source.text();
+    let start = text[..node.offset()].rfind('\n').map_or(0, |i| i + 1);
+    let end = text[node.range().end..]
+        .find('\n')
+        .map_or(text.len(), |i| node.range().end + i + 1);
+    if !text[start..end].trim().chars().all(|c| c == ')' || c == ',') {
+        return None;
+    }
+    Some(Fix {
+        description: "delete the line with the stray closing bracket".into(),
+        edits: vec![edit_range(world, source, start..end, "")?],
     })
 }
 

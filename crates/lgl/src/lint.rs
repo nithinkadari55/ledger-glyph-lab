@@ -11,6 +11,7 @@ pub const NO_REFLOW: &str = "S003.transform-without-reflow";
 pub const DISABLED_PROTECTION: &str = "S004.disabled-protection";
 pub const MATH_LETTER_CALL: &str = "S005.math-letter-call";
 pub const STRING_ESCAPE: &str = "S006.string-escape";
+pub const STRAY_DELIMITER: &str = "S007.stray-delimiter";
 
 /// Characters that need a backslash in markup but not inside a quoted
 /// string. A quoted string knows only \\, \", \n, \r, \t and \u{..}; any
@@ -128,9 +129,63 @@ fn visit(world: &LabWorld, node: &LinkedNode, out: &mut Vec<Diagnostic>) {
     if node.kind() == SyntaxKind::Str {
         check_string(world, node, out);
     }
+    if stray_delimiter(node) {
+        let mut diagnostic = finding(
+            world,
+            node,
+            STRAY_DELIMITER,
+            format!(
+                "a line holding only \"{}\" in markup is printed as text: it is left over \
+                 from an edit that closed a call or block",
+                node.get().leaf_text()
+            ),
+            "delete the line; in markup a closing bracket on its own is ordinary text",
+        );
+        diagnostic.anchor = Some(node.span());
+        out.push(diagnostic);
+    }
     for child in node.children() {
         visit(world, &child, out);
     }
+}
+
+/// Markup text that is nothing but closing brackets (and commas) on a line of
+/// its own: a leftover of an edit that closed a call or a block twice. Typst
+/// prints it as ordinary text, so the syntax check passes.
+pub(crate) fn stray_delimiter(node: &LinkedNode) -> bool {
+    let text = node.get().leaf_text();
+    let breaks = |sibling: Option<LinkedNode>| match sibling {
+        None => true,
+        Some(s) => {
+            s.kind() == SyntaxKind::Parbreak
+                || (s.kind() == SyntaxKind::Space && s.get().leaf_text().contains('\n'))
+        }
+    };
+    node.kind() == SyntaxKind::Text
+        && node.parent().is_some_and(|p| p.kind() == SyntaxKind::Markup)
+        && text.contains(')')
+        && text.chars().all(|c| c == ')' || c == ',')
+        && breaks(node.prev_sibling_with_trivia())
+        && breaks(node.next_sibling_with_trivia())
+        && !open_bracket_before(node)
+}
+
+/// Whether the text of the paragraph before the node leaves a bracket open,
+/// which the node may close: "(see the note" wrapped onto a new line.
+fn open_bracket_before(node: &LinkedNode) -> bool {
+    let mut open = 0i64;
+    let mut cursor = node.prev_sibling_with_trivia();
+    while let Some(sibling) = cursor {
+        if sibling.kind() == SyntaxKind::Parbreak {
+            break;
+        }
+        if sibling.kind() == SyntaxKind::Text {
+            let text = sibling.get().leaf_text();
+            open += text.matches('(').count() as i64 - text.matches(')').count() as i64;
+        }
+        cursor = sibling.prev_sibling_with_trivia();
+    }
+    open > 0
 }
 
 /// A quoted string with a markup escape such as `\$`: the backslash is not an
@@ -473,6 +528,15 @@ mod tests {
         assert!(rules_for("#\"a$b\".replace(regex(\"\\$\"), \"\")").is_empty());
         assert!(rules_for("#raw(\"price: \\$5\")").is_empty());
         assert!(rules_for("Markup \\$5 is fine.").is_empty());
+    }
+
+    #[test]
+    fn stray_delimiters_are_flagged() {
+        assert_eq!(rules_for("#grid(\n  [a],\n)\n)\nText after."), [STRAY_DELIMITER]);
+        assert_eq!(rules_for("Text before.\n\n  ),\n\nText after."), [STRAY_DELIMITER]);
+        assert!(rules_for("A note (see the table\n)\nends here.").is_empty());
+        assert!(rules_for("A note (see the table) ends here.").is_empty());
+        assert!(rules_for("#grid(\n  [a],\n)\nText after.").is_empty());
     }
 
     #[test]
