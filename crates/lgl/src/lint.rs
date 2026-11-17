@@ -226,9 +226,13 @@ fn paragraph_text(node: &LinkedNode) -> bool {
         | SyntaxKind::SmartQuote
         | SyntaxKind::Linebreak
         | SyntaxKind::Link => true,
-        _ => ast::FuncCall::from_untyped(node).is_some_and(|call| {
-            matches!(call.callee(), ast::Expr::Ident(i) if TEXT_FUNCTIONS.contains(&i.get().as_str()))
-        }),
+        // A styling call counts unless it sets paragraph spacing of its own
+        // (#text(..)[#par(spacing: 0pt)[..]]), which the author meant exactly.
+        _ => {
+            ast::FuncCall::from_untyped(node).is_some_and(|call| {
+                matches!(call.callee(), ast::Expr::Ident(i) if TEXT_FUNCTIONS.contains(&i.get().as_str()))
+            }) && !node.get().full_text().contains("par(")
+        }
     }
 }
 
