@@ -334,7 +334,7 @@ const STEPPED_RULE_MAX_PT: f64 = 6.0;
 /// A shorter rule this far under a longer one doubles it.
 const STEPPED_RULE_GAP_PT: std::ops::RangeInclusive<f64> = 3.0..=24.0;
 
-/// Text this close under a line, at most the body size, is the line's caption:
+/// Text this close under a line, smaller than the body, is the line's caption:
 /// a signature or write-in line ("Form tutor · Signature and date"), not a
 /// card under a separator. Measured on stored documents: such captions sit
 /// 0.58 of their size below the line; card titles 0.9 to 1.4.
@@ -458,7 +458,7 @@ fn on_text_row(geometry: &Geometry, rule: &crate::geom::Item) -> bool {
 }
 
 /// Whether the first text under the rule, within its span, is its caption:
-/// set close under it and no larger than the body text.
+/// set close under it and smaller than the body text.
 fn captioned(geometry: &Geometry, rule: &crate::geom::Item, body: f64) -> bool {
     let r = &rule.bbox;
     geometry
@@ -474,7 +474,7 @@ fn captioned(geometry: &Geometry, rule: &crate::geom::Item, body: f64) -> bool {
         .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
         .is_some_and(|t| {
             let size = t.font_size.unwrap_or(body);
-            t.bbox.y0 - r.y1 <= LINE_CAPTION_EM * size && size <= body + 0.05
+            t.bbox.y0 - r.y1 <= LINE_CAPTION_EM * size && size < body - 0.05
         })
 }
 
