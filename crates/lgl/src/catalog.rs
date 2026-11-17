@@ -888,8 +888,8 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "S008.scaled-spacing",
         "info",
-        "Source lint: a plain v(x) between two pieces of content, whose gap is x plus the          paragraph spacing of its neighbours, which grows with their text size.",
-        "any positive length literal, except next to another v(), at the edge of a flow          or at a page or column break",
+        "Source lint: a plain v(x) between two paragraphs of text, whose gap is x plus          the paragraph spacing of its neighbours, which grows with their text size.",
+        "any positive length literal between paragraph text on both sides",
         "Applied as v(x + par.spacing, weak: true), so the gap is x plus the body's          paragraph spacing.",
         true,
     ),
