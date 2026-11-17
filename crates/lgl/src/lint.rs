@@ -227,11 +227,15 @@ fn paragraph_text(node: &LinkedNode) -> bool {
         | SyntaxKind::Linebreak
         | SyntaxKind::Link => true,
         // A styling call counts unless it sets paragraph spacing of its own
-        // (#text(..)[#par(spacing: 0pt)[..]]), which the author meant exactly.
+        // (#text(..)[#par(spacing: 0pt)[..]]), which the author meant exactly;
+        // a par() that only sets leading or justification is fine.
         _ => {
             ast::FuncCall::from_untyped(node).is_some_and(|call| {
                 matches!(call.callee(), ast::Expr::Ident(i) if TEXT_FUNCTIONS.contains(&i.get().as_str()))
-            }) && !node.get().full_text().contains("par(")
+            }) && {
+                let text = node.get().full_text();
+                !(text.contains("par(") && text.contains("spacing"))
+            }
         }
     }
 }
