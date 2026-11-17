@@ -40,6 +40,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     out.extend(touching_cells(world, geometry));
     out.extend(cell_padding(world, geometry));
     out.extend(double_rules(world, geometry));
+    out.extend(stepped_rules(world, geometry));
     out.extend(box_padding(world, geometry));
     out.extend(dangling_separators(world, geometry));
     out.extend(uneven_boxes(world, geometry));
@@ -289,30 +290,237 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if !empty || writing(a) || writing(b) {
                 continue;
             }
-            let mut diagnostic = Diagnostic::new(
-                DOUBLE_RULE,
-                Severity::Warning,
-                format!(
-                    "two rules on page {} run {}pt apart with nothing between them, so \
-                     the separator is doubled",
-                    a.page + 1,
-                    round1(gap)
-                ),
-            );
-            diagnostic.loc = diag::resolve_span(world, geometry.span_for(b.span, b.elem));
-            diagnostic.page = Some(a.page + 1);
-            diagnostic.bbox = Some(ra.union(rb).rounded());
-            diagnostic.measured = Some(round1(gap));
-            diagnostic.unit = Some("pt");
-            diagnostic.hints.push(
-                "keep one of the two rules: drop the closing rule of the previous \
-                 section or the opening rule (or top border) of the next"
-                    .into(),
-            );
-            out.push(diagnostic);
+            out.push(double_rule_diagnostic(world, geometry, a, b));
         }
     }
     out
+}
+
+fn double_rule_diagnostic(
+    world: &LabWorld,
+    geometry: &Geometry,
+    a: &crate::geom::Item,
+    b: &crate::geom::Item,
+) -> Diagnostic {
+    let (ra, rb) = (&a.bbox, &b.bbox);
+    let gap = rb.y0 - ra.y1;
+    let mut diagnostic = Diagnostic::new(
+        DOUBLE_RULE,
+        Severity::Warning,
+        format!(
+            "two rules on page {} run {}pt apart with nothing between them, so the \
+             separator is doubled",
+            a.page + 1,
+            round1(gap)
+        ),
+    );
+    diagnostic.loc = diag::resolve_span(world, geometry.span_for(b.span, b.elem));
+    diagnostic.page = Some(a.page + 1);
+    diagnostic.bbox = Some(ra.union(rb).rounded());
+    diagnostic.measured = Some(round1(gap));
+    diagnostic.unit = Some("pt");
+    diagnostic.hints.push(
+        "keep one of the two rules: drop the closing rule of the previous section or \
+         the opening rule (or top border) of the next"
+            .into(),
+    );
+    diagnostic
+}
+
+/// Card, column and bar rules may be heavier than a plain separator: the
+/// coloured top bars of a poster's act cards are 4 to 5pt.
+const STEPPED_RULE_MAX_PT: f64 = 6.0;
+
+/// A shorter rule this far under a longer one doubles it.
+const STEPPED_RULE_GAP_PT: std::ops::RangeInclusive<f64> = 3.0..=24.0;
+
+/// Text this close under a line, at most the body size, is the line's caption:
+/// a signature or write-in line ("Form tutor · Signature and date"), not a
+/// card under a separator. Measured on stored documents: such captions sit
+/// 0.58 of their size below the line; card titles 0.9 to 1.4.
+const LINE_CAPTION_EM: f64 = 0.7;
+
+/// A shorter rule right under a longer one, within its span and with nothing
+/// between them, such as a section heading's underline followed by the top
+/// rules of the cards or columns under it. Left alone: rules that edge a frame
+/// or a fill (a filled header row), a table's own borders, leader lines beside
+/// a heading, lines to write on or sign on, and rules in another page region.
+/// Measured over the stored documents: 12 documents, all a heading rule over
+/// card or column rules (datasheets, posters, a lesson plan, magazine pull
+/// quotes).
+fn stepped_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
+    let rules: Vec<&crate::geom::Item> = geometry
+        .items
+        .iter()
+        .filter(|i| {
+            i.kind == ItemKind::Shape
+                && i.bbox.height() < STEPPED_RULE_MAX_PT
+                && i.bbox.width() >= 20.0
+        })
+        .collect();
+    let mut out = Vec::new();
+    for a in &rules {
+        for b in &rules {
+            let (ra, rb) = (&a.bbox, &b.bbox);
+            if a.page != b.page || a.region != b.region || rb.y0 <= ra.y1 {
+                continue;
+            }
+            let gap = rb.y0 - ra.y1;
+            let overlap = ra.x1.min(rb.x1) - ra.x0.max(rb.x0);
+            let (wa, wb) = (ra.width(), rb.width());
+            if !STEPPED_RULE_GAP_PT.contains(&gap)
+                || overlap < 0.9 * wb
+                || wa - wb <= 0.1 * wa
+            {
+                continue;
+            }
+            let writing = |r: &crate::geom::Item| {
+                line_labels(geometry, r, None) != (false, false)
+                    || in_empty_ruled_area(geometry, &rules, r)
+            };
+            if frame_edge(geometry, b, true)
+                || frame_edge(geometry, a, false)
+                || on_text_row(geometry, a)
+                || on_text_row(geometry, b)
+                || !nothing_between(geometry, a, b)
+                || writing(a)
+                || writing(b)
+                || captioned(geometry, b, body)
+                || in_table(geometry, b.elem)
+            {
+                continue;
+            }
+            out.push(double_rule_diagnostic(world, geometry, a, b));
+        }
+    }
+    out
+}
+
+/// Whether nothing but the two rules, links and fills lying behind both of
+/// them (a page background, a coloured panel) is in the band between them.
+fn nothing_between(
+    geometry: &Geometry,
+    a: &crate::geom::Item,
+    b: &crate::geom::Item,
+) -> bool {
+    let (ra, rb) = (&a.bbox, &b.bbox);
+    let band = BBox {
+        x0: ra.x0.max(rb.x0),
+        y0: ra.y1,
+        x1: ra.x1.min(rb.x1),
+        y1: rb.y0,
+    };
+    !geometry.items.iter().any(|i| {
+        let x = &i.bbox;
+        let behind = x.x0 <= ra.x0.min(rb.x0)
+            && x.x1 >= ra.x1.max(rb.x1)
+            && x.y0 <= ra.y0
+            && x.y1 >= rb.y1;
+        i.page == a.page
+            && !std::ptr::eq(i, a)
+            && !std::ptr::eq(i, b)
+            && i.kind != ItemKind::Link
+            && !behind
+            && x.y0 < band.y1
+            && x.y1 > band.y0
+            && x.x0 < band.x1
+            && x.x1 > band.x0
+    })
+}
+
+/// Whether the rule is the top (`top`) or the bottom edge of a frame or a fill:
+/// a vertical stroke or a filled shape starts (or ends) at it.
+fn frame_edge(geometry: &Geometry, rule: &crate::geom::Item, top: bool) -> bool {
+    let r = &rule.bbox;
+    geometry.items.iter().any(|i| {
+        let b = &i.bbox;
+        let edge = if top { b.y0 } else { b.y1 };
+        let side = b.width() < 1.5
+            && b.height() > 4.0
+            && ((b.x0 - r.x0).abs() < 2.0 || (b.x1 - r.x1).abs() < 2.0);
+        let fill =
+            b.height() >= 4.0 && b.x1.min(r.x1) - b.x0.max(r.x0) >= 0.5 * r.width();
+        i.page == rule.page
+            && i.kind == ItemKind::Shape
+            && !std::ptr::eq(i, rule)
+            && (r.y0 - 1.5..=r.y1 + 1.5).contains(&edge)
+            && (side || fill)
+    })
+}
+
+/// Whether text shares the rule's row, as beside a leader line after a heading.
+fn on_text_row(geometry: &Geometry, rule: &crate::geom::Item) -> bool {
+    let r = &rule.bbox;
+    geometry.items.iter().any(|i| {
+        i.page == rule.page && nonblank_text(i) && i.bbox.y0 <= r.y0 && r.y0 <= i.bbox.y1
+    })
+}
+
+/// Whether the first text under the rule, within its span, is its caption:
+/// set close under it and no larger than the body text.
+fn captioned(geometry: &Geometry, rule: &crate::geom::Item, body: f64) -> bool {
+    let r = &rule.bbox;
+    geometry
+        .items
+        .iter()
+        .filter(|t| {
+            t.page == rule.page
+                && nonblank_text(t)
+                && t.bbox.y0 >= r.y1 - 0.5
+                && t.bbox.x0 >= r.x0 - 2.0
+                && t.bbox.x1 <= r.x1 + 2.0
+        })
+        .min_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0))
+        .is_some_and(|t| {
+            let size = t.font_size.unwrap_or(body);
+            t.bbox.y0 - r.y1 <= LINE_CAPTION_EM * size && size <= body + 0.05
+        })
+}
+
+/// Whether an element is part of a table.
+fn in_table(geometry: &Geometry, mut elem: Option<usize>) -> bool {
+    while let Some(index) = elem {
+        if geometry.elements[index].name == "table" {
+            return true;
+        }
+        elem = geometry.elements[index].parent;
+    }
+    false
+}
+
+/// Whether the rule belongs to a ruled area whose rules have nothing between
+/// them: lines to write on. Evenly repeated rules with content between them,
+/// such as the top rules of a grid of cards, are separators.
+fn in_empty_ruled_area(
+    geometry: &Geometry,
+    rules: &[&crate::geom::Item],
+    rule: &crate::geom::Item,
+) -> bool {
+    let r = &rule.bbox;
+    let mut column: Vec<&crate::geom::Item> = rules
+        .iter()
+        .copied()
+        .filter(|o| {
+            let b = &o.bbox;
+            o.page == rule.page
+                && (b.width() - r.width()).abs() <= 0.1 * b.width().max(r.width())
+                && b.x1.min(r.x1) - b.x0.max(r.x0) >= 0.9 * b.width().min(r.width())
+        })
+        .collect();
+    column.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+    let Some(at) = column.iter().position(|o| std::ptr::eq(*o, rule)) else {
+        return false;
+    };
+    (at.saturating_sub(2)..=at).any(|start| {
+        let Some(run) = column.get(start..start + 3) else { return false };
+        let first = run[1].bbox.y0 - run[0].bbox.y0;
+        let second = run[2].bbox.y0 - run[1].bbox.y0;
+        first > 0.0
+            && (first - second).abs() <= RULED_AREA_TOLERANCE_PT
+            && nothing_between(geometry, run[0], run[1])
+            && nothing_between(geometry, run[1], run[2])
+    })
 }
 
 /// Rules spaced this evenly (within this many points) form a ruled area.
