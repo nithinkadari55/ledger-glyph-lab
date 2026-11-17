@@ -183,3 +183,12 @@ fn stray_delimiter_line_is_deleted() {
     assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
     assert!(text.contains("  [#lorem(30)],\n)\n#lorem(60)"), "{text}");
 }
+
+#[test]
+fn plain_spacing_no_longer_grows_with_large_text() {
+    let (rules, applied, text) = rules_after_repair("scaled-spacing.typ");
+    assert!(applied >= 2, "applied {applied}\n{text}");
+    assert!(rules.is_empty(), "remaining: {rules:?}\n{text}");
+    assert!(text.contains("#context v(8pt + par.spacing, weak: true)"), "{text}");
+    assert!(text.contains("#context v(10pt + par.spacing, weak: true)"), "{text}");
+}

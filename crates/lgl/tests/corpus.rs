@@ -54,8 +54,14 @@ fn corpus() {
                 failures.push(format!("{name}: {} has a line break in its text", d.rule));
             }
         }
-        let actual: BTreeSet<String> =
-            first.diagnostics.iter().map(|d| d.rule.clone()).collect();
+        // Info-level notes are advisory and fixed automatically; fixtures
+        // state the warnings and errors they expect.
+        let actual: BTreeSet<String> = first
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity != lgl::diag::Severity::Info)
+            .map(|d| d.rule.clone())
+            .collect();
         if actual != expected {
             let lines: Vec<String> = first
                 .diagnostics

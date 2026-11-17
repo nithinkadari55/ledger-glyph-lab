@@ -12,6 +12,7 @@ pub const DISABLED_PROTECTION: &str = "S004.disabled-protection";
 pub const MATH_LETTER_CALL: &str = "S005.math-letter-call";
 pub const STRING_ESCAPE: &str = "S006.string-escape";
 pub const STRAY_DELIMITER: &str = "S007.stray-delimiter";
+pub const SCALED_SPACING: &str = "S008.scaled-spacing";
 
 /// Characters that need a backslash in markup but not inside a quoted
 /// string. A quoted string knows only \\, \", \n, \r, \t and \u{..}; any
@@ -144,9 +145,124 @@ fn visit(world: &LabWorld, node: &LinkedNode, out: &mut Vec<Diagnostic>) {
         diagnostic.anchor = Some(node.span());
         out.push(diagnostic);
     }
+    if let Some(amount) = scaled_spacing(node) {
+        let mut diagnostic = finding(
+            world,
+            node,
+            SCALED_SPACING,
+            format!(
+                "v({amount}) is added to the paragraph spacing of the content around it, \
+                 which grows with that content's text size (0.7em beside 44pt text is \
+                 31pt); applied as v({amount} + par.spacing, weak: true), the gap is \
+                 {amount} plus the body's paragraph spacing"
+            ),
+            "set the gap with v(.., weak: true), block(above/below) or stack(spacing: ..)",
+        );
+        diagnostic.severity = Severity::Info;
+        diagnostic.anchor = Some(node.span());
+        out.push(diagnostic);
+    }
     for child in node.children() {
         visit(world, &child, out);
     }
+}
+
+/// The amount of a plain `v()` between two pieces of markup content, written
+/// as a positive length literal, whose gap would grow with the text size of
+/// its neighbours. Left alone: fractional, negative or computed amounts, an
+/// explicit `weak:`, a `v()` next to another one (v(1.5em) v(1fr) keeps a
+/// minimum gap), and one at the start or end of its flow or after a page or
+/// column break, where weak spacing would vanish.
+pub(crate) fn scaled_spacing(node: &LinkedNode) -> Option<String> {
+    let call = ast::FuncCall::from_untyped(node)?;
+    let ast::Expr::Ident(callee) = call.callee() else { return None };
+    if callee.get() != "v" || node.parent()?.kind() != SyntaxKind::Markup {
+        return None;
+    }
+    let mut args = call.args().items();
+    let (Some(ast::Arg::Pos(amount)), None) = (args.next(), args.next()) else {
+        return None;
+    };
+    if !length_literal(amount) {
+        return None;
+    }
+    let before = content_sibling(node, false)?;
+    let after = content_sibling(node, true)?;
+    if [&before, &after].iter().any(|n| is_spacing(n) || is_break(n)) {
+        return None;
+    }
+    Some(amount.to_untyped().full_text().to_string())
+}
+
+/// A positive length written as a literal, or a sum of such literals.
+fn length_literal(expr: ast::Expr) -> bool {
+    match expr {
+        ast::Expr::Numeric(numeric) => {
+            let (value, unit) = numeric.get();
+            value >= 0.0
+                && matches!(
+                    unit,
+                    Unit::Pt | Unit::Mm | Unit::Cm | Unit::In | Unit::Em | Unit::Percent
+                )
+        }
+        ast::Expr::Binary(binary) => {
+            binary.op() == ast::BinOp::Add
+                && length_literal(binary.lhs())
+                && length_literal(binary.rhs())
+        }
+        _ => false,
+    }
+}
+
+/// The nearest sibling on one side that produces content, skipping spaces,
+/// comments, the `#` of an embedded expression and set, show, let and import
+/// rules. `None` at the start or end of the flow.
+fn content_sibling<'a>(node: &LinkedNode<'a>, forward: bool) -> Option<LinkedNode<'a>> {
+    let mut cursor = if forward {
+        node.next_sibling_with_trivia()
+    } else {
+        node.prev_sibling_with_trivia()
+    };
+    while let Some(sibling) = cursor {
+        if !matches!(
+            sibling.kind(),
+            SyntaxKind::SpaceNoNewline
+                | SyntaxKind::SpaceWithNewline
+                | SyntaxKind::Parbreak
+                | SyntaxKind::LineComment
+                | SyntaxKind::BlockComment
+                | SyntaxKind::Hash
+                | SyntaxKind::SetRule
+                | SyntaxKind::ShowRule
+                | SyntaxKind::LetBinding
+                | SyntaxKind::ModuleImport
+                | SyntaxKind::ModuleInclude
+        ) {
+            return Some(sibling);
+        }
+        cursor = if forward {
+            sibling.next_sibling_with_trivia()
+        } else {
+            sibling.prev_sibling_with_trivia()
+        };
+    }
+    None
+}
+
+/// Whether a node is a page or column break.
+fn is_break(node: &LinkedNode) -> bool {
+    ast::FuncCall::from_untyped(node).is_some_and(|c| {
+        matches!(c.callee(), ast::Expr::Ident(i) if i.get() == "pagebreak" || i.get() == "colbreak")
+    })
+}
+
+/// Whether a node is a `v()` call, plain or inside `context`.
+pub(crate) fn is_spacing(node: &LinkedNode) -> bool {
+    let text = node.get().full_text();
+    let text = text.trim_start_matches("context").trim_start();
+    ast::FuncCall::from_untyped(node)
+        .is_some_and(|c| matches!(c.callee(), ast::Expr::Ident(i) if i.get() == "v"))
+        || (node.kind() == SyntaxKind::Contextual && text.starts_with("v("))
 }
 
 /// Markup text that is nothing but closing brackets (and commas) on a line of
@@ -527,6 +643,46 @@ mod tests {
         assert!(rules_for("#\"a$b\".replace(regex(\"\\$\"), \"\")").is_empty());
         assert!(rules_for("#raw(\"price: \\$5\")").is_empty());
         assert!(rules_for("Markup \\$5 is fine.").is_empty());
+    }
+
+    #[test]
+    fn plain_spacing_between_content_is_noted() {
+        assert_eq!(rules_for("Title
+#v(4pt)
+Subtitle"), [SCALED_SPACING]);
+        assert_eq!(rules_for("A
+
+#v(0.4em + 2pt)
+
+B"), [SCALED_SPACING]);
+        // Left alone: weak given, fractional, negative, computed, next to
+        // another v(), at the edges of a flow or a page break.
+        assert!(rules_for("A
+#v(4pt, weak: true)
+B").is_empty());
+        assert!(rules_for("A
+#v(1fr)
+B").is_empty());
+        assert!(rules_for("A
+#v(-2pt)
+B").is_empty());
+        assert!(rules_for("#let gap = 4pt
+A
+#v(gap)
+B").is_empty());
+        assert!(rules_for("A
+#v(1.5em)
+#v(1fr)
+B").is_empty());
+        assert!(rules_for("#block[#v(6pt) A]
+B").is_empty());
+        assert!(rules_for("A
+#v(6pt)").is_empty());
+        assert!(rules_for("A
+#pagebreak()
+#v(2cm)
+B").is_empty());
+        assert!(rules_for("#stack(spacing: 4pt, [A], v(4pt), [B])").is_empty());
     }
 
     #[test]

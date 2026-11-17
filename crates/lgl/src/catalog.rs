@@ -885,6 +885,14 @@ pub const CATALOG: &[RuleInfo] = &[
         "Delete the line.",
         true,
     ),
+    rule(
+        "S008.scaled-spacing",
+        "info",
+        "Source lint: a plain v(x) between two pieces of content, whose gap is x plus the          paragraph spacing of its neighbours, which grows with their text size.",
+        "any positive length literal, except next to another v(), at the edge of a flow          or at a page or column break",
+        "Applied as v(x + par.spacing, weak: true), so the gap is x plus the body's          paragraph spacing.",
+        true,
+    ),
 ];
 
 /// Typst's own diagnostics are reported with these rule names.
@@ -1001,6 +1009,7 @@ mod tests {
             lint::MATH_LETTER_CALL,
             lint::STRING_ESCAPE,
             lint::STRAY_DELIMITER,
+            lint::SCALED_SPACING,
         ];
         for id in used {
             assert!(CATALOG.iter().any(|r| r.id == id), "{id} is not in the catalog");

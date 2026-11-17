@@ -7,7 +7,9 @@ use typst::syntax::{LinkedNode, Source, Span, SyntaxKind};
 
 use crate::captions::DOUBLED_CAPTION_NUMBER;
 use crate::diag::{Diagnostic, SourceLoc};
-use crate::lint::{DISABLED_PROTECTION, NO_REFLOW, STRAY_DELIMITER, STRING_ESCAPE};
+use crate::lint::{
+    DISABLED_PROTECTION, NO_REFLOW, SCALED_SPACING, STRAY_DELIMITER, STRING_ESCAPE,
+};
 use crate::pagecheck::{COLUMN_IMBALANCE, EMPTY_COLUMN};
 use crate::quality::{ASPECT, MIN_SIZE};
 use crate::rules::{CONTAINER_OVERFLOW, MARGIN_INTRUSION, PAGE_OVERFLOW};
@@ -74,6 +76,7 @@ pub fn suggest(world: &LabWorld, diagnostics: &mut [Diagnostic]) {
             DISABLED_PROTECTION => protection_fix(world, &source, anchor),
             STRING_ESCAPE => string_fix(world, &source, anchor),
             STRAY_DELIMITER => delimiter_fix(world, &source, anchor),
+            SCALED_SPACING => spacing_weak_fix(world, &source, anchor),
             DOUBLED_CAPTION_NUMBER => caption_fix(world, &source, anchor),
             MIN_SIZE => enclosing_call(&source, anchor, "text").and_then(|call| {
                 named_arg(&call, "size")?;
@@ -172,6 +175,23 @@ fn string_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
     })
 }
 
+/// Turns a plain v(x) between two pieces of content into
+/// v(x + par.spacing, weak: true): the gap stays x plus the body's paragraph
+/// spacing instead of growing with the text size of its neighbours.
+fn spacing_weak_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
+    let node = LinkedNode::new(source.root()).find(anchor)?;
+    let amount = crate::lint::scaled_spacing(&node)?;
+    Some(Fix {
+        description: "keep the gap from growing with the size of the text around it".into(),
+        edits: vec![edit_range(
+            world,
+            source,
+            node.range(),
+            &format!("context v({amount} + par.spacing, weak: true)"),
+        )?],
+    })
+}
+
 /// Deletes the line that holds only a stray closing bracket.
 fn delimiter_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
     let node = LinkedNode::new(source.root()).find(anchor)?;
@@ -242,9 +262,8 @@ fn first_text<'a>(node: &LinkedNode<'a>) -> Option<LinkedNode<'a>> {
 fn spacing_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<Fix> {
     let node = LinkedNode::new(source.root()).find(anchor)?;
     let previous = node.prev_sibling()?;
-    let call = ast::FuncCall::from_untyped(&previous)?;
-    let ast::Expr::Ident(callee) = call.callee() else { return None };
-    if callee.get() != "v" {
+    // A plain v() or one that S008 turned into context v(..).
+    if !crate::lint::is_spacing(&previous) {
         return None;
     }
     let mut start = previous.range().start;
