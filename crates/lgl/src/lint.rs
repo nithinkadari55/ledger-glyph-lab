@@ -764,16 +764,28 @@ B"
             .is_empty()
         );
         assert!(rules_for("#stack(spacing: 4pt, [A], v(4pt), [B])").is_empty());
-        assert!(rules_for("#block(below: 0pt)[A]
+        assert!(
+            rules_for(
+                "#block(below: 0pt)[A]
 #v(12pt)
-B").is_empty());
-        assert!(rules_for("= Heading
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "= Heading
 #v(4pt)
-B").is_empty());
+B"
+            )
+            .is_empty()
+        );
         assert_eq!(
-            rules_for("#text(size: 40pt)[Title]
+            rules_for(
+                "#text(size: 40pt)[Title]
 #v(4pt)
-#text(size: 11pt)[Sub]"),
+#text(size: 11pt)[Sub]"
+            ),
             [SCALED_SPACING]
         );
     }
