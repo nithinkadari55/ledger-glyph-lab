@@ -647,41 +647,91 @@ mod tests {
 
     #[test]
     fn plain_spacing_between_content_is_noted() {
-        assert_eq!(rules_for("Title
+        assert_eq!(
+            rules_for(
+                "Title
 #v(4pt)
-Subtitle"), [SCALED_SPACING]);
-        assert_eq!(rules_for("A
+Subtitle"
+            ),
+            [SCALED_SPACING]
+        );
+        assert_eq!(
+            rules_for(
+                "A
 
 #v(0.4em + 2pt)
 
-B"), [SCALED_SPACING]);
+B"
+            ),
+            [SCALED_SPACING]
+        );
         // Left alone: weak given, fractional, negative, computed, next to
         // another v(), at the edges of a flow or a page break.
-        assert!(rules_for("A
+        assert!(
+            rules_for(
+                "A
 #v(4pt, weak: true)
-B").is_empty());
-        assert!(rules_for("A
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "A
 #v(1fr)
-B").is_empty());
-        assert!(rules_for("A
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "A
 #v(-2pt)
-B").is_empty());
-        assert!(rules_for("#let gap = 4pt
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "#let gap = 4pt
 A
 #v(gap)
-B").is_empty());
-        assert!(rules_for("A
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "A
 #v(1.5em)
 #v(1fr)
-B").is_empty());
-        assert!(rules_for("#block[#v(6pt) A]
-B").is_empty());
-        assert!(rules_for("A
-#v(6pt)").is_empty());
-        assert!(rules_for("A
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "#block[#v(6pt) A]
+B"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "A
+#v(6pt)"
+            )
+            .is_empty()
+        );
+        assert!(
+            rules_for(
+                "A
 #pagebreak()
 #v(2cm)
-B").is_empty());
+B"
+            )
+            .is_empty()
+        );
         assert!(rules_for("#stack(spacing: 4pt, [A], v(4pt), [B])").is_empty());
     }
 

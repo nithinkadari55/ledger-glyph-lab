@@ -182,7 +182,8 @@ fn spacing_weak_fix(world: &LabWorld, source: &Source, anchor: Span) -> Option<F
     let node = LinkedNode::new(source.root()).find(anchor)?;
     let amount = crate::lint::scaled_spacing(&node)?;
     Some(Fix {
-        description: "keep the gap from growing with the size of the text around it".into(),
+        description: "keep the gap from growing with the size of the text around it"
+            .into(),
         edits: vec![edit_range(
             world,
             source,

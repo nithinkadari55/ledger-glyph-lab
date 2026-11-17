@@ -1,4 +1,5 @@
-// expect-none
+// expect: L064.detached-subtitle
+// expect: L071.detached-label
 #set page(paper: "a4", margin: 2cm)
 #set text(size: 10pt)
 #set par(spacing: 1em)
