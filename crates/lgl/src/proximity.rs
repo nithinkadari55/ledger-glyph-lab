@@ -73,7 +73,7 @@ pub fn run(
     let mut out = clipped_text(world, geometry);
     out.extend(stranded_separators(world, geometry, &tight));
     out.extend(crowded_headings(world, geometry, &tight, body));
-    out.extend(cramped_fraction_rows(world, geometry));
+    out.extend(cramped_fraction_rows(world, geometry, body));
     out.extend(loose_display_lines(world, geometry, &tight, body));
     out.extend(drifting_subtitles(world, geometry, body, earlier));
     out.extend(wrapped_labels(world, geometry, &tight));
@@ -587,7 +587,11 @@ fn crowded_headings(
 
 /// Stacked rows of separate items (grid or table cells) that both hold
 /// built-up fractions, set so close that numerators and denominators crowd.
-fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+fn cramped_fraction_rows(
+    world: &LabWorld,
+    geometry: &Geometry,
+    body: f64,
+) -> Vec<Diagnostic> {
     let items = &geometry.items;
     // Fractions reach above and below a line's box, so take in more of them.
     let all = rows(geometry, |line| 0.5 * line.bbox.height() + 1.0);
@@ -599,7 +603,10 @@ fn cramped_fraction_rows(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
             continue;
         };
         let lb = &geometry.lines[row.line].bbox;
-        let small = |i: &Item| i.font_size.unwrap_or_default() < 0.85 * row.size;
+        // Numerators and denominators are smaller than the text around them;
+        // in a cell that holds only a fraction, smaller than the body text.
+        let reference = row.size.max(body);
+        let small = |i: &Item| i.font_size.unwrap_or_default() < 0.85 * reference;
         let has_fraction = items.iter().any(|bar| {
             let b = &bar.bbox;
             bar.kind == ItemKind::Shape

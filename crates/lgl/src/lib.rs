@@ -7,6 +7,8 @@ pub mod contrast;
 pub mod dates;
 pub mod diag;
 pub mod edges;
+pub mod equations;
+pub mod fillins;
 pub mod fix;
 pub mod geom;
 pub mod grid;

@@ -62,6 +62,8 @@ pub fn run(
     out.extend(crate::holes::run(world, geometry));
     out.extend(crate::dates::run(world, geometry));
     out.extend(crate::captions::run(world, geometry));
+    out.extend(crate::fillins::run(world, geometry));
+    out.extend(crate::equations::run(world, geometry));
     let grouping = crate::proximity::run(world, geometry, &out);
     out.extend(grouping);
     reanchor(world, geometry, &mut out);

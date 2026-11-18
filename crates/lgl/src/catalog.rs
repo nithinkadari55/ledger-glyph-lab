@@ -828,6 +828,22 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L096.split-fill-in",
+        "warning",
+        "A short label ending in a colon (Answer:, Name:) ends a running line while its          line to write on starts the next line, so the label and its line are split.",
+        "a line under 1.5pt thick, 0.5 to 2.5 label sizes below, at the start of the line",
+        "Keep the label and its line in one box, or give both a line of their own.",
+        false,
+    ),
+    rule(
+        "L097.broken-inline-equation",
+        "warning",
+        "A short inline equation breaks across two lines (36 / 6 = at the end of one          line, 6 at the start of the next).",
+        "6 body text sizes wide",
+        "Wrap the equation in box() so that it stays on one line; set each step of a          worked example on a line of its own.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
