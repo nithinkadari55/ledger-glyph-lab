@@ -38,6 +38,13 @@ const DISPLAY_TEXT_PT: f64 = 14.0;
 /// spacing. Less, and it reads as part of the paragraph.
 const MIN_FIGURE_EXTRA_LINES: f64 = 1.0;
 
+/// A line above a figure set this many times the body size or larger is a
+/// heading or title for the figure, not running text it could merge with.
+/// Measured on 821 stored documents: none of the 70 lines above a figure
+/// reported for spacing was this large; the newsletter title over its events
+/// table (20pt on 10pt body) was.
+const FIGURE_TITLE_RATIO: f64 = 1.3;
+
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = centered_paragraphs(world, geometry);
     out.extend(figure_spacing(world, geometry));
@@ -814,6 +821,10 @@ fn pitch(geometry: &Geometry, line: &Line) -> Option<f64> {
 
 fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
+    let title = |line: &Line| {
+        ink(geometry, line).is_some_and(|i| i.size >= FIGURE_TITLE_RATIO * body)
+    };
     for (index, figure) in geometry.elements.iter().enumerate() {
         if figure.name != "figure" {
             continue;
@@ -867,6 +878,7 @@ fn figure_spacing(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             };
             if let Some(line) = before
                 && !beside(line)
+                && !title(line)
             {
                 let size = ink(geometry, line).map_or(10.0, |i| i.size);
                 // A single-line paragraph has no pitch of its own; the nearest

@@ -52,6 +52,25 @@ struct TextCell {
     item: usize,
 }
 
+/// Cells whose edges lie within this distance share an edge.
+const EDGE_TOLERANCE_PT: f64 = 1.0;
+
+/// The number of distinct edges among the values: groups of values each
+/// within the tolerance of the next.
+fn edges(values: impl Iterator<Item = f64>) -> usize {
+    let mut sorted: Vec<f64> = values.collect();
+    sorted.sort_by(f64::total_cmp);
+    let mut count = 0;
+    let mut last = f64::NEG_INFINITY;
+    for value in sorted {
+        if value - last > EDGE_TOLERANCE_PT {
+            count += 1;
+        }
+        last = value;
+    }
+    count
+}
+
 fn spread(values: impl Iterator<Item = f64> + Clone) -> f64 {
     values.clone().fold(f64::NEG_INFINITY, f64::max)
         - values.fold(f64::INFINITY, f64::min)
@@ -107,6 +126,11 @@ fn ragged_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let left = spread(body.iter().map(|c| c.left));
         let right = spread(body.iter().map(|c| c.right));
         if left < MAX_RAGGED_SPREAD_PT || right < MAX_RAGGED_SPREAD_PT {
+            continue;
+        }
+        // Left-aligned text with indented rows ("of which saturates" under
+        // "Fat"): two left edges, ragged right edges.
+        if edges(body.iter().map(|c| c.left)) <= 2 && edges(body.iter().map(|c| c.right)) > 2 {
             continue;
         }
         let first = &geometry.items[body[0].item];

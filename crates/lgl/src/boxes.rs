@@ -899,7 +899,21 @@ fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             if low >= MIN_HEIGHT_RATIO * high {
                 continue;
             }
-            let shorter = if a.height() < b.height() { left } else { right };
+            let (shorter, taller) =
+                if a.height() < b.height() { (left, right) } else { (right, left) };
+            // Columns of boxes (a poster's or a checklist's columns): the
+            // shorter box's column goes on with another box before the taller
+            // box ends, so the two never formed a row.
+            let column_goes_on = panels.iter().any(|o| {
+                let (s, n) = (&shorter.bbox, &o.bbox);
+                o.page == shorter.page
+                    && (0.0..=MAX_ROW_GUTTER_PT).contains(&(n.y0 - s.y1))
+                    && n.y0 < taller.bbox.y1
+                    && n.x1.min(s.x1) - n.x0.max(s.x0) >= 0.9 * n.width().min(s.width())
+            });
+            if column_goes_on {
+                continue;
+            }
             let mut diagnostic = Diagnostic::new(
                 UNEVEN_BOXES,
                 Severity::Warning,
