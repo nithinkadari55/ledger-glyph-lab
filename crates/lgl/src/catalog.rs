@@ -863,7 +863,7 @@ pub const CATALOG: &[RuleInfo] = &[
         "L100.broken-row-line",
         "warning",
         "A table or grid draws its row lines as cell borders while its columns have a          gutter, so the row lines stop at every gap and print in pieces.",
-        "2 rows broken at the same gap",
+        "3 rows broken at the same gap of at most 15pt",
         "Draw row lines with table.hline() or grid.hline(), or drop column-gutter and          space the columns with inset.",
         false,
     ),

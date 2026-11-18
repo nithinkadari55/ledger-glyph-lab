@@ -1,8 +1,9 @@
 //! Row lines broken at a column gutter: a table or grid that draws its row
 //! lines as cell borders while its columns have a gutter, so every row line
 //! stops at the gap and starts again after it. Measured in batch 19 on 821
-//! stored documents: 30 documents (catalogue cards, menus, checklists,
-//! release notes) printed broken row lines.
+//! stored documents: 26 documents (catalogue cards, menus, checklists,
+//! release notes) printed broken row lines. Fields of a form side by side,
+//! each with its own line, are set further apart or in fewer rows.
 
 use std::collections::BTreeMap;
 
@@ -13,15 +14,18 @@ use crate::world::LabWorld;
 pub const BROKEN_ROW_LINE: &str = "L100.broken-row-line";
 
 /// A gap between two pieces of one row line, in points: the column gutter.
+/// The broken tables measured had gutters of 3 to 12pt; fields of a form
+/// side by side, each with its own line, stood 17pt apart.
 const MIN_GAP_PT: f64 = 2.0;
-const MAX_GAP_PT: f64 = 30.0;
+const MAX_GAP_PT: f64 = 15.0;
 
 /// A line piece is thinner than this and at least this long, in points.
 const LINE_MAX_HEIGHT_PT: f64 = 1.5;
 const LINE_MIN_WIDTH_PT: f64 = 15.0;
 
-/// Rows of a table broken at the same gap before it counts.
-const MIN_BROKEN_ROWS: usize = 2;
+/// Rows of a table broken at the same gap before it counts: a table, not a
+/// pair of form fields.
+const MIN_BROKEN_ROWS: usize = 3;
 
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let items = &geometry.items;
