@@ -38,7 +38,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 }
 
 fn nonblank(item: &Item) -> bool {
-    item.kind == ItemKind::Text && item.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+    item.kind == ItemKind::Text
+        && item.text.as_deref().is_some_and(|t| !t.trim().is_empty())
 }
 
 /// Whether the element or one of its ancestors has one of the names.
@@ -55,7 +56,11 @@ fn inside(geometry: &Geometry, mut elem: Option<usize>, names: &[&str]) -> bool 
 /// Sections side by side in a row of a grid (not a table): one ends far
 /// above the taller one, while the next section of its own column waits under
 /// the row (sections paired by rows instead of stacked by columns).
-fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diagnostic> {
+fn hole_beside_section(
+    world: &LabWorld,
+    geometry: &Geometry,
+    body: f64,
+) -> Vec<Diagnostic> {
     let items = &geometry.items;
     let containers = &geometry.containers;
     // The items inside each cell, nested cells included.
@@ -69,7 +74,8 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
             cursor = containers[current].parent;
         }
     }
-    let in_table = |cell: usize| inside(geometry, items[owned[&cell][0]].elem, &["table"]);
+    let in_table =
+        |cell: usize| inside(geometry, items[owned[&cell][0]].elem, &["table"]);
     let mut rows: BTreeMap<(usize, Option<usize>, i64), Vec<usize>> = BTreeMap::new();
     for &cell in owned.keys() {
         if in_table(cell) {
@@ -84,7 +90,9 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
         owned[&cell]
             .iter()
             .map(|&k| &items[k])
-            .filter(|i| matches!(i.kind, ItemKind::Text | ItemKind::Shape | ItemKind::Image))
+            .filter(|i| {
+                matches!(i.kind, ItemKind::Text | ItemKind::Shape | ItemKind::Image)
+            })
             .map(|i| i.bbox.y1)
             .fold(f64::NEG_INFINITY, f64::max)
     };
@@ -100,8 +108,11 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
             if !end.is_finite() {
                 continue;
             }
-            let texts: Vec<&Item> =
-                owned[&cell].iter().map(|&k| &items[k]).filter(|i| nonblank(i)).collect();
+            let texts: Vec<&Item> = owned[&cell]
+                .iter()
+                .map(|&k| &items[k])
+                .filter(|i| nonblank(i))
+                .collect();
             let lines: BTreeSet<i64> =
                 texts.iter().map(|t| t.bbox.y1.round() as i64).collect();
             let hole = full - end;
@@ -140,8 +151,14 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
                 continue;
             }
             let first = texts[0];
-            let shown: String =
-                first.text.as_deref().unwrap_or_default().trim().chars().take(30).collect();
+            let shown: String = first
+                .text
+                .as_deref()
+                .unwrap_or_default()
+                .trim()
+                .chars()
+                .take(30)
+                .collect();
             let mut diagnostic = Diagnostic::new(
                 HOLE_BESIDE_SECTION,
                 Severity::Warning,
@@ -156,7 +173,8 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
             diagnostic.loc =
                 diag::resolve_span(world, geometry.span_for(first.span, first.elem));
             diagnostic.page = Some(page + 1);
-            diagnostic.bbox = Some(BBox { x0: b.x0, y0: end, x1: b.x1, y1: full }.rounded());
+            diagnostic.bbox =
+                Some(BBox { x0: b.x0, y0: end, x1: b.x1, y1: full }.rounded());
             diagnostic.measured = Some(round1(hole / body));
             diagnostic.limit = Some(MIN_HOLE_EM);
             diagnostic.unit = Some("body sizes");
@@ -173,20 +191,25 @@ fn hole_beside_section(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<
     out
 }
 
-/// A footer line (company, address, codes under a rule) set as the last
+/// A footer line (company, address, codes right under a rule) set as the last
 /// block of the flow on a page without a footer, with an empty band under it.
 fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diagnostic> {
     let items = &geometry.items;
     let kind = |item: &Item| item.region.map(|r| geometry.regions[r].kind);
     let mut out = Vec::new();
     for (index, page) in geometry.pages.iter().enumerate() {
-        let Some(region) =
-            geometry.regions.iter().find(|r| r.page == index && r.kind == "page-body")
+        let Some(region) = geometry
+            .regions
+            .iter()
+            .find(|r| r.page == index && r.kind == "page-body")
         else {
             continue;
         };
         let r = region.bbox;
-        if items.iter().any(|i| i.page == index && nonblank(i) && kind(i) == Some("footer")) {
+        if items
+            .iter()
+            .any(|i| i.page == index && nonblank(i) && kind(i) == Some("footer"))
+        {
             continue;
         }
         let content: Vec<&Item> = items
@@ -211,10 +234,13 @@ fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diag
         if empty < MIN_FOOTER_EMPTY_SHARE * page.height {
             continue;
         }
-        let texts: Vec<&&Item> = content.iter().filter(|i| i.kind == ItemKind::Text).collect();
+        let texts: Vec<&&Item> =
+            content.iter().filter(|i| i.kind == ItemKind::Text).collect();
         let tail: Vec<&&&Item> =
             texts.iter().filter(|t| t.bbox.y1 > last - 2.6 * body).collect();
-        if tail.is_empty() || tail.iter().any(|t| t.font_size.unwrap_or(0.0) >= body - 0.05) {
+        if tail.is_empty()
+            || tail.iter().any(|t| t.font_size.unwrap_or(0.0) >= body - 0.05)
+        {
             continue;
         }
         let top = tail.iter().map(|t| t.bbox.y0).fold(f64::INFINITY, f64::min);
@@ -225,6 +251,13 @@ fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diag
                 && top - 2.5 * body <= s.bbox.y0
                 && s.bbox.y0 <= top
                 && !inside(geometry, s.elem, &["table", "grid", "figure"])
+                // A footer sits right under its rule; signature lines or other
+                // content between them make the rule a section's.
+                && !content.iter().any(|i| {
+                    !std::ptr::eq(*i, **s)
+                        && i.bbox.y0 >= s.bbox.y1 - 0.5
+                        && i.bbox.y1 <= top + 0.5
+                })
         }) else {
             continue;
         };
@@ -232,8 +265,14 @@ fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diag
             continue;
         }
         let first = tail[0];
-        let shown: String =
-            first.text.as_deref().unwrap_or_default().trim().chars().take(30).collect();
+        let shown: String = first
+            .text
+            .as_deref()
+            .unwrap_or_default()
+            .trim()
+            .chars()
+            .take(30)
+            .collect();
         let mut diagnostic = Diagnostic::new(
             FLOATING_FOOTER,
             Severity::Warning,
@@ -244,7 +283,8 @@ fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diag
                 round1(empty)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(first.span, first.elem));
         diagnostic.page = Some(index + 1);
         diagnostic.bbox = Some(rule.bbox.union(&first.bbox).rounded());
         diagnostic.measured = Some(round1(empty / page.height));

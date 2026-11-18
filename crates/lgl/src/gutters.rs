@@ -25,7 +25,8 @@ const MIN_BROKEN_ROWS: usize = 2;
 
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let items = &geometry.items;
-    let thin = |i: &Item| i.kind == ItemKind::Shape && i.bbox.height() < LINE_MAX_HEIGHT_PT;
+    let thin =
+        |i: &Item| i.kind == ItemKind::Shape && i.bbox.height() < LINE_MAX_HEIGHT_PT;
     // Line pieces drawn by a table or grid itself (its cell borders), by row.
     let mut rows: BTreeMap<(usize, usize, i64), Vec<&Item>> = BTreeMap::new();
     for item in items {
@@ -75,7 +76,9 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && o.bbox.y0 <= a.bbox.y1
                     && o.bbox.y1 >= a.bbox.y0
             });
-            if bridged || side(page, a.bbox.x1, a.bbox.y0) || side(page, b.bbox.x0, b.bbox.y0)
+            if bridged
+                || side(page, a.bbox.x1, a.bbox.y0)
+                || side(page, b.bbox.x0, b.bbox.y0)
             {
                 continue;
             }
@@ -113,7 +116,11 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.loc = diag::resolve_span(world, element.span);
         diagnostic.elem = Some(element.name.into());
         diagnostic.page = Some(page + 1);
-        diagnostic.bbox = element.boxes.iter().find(|b| b.page == page).map(|b| b.bbox.rounded());
+        diagnostic.bbox = element
+            .boxes
+            .iter()
+            .find(|b| b.page == page)
+            .map(|b| b.bbox.rounded());
         diagnostic.measured = Some(count as f64);
         diagnostic.limit = Some(MIN_BROKEN_ROWS as f64);
         diagnostic.unit = Some("rows");

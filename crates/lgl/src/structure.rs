@@ -130,7 +130,9 @@ fn ragged_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
         // Left-aligned text with indented rows ("of which saturates" under
         // "Fat"): two left edges, ragged right edges.
-        if edges(body.iter().map(|c| c.left)) <= 2 && edges(body.iter().map(|c| c.right)) > 2 {
+        if edges(body.iter().map(|c| c.left)) <= 2
+            && edges(body.iter().map(|c| c.right)) > 2
+        {
             continue;
         }
         let first = &geometry.items[body[0].item];
