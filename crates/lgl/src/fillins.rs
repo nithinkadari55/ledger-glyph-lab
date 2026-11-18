@@ -53,7 +53,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let followed = items.iter().enumerate().any(|(k, o)| {
             k != index
                 && o.bbox.x0 >= b.x1 - 0.5
-                && ((is_text(o) && on_row(o)) || (is_rule(o) && (on_row(o) || on_baseline(o))))
+                && ((is_text(o) && on_row(o))
+                    || (is_rule(o) && (on_row(o) || on_baseline(o))))
         });
         if followed {
             continue;
@@ -62,7 +63,9 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         let start = items
             .iter()
             .enumerate()
-            .filter(|&(k, o)| k != index && is_text(o) && on_row(o) && o.bbox.x1 <= b.x0 + 0.5)
+            .filter(|&(k, o)| {
+                k != index && is_text(o) && on_row(o) && o.bbox.x1 <= b.x0 + 0.5
+            })
             .map(|(_, o)| o.bbox.x0)
             .fold(f64::INFINITY, f64::min);
         if !start.is_finite() {
@@ -90,7 +93,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 round1(b.x0 - rule.bbox.x0)
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(label.span, label.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(label.span, label.elem));
         diagnostic.page = Some(page + 1);
         diagnostic.bbox = Some(b.union(&rule.bbox).rounded());
         diagnostic.hints.push(
@@ -105,7 +109,8 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 }
 
 fn is_text(item: &Item) -> bool {
-    item.kind == ItemKind::Text && item.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+    item.kind == ItemKind::Text
+        && item.text.as_deref().is_some_and(|t| !t.trim().is_empty())
 }
 
 fn is_rule(item: &Item) -> bool {

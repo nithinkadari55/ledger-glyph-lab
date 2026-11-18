@@ -1018,6 +1018,8 @@ mod tests {
             holes::COLUMN_HOLE,
             captions::DOUBLED_CAPTION_NUMBER,
             dates::WRONG_WEEKDAY,
+            fillins::SPLIT_FILL_IN,
+            equations::BROKEN_EQUATION,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,

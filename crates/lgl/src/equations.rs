@@ -51,7 +51,10 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             // The next glyph starts left of where the equation began, a line
             // lower: the equation wraps.
             let line_height = a.bbox.height().max(6.0);
-            let start = parts[..=j].iter().map(|&k| items[k].bbox.x0).fold(f64::INFINITY, f64::min);
+            let start = parts[..=j]
+                .iter()
+                .map(|&k| items[k].bbox.x0)
+                .fold(f64::INFINITY, f64::min);
             if b.bbox.x0 >= start - body || b.bbox.y0 < a.bbox.y1 - 0.2 * line_height {
                 continue;
             }
@@ -74,7 +77,11 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     ),
                 );
                 let span = geometry.elements[*equation].span;
-                let span = if span.is_detached() { geometry.span_for(a.span, a.elem) } else { span };
+                let span = if span.is_detached() {
+                    geometry.span_for(a.span, a.elem)
+                } else {
+                    span
+                };
                 diagnostic.loc = diag::resolve_span(world, span);
                 diagnostic.page = Some(a.page + 1);
                 diagnostic.bbox = Some(first.union(&second).rounded());
@@ -116,5 +123,9 @@ fn text_on_row(
 
 /// The box around the given items.
 fn extent(items: &[Item], parts: &[usize]) -> BBox {
-    parts.iter().map(|&k| items[k].bbox).reduce(|a, b| a.union(&b)).expect("parts are not empty")
+    parts
+        .iter()
+        .map(|&k| items[k].bbox)
+        .reduce(|a, b| a.union(&b))
+        .expect("parts are not empty")
 }
