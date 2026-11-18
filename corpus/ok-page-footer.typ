@@ -1,18 +1,8 @@
 // expect-none
-#set page(paper: "a4", margin: 2.2cm)
-#set text(size: 11pt)
-#text(size: 18pt, weight: "bold")[Letter of appointment]
+#set page(paper: "a5", margin: (x: 1.5cm, top: 1.5cm, bottom: 2.2cm),
+  footer: [#line(length: 100%, stroke: 0.5pt) #text(size: 8pt)[Larkfield Mill Ltd · The Old Mill, Wend Lane #h(1fr) Net weight 500 g]])
+#set text(size: 10pt)
+= Honey Granola
+Slow-baked oat clusters with wildflower honey, roasted hazelnuts and toasted seeds. Keep in a cool, dry place and reseal the pack after opening.
 
-#lorem(90)
-
-#lorem(70)
-
-#lorem(60)
-
-#v(1fr)
-#grid(
-  columns: (1fr, 1fr),
-  column-gutter: 40pt,
-  [#line(length: 100%, stroke: 0.6pt) #v(4pt, weak: true) Head of department],
-  [#line(length: 100%, stroke: 0.6pt) #v(4pt, weak: true) Date],
-)
+Every pack is made without palm oil, artificial flavours or colours, and is packed in a fully recyclable paper pouch.
