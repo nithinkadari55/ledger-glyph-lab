@@ -171,7 +171,7 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if geometry.columns.iter().filter(|c| c.page == page).count() < 2 {
             continue;
         }
-        let mut side_by_side: Vec<&Vec<&Line>> = groups
+        let side_by_side: Vec<&Vec<&Line>> = groups
             .iter()
             .filter(|group| group.len() >= 2)
             .filter(|group| {
@@ -183,6 +183,9 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 })
             })
             .collect();
+        // Each block of columns is judged on its own: two stories set in
+        // columns one above the other are not one flow.
+        for mut side_by_side in bands(side_by_side) {
         if side_by_side.len() < 2 {
             continue;
         }
@@ -226,8 +229,29 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             .hints
             .push("balance the columns (columns(.., balanced: true))".into());
         out.push(diagnostic);
+        }
     }
     out
+}
+
+/// Groups of column lines that stand beside each other: those whose vertical
+/// extents overlap, directly or through another group. Measured in batch 20:
+/// a newsletter page with two stories in columns, one above the other, was
+/// reported as one flow whose last column ended 37 lines early.
+fn bands<'a, 'b>(mut groups: Vec<&'a Vec<&'b Line>>) -> Vec<Vec<&'a Vec<&'b Line>>> {
+    groups.sort_by(|a, b| span(a).y0.total_cmp(&span(b).y0));
+    let mut out: Vec<(f64, Vec<&'a Vec<&'b Line>>)> = Vec::new();
+    for group in groups {
+        let extent = span(group);
+        match out.last_mut() {
+            Some((bottom, band)) if extent.y0 < *bottom => {
+                *bottom = bottom.max(extent.y1);
+                band.push(group);
+            }
+            _ => out.push((extent.y1, vec![group])),
+        }
+    }
+    out.into_iter().map(|(_, band)| band).collect()
 }
 
 fn span(lines: &[&Line]) -> BBox {

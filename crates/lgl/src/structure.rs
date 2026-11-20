@@ -223,6 +223,50 @@ struct NumericCell {
     cell: usize,
     decimals: Option<usize>,
     unit: String,
+    text: String,
+    size: f64,
+    math: bool,
+}
+
+/// Numbers set this many times the body size are display figures (a
+/// poster's 01, 02, 03), not the values of a table.
+const DISPLAY_NUMBER_RATIO: f64 = 1.4;
+
+/// Whether a column of numbers holds values whose digits should line up.
+/// Measured in batch 20 on 900 stored documents and every run log: the
+/// warnings the agent saw were, apart from money columns, display ordinals
+/// of posters, the day numbers of month grids, numbered labels (7., 1. 1/6)
+/// and fractions set as math, none of which line up by digits.
+fn data_column(cells: &[NumericCell], body: f64) -> bool {
+    let display = cells.iter().all(|c| c.size >= DISPLAY_NUMBER_RATIO * body);
+    let math = cells.iter().all(|c| c.math);
+    let labels = cells.iter().all(|c| numbered_label(&c.text));
+    !(display || math || labels || month_grid(cells))
+}
+
+/// A list label: up to three digits and a full stop or parenthesis, alone
+/// or before the item ("7.", "12)", "1. 3/8").
+fn numbered_label(text: &str) -> bool {
+    let digits = text.chars().take_while(|c| c.is_ascii_digit()).count();
+    let rest = &text[digits..];
+    (1..=3).contains(&digits)
+        && (rest.starts_with('.') || rest.starts_with(')'))
+        && rest[1..].chars().next().is_none_or(char::is_whitespace)
+}
+
+/// The day numbers of one weekday in a month grid: 1 to 31, each a week
+/// after the one above it.
+fn month_grid(cells: &[NumericCell]) -> bool {
+    let mut days: Vec<(f64, u32)> = Vec::new();
+    for cell in cells {
+        let Ok(day) = cell.text.parse::<u32>() else { return false };
+        if !(1..=31).contains(&day) {
+            return false;
+        }
+        days.push((cell.bbox.y0, day));
+    }
+    days.sort_by(|a, b| a.0.total_cmp(&b.0));
+    days.windows(2).all(|w| w[1].1 == w[0].1 + 7)
 }
 
 /// The unit or currency signs of a number, such as `%` or `£`. Numbers that
@@ -254,6 +298,8 @@ fn is_numeric(text: &str) -> bool {
 
 fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut cells: BTreeMap<usize, (String, f64, f64, usize)> = BTreeMap::new();
+    // The largest text size in each cell, and whether it holds math.
+    let mut sizes: BTreeMap<usize, (f64, bool)> = BTreeMap::new();
     for (index, item) in geometry.items.iter().enumerate() {
         if item.kind != ItemKind::Text {
             continue;
@@ -268,7 +314,11 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         entry.0.push_str(item.text.as_deref().unwrap_or_default());
         entry.1 = entry.1.min(item.bbox.x0);
         entry.2 = entry.2.max(item.bbox.x1);
+        let size = sizes.entry(cell).or_insert((0.0, false));
+        size.0 = size.0.max(item.font_size.unwrap_or_default());
+        size.1 |= has_ancestor(geometry, item.elem, "equation");
     }
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
 
     let mut columns: BTreeMap<(usize, i64, i64), Vec<NumericCell>> = BTreeMap::new();
     for (cell, (text, left, right, item)) in cells {
@@ -281,6 +331,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             (container.bbox.x0 * 2.0).round() as i64,
             (container.bbox.x1 * 2.0).round() as i64,
         );
+        let (size, math) = sizes.get(&cell).copied().unwrap_or((0.0, false));
         columns.entry(key).or_default().push(NumericCell {
             bbox: container.bbox,
             left,
@@ -289,6 +340,9 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             cell,
             decimals: decimals(&text),
             unit: unit(&text),
+            text: text.trim().to_string(),
+            size,
+            math,
         });
     }
 
@@ -304,7 +358,7 @@ fn number_alignment(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 - values.fold(f64::INFINITY, f64::min)
         };
         let right_spread = spread(|c| c.right);
-        if right_spread <= MAX_EDGE_SPREAD_PT {
+        if right_spread <= MAX_EDGE_SPREAD_PT || !data_column(&cells, body) {
             continue;
         }
         let left_aligned = spread(|c| c.left) <= MAX_EDGE_SPREAD_PT;
