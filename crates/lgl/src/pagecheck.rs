@@ -171,7 +171,7 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         if geometry.columns.iter().filter(|c| c.page == page).count() < 2 {
             continue;
         }
-        let side_by_side: Vec<&Vec<&Line>> = groups
+        let mut side_by_side: Vec<&Vec<&Line>> = groups
             .iter()
             .filter(|group| group.len() >= 2)
             .filter(|group| {
@@ -183,63 +183,77 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 })
             })
             .collect();
-        // Each block of columns is judged on its own: two stories set in
-        // columns one above the other are not one flow.
-        for mut side_by_side in bands(side_by_side) {
-            if side_by_side.len() < 2 {
-                continue;
-            }
-            side_by_side.sort_by(|a, b| span(a).x0.total_cmp(&span(b).x0));
-            let Some(pitch) = pitch(side_by_side[0]) else { continue };
-            let bottoms: Vec<f64> = side_by_side.iter().map(|g| span(g).y1).collect();
-            let highest = bottoms.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-            let last = *bottoms.last().unwrap();
-            let diff = highest - last;
-            // The text of the last page may simply run out, so only a severe
-            // imbalance is reported there.
-            let top =
-                side_by_side.iter().map(|g| span(g).y0).fold(f64::INFINITY, f64::min);
-            let allowed = if last_page {
-                (LAST_PAGE_COLUMN_SHARE * (highest - top))
-                    .max(MAX_COLUMN_DIFF_LINES * pitch)
-            } else {
-                MAX_COLUMN_DIFF_LINES * pitch
-            };
-            if diff <= allowed {
-                continue;
-            }
-            let shortest = side_by_side.last().unwrap();
-            let mut diagnostic = Diagnostic::new(
-                COLUMN_IMBALANCE,
-                Severity::Warning,
-                format!(
-                    "the last column on page {} ends {}pt ({:.0} lines) above the others",
-                    page + 1,
-                    round1(diff),
-                    diff / pitch
-                ),
-            );
-            diagnostic.anchor = Some(shortest[0].span);
-            diagnostic.loc = diag::resolve_span(world, shortest[0].span);
-            diagnostic.page = Some(page + 1);
-            diagnostic.bbox =
-                Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
-            diagnostic.measured = Some(round1(diff));
-            diagnostic.limit = Some(round1(allowed));
-            diagnostic.unit = Some("pt");
-            diagnostic
-                .hints
-                .push("balance the columns (columns(.., balanced: true))".into());
-            out.push(diagnostic);
+        if side_by_side.len() < 2 {
+            continue;
         }
+        side_by_side.sort_by(|a, b| span(a).x0.total_cmp(&span(b).x0));
+        let Some(pitch) = pitch(side_by_side[0]) else { continue };
+        let bottoms: Vec<f64> = side_by_side.iter().map(|g| span(g).y1).collect();
+        let highest = bottoms.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        let last = *bottoms.last().unwrap();
+        let diff = highest - last;
+        // The text of the last page may simply run out, so only a severe
+        // imbalance is reported there.
+        let top = side_by_side.iter().map(|g| span(g).y0).fold(f64::INFINITY, f64::min);
+        let allowed = if last_page {
+            (LAST_PAGE_COLUMN_SHARE * (highest - top)).max(MAX_COLUMN_DIFF_LINES * pitch)
+        } else {
+            MAX_COLUMN_DIFF_LINES * pitch
+        };
+        if diff <= allowed {
+            continue;
+        }
+        let shortest = *side_by_side.last().unwrap();
+        // The short last column and the longest one must stand in one block
+        // of columns: two stories set in columns one above the other are not
+        // one flow.
+        let longest = side_by_side
+            .iter()
+            .copied()
+            .max_by(|a, b| span(a).y1.total_cmp(&span(b).y1))
+            .unwrap();
+        if !same_band(&side_by_side, shortest, longest) {
+            continue;
+        }
+        let mut diagnostic = Diagnostic::new(
+            COLUMN_IMBALANCE,
+            Severity::Warning,
+            format!(
+                "the last column on page {} ends {}pt ({:.0} lines) above the others",
+                page + 1,
+                round1(diff),
+                diff / pitch
+            ),
+        );
+        diagnostic.anchor = Some(shortest[0].span);
+        diagnostic.loc = diag::resolve_span(world, shortest[0].span);
+        diagnostic.page = Some(page + 1);
+        diagnostic.bbox = Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
+        diagnostic.measured = Some(round1(diff));
+        diagnostic.limit = Some(round1(allowed));
+        diagnostic.unit = Some("pt");
+        diagnostic
+            .hints
+            .push("balance the columns (columns(.., balanced: true))".into());
+        out.push(diagnostic);
     }
     out
+}
+
+/// Whether two column groups stand in one block of columns: linked by
+/// groups whose vertical extents overlap.
+fn same_band(groups: &[&Vec<&Line>], a: &Vec<&Line>, b: &Vec<&Line>) -> bool {
+    bands(groups.to_vec()).iter().any(|band| {
+        band.iter().any(|g| std::ptr::eq(*g, a)) && band.iter().any(|g| std::ptr::eq(*g, b))
+    })
 }
 
 /// Groups of column lines that stand beside each other: those whose vertical
 /// extents overlap, directly or through another group. Measured in batch 20:
 /// a newsletter page with two stories in columns, one above the other, was
-/// reported as one flow whose last column ended 37 lines early.
+/// reported as one flow whose last column ended 37 lines early. Only used to
+/// drop such findings: judging each block alone raised new false alarms
+/// (pull quotes and grid columns beside running text).
 fn bands<'a, 'b>(mut groups: Vec<&'a Vec<&'b Line>>) -> Vec<Vec<&'a Vec<&'b Line>>> {
     groups.sort_by(|a, b| span(a).y0.total_cmp(&span(b).y0));
     let mut out: Vec<(f64, Vec<&'a Vec<&'b Line>>)> = Vec::new();
