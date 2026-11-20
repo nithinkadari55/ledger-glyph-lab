@@ -1018,6 +1018,10 @@ fn wrapped_labels(
 
 // --- L101: a value split by the line break ------------------------------------
 
+/// The lines of one paragraph or container on one page: page, container and
+/// paragraph element.
+type LineGroup = (usize, Option<usize>, Option<usize>);
+
 /// A value split across two lines is at most this many characters long.
 const MAX_VALUE_CHARS: usize = 32;
 
@@ -1026,14 +1030,24 @@ const MAX_SPLIT_TAIL_CHARS: usize = 12;
 
 /// Units that stay with their number.
 const UNITS: &[&str] = &[
-    "h", "hr", "hrs", "min", "s", "ms", "kg", "g", "mg", "l", "ml", "cl", "m", "cm", "mm",
-    "km", "m²", "m³", "°c", "°f", "pm", "am", "w", "kw", "kwh", "v", "hz", "db", "%", "gb",
-    "mb", "tb", "px", "pt", "lb", "lbs", "oz", "ft", "in",
+    "h", "hr", "hrs", "min", "s", "ms", "kg", "g", "mg", "l", "ml", "cl", "m", "cm",
+    "mm", "km", "m²", "m³", "°c", "°f", "pm", "am", "w", "kw", "kwh", "v", "hz", "db",
+    "%", "gb", "mb", "tb", "px", "pt", "lb", "lbs", "oz", "ft", "in",
 ];
 
 const MONTH_NAMES: [&str; 12] = [
-    "january", "february", "march", "april", "may", "june", "july", "august",
-    "september", "october", "november", "december",
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
 ];
 
 fn is_unit(word: &str) -> bool {
@@ -1102,11 +1116,13 @@ fn split_value(first: &str, second: &str) -> Option<(String, &'static str)> {
 /// ordinary wrapping inside phrases is left alone.
 fn split_values(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> Vec<Diagnostic> {
     let lines = &geometry.lines;
-    let mut groups: BTreeMap<(usize, Option<usize>, Option<usize>), Vec<&Row>> =
-        BTreeMap::new();
+    let mut groups: BTreeMap<LineGroup, Vec<&Row>> = BTreeMap::new();
     for row in rows {
         let line = &lines[row.line];
-        groups.entry((row.page, line.container, line.elem)).or_default().push(row);
+        groups
+            .entry((row.page, line.container, line.elem))
+            .or_default()
+            .push(row);
     }
     let mut out = Vec::new();
     for group in groups.values_mut() {
