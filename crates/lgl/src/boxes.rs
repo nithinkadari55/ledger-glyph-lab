@@ -911,7 +911,7 @@ fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                     && n.y0 < taller.bbox.y1
                     && n.x1.min(s.x1) - n.x0.max(s.x0) >= 0.9 * n.width().min(s.width())
             });
-            if column_goes_on {
+            if column_goes_on || has_partner(geometry, shorter, taller) {
                 continue;
             }
             let mut diagnostic = Diagnostic::new(
@@ -941,6 +941,32 @@ fn uneven_boxes(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Whether a box sits inside a panel whose top is level with it and whose
+/// height matches the taller box: that panel, not the box inside it, stands in
+/// the row (a card's header strip or score box beside the next card). Measured
+/// in batch 21: 83 of the 98 stored findings were such inner boxes, in
+/// catalogue cards and quiz rounds whose rows are even.
+fn has_partner(
+    geometry: &Geometry,
+    inner: &crate::geom::Container,
+    taller: &crate::geom::Container,
+) -> bool {
+    let mut cursor = inner.parent;
+    while let Some(index) = cursor {
+        let outer = &geometry.containers[index];
+        if outer.visible
+            && matches!(outer.kind, "block" | "box")
+            && !std::ptr::eq(outer, taller)
+            && (outer.bbox.y0 - inner.bbox.y0).abs() <= 2.0
+            && outer.bbox.height() >= MIN_HEIGHT_RATIO * taller.bbox.height()
+        {
+            return true;
+        }
+        cursor = outer.parent;
+    }
+    false
 }
 
 pub const OFF_CENTRE_PANEL: &str = "L075.off-centre-panel";

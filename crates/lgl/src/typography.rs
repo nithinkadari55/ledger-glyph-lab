@@ -30,6 +30,12 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 
 pub const LONELY_TITLE_WORD: &str = "L052.lonely-title-word";
 
+/// A title is at least this many times the body size. On posters the running
+/// text itself is 14 to 25pt; measured in batch 21 on the stored documents,
+/// the 58 findings on such text were all paragraph ends, the 11 on titles
+/// stood at 1.6 times the body size or more.
+const TITLE_BODY_RATIO: f64 = 1.3;
+
 /// The number of words on a line.
 fn line_words(geometry: &Geometry, line: &Line) -> usize {
     line_text(geometry, line).split_whitespace().count()
@@ -71,6 +77,7 @@ fn line_text(geometry: &Geometry, line: &Line) -> String {
 fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     let lines = &geometry.lines;
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
     for index in 1..lines.len() {
         let (above, last) = (&lines[index - 1], &lines[index]);
         let step = last.bbox.y1 - above.bbox.y1;
@@ -96,6 +103,7 @@ fn lonely_title_words(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> 
             continue;
         }
         if size < DISPLAY_TEXT_PT
+            || size < TITLE_BODY_RATIO * body
             || line_words(geometry, last) != 1
             || line_words(geometry, above) < 3
             || list_marker(&line_text(geometry, last))
