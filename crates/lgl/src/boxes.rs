@@ -294,9 +294,12 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
             // A heading's rule right on top of the first line of a ruled
             // writing area, closer than the area's own spacing: the two read
             // as one doubled line (round 42's checklist notes).
+            // A table's row borders are not lines to write on.
             let crowded = !writing(a)
-                && first_of_ruled_area(&rules, b)
-                    .is_some_and(|pitch| gap < HEADER_RULE_SHARE * pitch && gap < body * 1.2);
+                && !in_table(geometry, b.elem)
+                && first_of_ruled_area(&rules, b).is_some_and(|pitch| {
+                    gap < HEADER_RULE_SHARE * pitch && gap < body * 1.2
+                });
             if !crowded && (writing(a) || writing(b)) {
                 continue;
             }
@@ -548,7 +551,10 @@ const HEADER_RULE_SHARE: f64 = 0.6;
 
 /// The line spacing of the ruled writing area that this rule opens: the rule
 /// and the two below it are evenly spaced, and no rule of the area lies above.
-fn first_of_ruled_area(rules: &[&crate::geom::Item], rule: &crate::geom::Item) -> Option<f64> {
+fn first_of_ruled_area(
+    rules: &[&crate::geom::Item],
+    rule: &crate::geom::Item,
+) -> Option<f64> {
     let r = &rule.bbox;
     let mut column: Vec<&BBox> = rules
         .iter()
@@ -566,7 +572,8 @@ fn first_of_ruled_area(rules: &[&crate::geom::Item], rule: &crate::geom::Item) -
     let first = run[1].y0 - run[0].y0;
     let second = run[2].y0 - run[1].y0;
     let even = first > 0.0 && (first - second).abs() <= RULED_AREA_TOLERANCE_PT;
-    let above = at > 0 && (r.y0 - column[at - 1].y0 - first).abs() <= RULED_AREA_TOLERANCE_PT;
+    let above =
+        at > 0 && (r.y0 - column[at - 1].y0 - first).abs() <= RULED_AREA_TOLERANCE_PT;
     (even && !above).then_some(first)
 }
 

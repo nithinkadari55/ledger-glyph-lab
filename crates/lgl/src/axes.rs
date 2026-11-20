@@ -71,7 +71,8 @@ fn stepped_axis(
     let mut groups: BTreeMap<(i64, String), Vec<&Item>> = BTreeMap::new();
     for shape in shapes {
         if height(shape) < PIECE_MAX_HEIGHT_PT && width(shape) >= PIECE_MIN_WIDTH_PT {
-            let key = ((height(shape) * 10.0).round() as i64, format!("{:?}", shape.color));
+            let key =
+                ((height(shape) * 10.0).round() as i64, format!("{:?}", shape.color));
             groups.entry(key).or_default().push(shape);
         }
     }
@@ -98,7 +99,8 @@ fn stepped_axis(
             }
             let (&main, _) = levels.iter().max_by_key(|(_, n)| **n)?;
             let level = main as f64 / 10.0;
-            let Some(odd) = chain.iter().find(|p| STEP_PT.contains(&(p.bbox.y0 - level).abs()))
+            let Some(odd) =
+                chain.iter().find(|p| STEP_PT.contains(&(p.bbox.y0 - level).abs()))
             else {
                 continue;
             };
@@ -119,7 +121,11 @@ fn stepped_axis(
                 diag::resolve_span(world, geometry.span_for(odd.span, odd.elem));
             diagnostic.page = Some(page + 1);
             diagnostic.bbox = Some(
-                chain.iter().skip(1).fold(chain[0].bbox, |acc, p| acc.union(&p.bbox)).rounded(),
+                chain
+                    .iter()
+                    .skip(1)
+                    .fold(chain[0].bbox, |acc, p| acc.union(&p.bbox))
+                    .rounded(),
             );
             diagnostic.measured = Some(round1(step.abs()));
             diagnostic.unit = Some("pt");
@@ -147,7 +153,8 @@ fn short_stems(
         .copied()
         .filter(|s| DOT_PT.contains(&width(s)) && (width(s) - height(s)).abs() <= 1.0)
         .collect();
-    let verticals: Vec<&Item> = shapes.iter().copied().filter(|s| width(s) < 3.0).collect();
+    let verticals: Vec<&Item> =
+        shapes.iter().copied().filter(|s| width(s) < 3.0).collect();
     let mut short: Vec<(&Item, f64)> = Vec::new();
     for stem in verticals.iter().filter(|s| height(s) >= 20.0) {
         let x = (stem.bbox.x0 + stem.bbox.x1) / 2.0;
