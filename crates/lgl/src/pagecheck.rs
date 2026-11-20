@@ -228,7 +228,8 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         diagnostic.anchor = Some(shortest[0].span);
         diagnostic.loc = diag::resolve_span(world, shortest[0].span);
         diagnostic.page = Some(page + 1);
-        diagnostic.bbox = Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
+        diagnostic.bbox =
+            Some(BBox { y0: last, y1: highest, ..span(shortest) }.rounded());
         diagnostic.measured = Some(round1(diff));
         diagnostic.limit = Some(round1(allowed));
         diagnostic.unit = Some("pt");
@@ -244,7 +245,8 @@ fn column_imbalance(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 /// groups whose vertical extents overlap.
 fn same_band(groups: &[&Vec<&Line>], a: &Vec<&Line>, b: &Vec<&Line>) -> bool {
     bands(groups.to_vec()).iter().any(|band| {
-        band.iter().any(|g| std::ptr::eq(*g, a)) && band.iter().any(|g| std::ptr::eq(*g, b))
+        band.iter().any(|g| std::ptr::eq(*g, a))
+            && band.iter().any(|g| std::ptr::eq(*g, b))
     })
 }
 
