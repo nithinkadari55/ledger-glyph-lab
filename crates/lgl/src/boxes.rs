@@ -251,6 +251,7 @@ fn cell_padding(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
 fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let rules: Vec<&crate::geom::Item> =
         geometry.items.iter().filter(|i| horizontal_rule(i)).collect();
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
     let mut out = Vec::new();
     for a in &rules {
         for b in &rules {
@@ -287,7 +288,16 @@ fn double_rules(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 line_labels(geometry, r, None) != (false, false)
                     || in_ruled_area(&rules, r)
             };
-            if !empty || writing(a) || writing(b) {
+            if !empty {
+                continue;
+            }
+            // A heading's rule right on top of the first line of a ruled
+            // writing area, closer than the area's own spacing: the two read
+            // as one doubled line (round 42's checklist notes).
+            let crowded = !writing(a)
+                && first_of_ruled_area(&rules, b)
+                    .is_some_and(|pitch| gap < HEADER_RULE_SHARE * pitch && gap < body * 1.2);
+            if !crowded && (writing(a) || writing(b)) {
                 continue;
             }
             out.push(double_rule_diagnostic(world, geometry, a, b));
@@ -529,6 +539,37 @@ const RULED_AREA_TOLERANCE_PT: f64 = 1.0;
 /// Whether a rule belongs to a ruled area: three or more rules of the same
 /// width, one under the other at an even spacing, such as the writing lines
 /// of a notes box. Such rules are lines to write on, not separators.
+/// A rule above a ruled writing area doubles its first line when it is closer
+/// than this share of the area's line spacing (and closer than 1.2 body sizes).
+/// Measured on the stored documents: round 42's notes header at 8.9pt over a
+/// 15.2pt pitch (0.58) read as a doubled line; headers at 13.4pt over 20pt and
+/// 17.4pt over 28pt did not.
+const HEADER_RULE_SHARE: f64 = 0.6;
+
+/// The line spacing of the ruled writing area that this rule opens: the rule
+/// and the two below it are evenly spaced, and no rule of the area lies above.
+fn first_of_ruled_area(rules: &[&crate::geom::Item], rule: &crate::geom::Item) -> Option<f64> {
+    let r = &rule.bbox;
+    let mut column: Vec<&BBox> = rules
+        .iter()
+        .filter(|o| {
+            let b = &o.bbox;
+            o.page == rule.page
+                && (b.width() - r.width()).abs() <= 0.1 * b.width().max(r.width())
+                && b.x1.min(r.x1) - b.x0.max(r.x0) >= 0.9 * b.width().min(r.width())
+        })
+        .map(|o| &o.bbox)
+        .collect();
+    column.sort_by(|a, b| a.y0.total_cmp(&b.y0));
+    let at = column.iter().position(|b| std::ptr::eq(*b, r))?;
+    let run = column.get(at..at + 3)?;
+    let first = run[1].y0 - run[0].y0;
+    let second = run[2].y0 - run[1].y0;
+    let even = first > 0.0 && (first - second).abs() <= RULED_AREA_TOLERANCE_PT;
+    let above = at > 0 && (r.y0 - column[at - 1].y0 - first).abs() <= RULED_AREA_TOLERANCE_PT;
+    (even && !above).then_some(first)
+}
+
 fn in_ruled_area(rules: &[&crate::geom::Item], rule: &crate::geom::Item) -> bool {
     let r = &rule.bbox;
     let mut column: Vec<&BBox> = rules

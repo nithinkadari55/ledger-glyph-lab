@@ -1,3 +1,4 @@
+pub mod axes;
 pub mod boxes;
 pub mod captions;
 pub mod catalog;

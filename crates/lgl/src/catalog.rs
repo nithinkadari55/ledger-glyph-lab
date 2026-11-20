@@ -876,6 +876,14 @@ pub const CATALOG: &[RuleInfo] = &[
         false,
     ),
     rule(
+        "L102.broken-axis",
+        "warning",
+        "The axis of a timeline or process line is drawn in pieces and one piece sits off the level of the others, or event lines stop short of the dot they point at.",
+        "a piece 1 to 8pt off level; event lines 4pt or more from their dot",
+        "Draw the axis as one line across the whole width, and run every event line to its dot.",
+        false,
+    ),
+    rule(
         "S001.negative-spacing",
         "warning",
         "Source lint: negative h() or v() spacing of at least 0.5em.",
@@ -1056,6 +1064,7 @@ mod tests {
             sections::FLOATING_FOOTER,
             gutters::BROKEN_ROW_LINE,
             proximity::SPLIT_VALUE,
+            axes::BROKEN_AXIS,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
