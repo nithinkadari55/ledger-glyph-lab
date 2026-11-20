@@ -19,6 +19,7 @@ pub const CRAMPED_FRACTIONS: &str = "L085.cramped-fraction-rows";
 pub const LOOSE_DISPLAY: &str = "L086.loose-display-lines";
 pub const DRIFTING_SUBTITLE: &str = "L087.drifting-subtitle";
 pub const WRAPPED_LABEL: &str = "L088.wrapped-label";
+pub const SPLIT_VALUE: &str = "L101.split-value";
 
 /// Text may reach this far beyond the box that clips it (glyph outlines and
 /// side bearings), in points or font sizes, whichever is larger.
@@ -77,6 +78,7 @@ pub fn run(
     out.extend(loose_display_lines(world, geometry, &tight, body));
     out.extend(drifting_subtitles(world, geometry, body, earlier));
     out.extend(wrapped_labels(world, geometry, &tight));
+    out.extend(split_values(world, geometry, &tight));
     out
 }
 
@@ -1008,6 +1010,164 @@ fn wrapped_labels(
                 line_span(geometry, line),
                 page,
                 first.ink.union(&second.ink),
+            ));
+        }
+    }
+    out
+}
+
+// --- L101: a value split by the line break ------------------------------------
+
+/// A value split across two lines is at most this many characters long.
+const MAX_VALUE_CHARS: usize = 32;
+
+/// The second line of a split value: one word of at most this many characters.
+const MAX_SPLIT_TAIL_CHARS: usize = 12;
+
+/// Units that stay with their number.
+const UNITS: &[&str] = &[
+    "h", "hr", "hrs", "min", "s", "ms", "kg", "g", "mg", "l", "ml", "cl", "m", "cm", "mm",
+    "km", "m²", "m³", "°c", "°f", "pm", "am", "w", "kw", "kwh", "v", "hz", "db", "%", "gb",
+    "mb", "tb", "px", "pt", "lb", "lbs", "oz", "ft", "in",
+];
+
+const MONTH_NAMES: [&str; 12] = [
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december",
+];
+
+fn is_unit(word: &str) -> bool {
+    let word = word.trim_end_matches('.').to_lowercase();
+    UNITS.contains(&word.as_str())
+}
+
+fn is_month(word: &str) -> bool {
+    let word = word.trim_end_matches([',', '.']).to_lowercase();
+    word.chars().count() >= 3
+        && word.chars().all(char::is_alphabetic)
+        && (word == "sept" || MONTH_NAMES.iter().any(|m| m.starts_with(word.as_str())))
+}
+
+fn starts_with_number(word: &str) -> bool {
+    let word = word.trim_start_matches(['€', '£', '$', '¥']);
+    word.chars().next().is_some_and(|c| c.is_ascii_digit())
+}
+
+fn ends_with_joiner(text: &str) -> bool {
+    matches!(text.trim().chars().last(), Some('/' | '–' | '-' | '−'))
+}
+
+/// The value and what the break split off, when the break between two lines
+/// splits a value: a year alone after its month, a range split at its dash, a
+/// number's unit alone on the next line.
+fn split_value(first: &str, second: &str) -> Option<(String, &'static str)> {
+    let (a, b) = (first.trim(), second.trim());
+    if b.split_whitespace().count() != 1 || b.chars().count() > MAX_SPLIT_TAIL_CHARS {
+        return None;
+    }
+    let last = a.split_whitespace().last()?;
+    let joined = ends_with_joiner(a);
+    let full = if joined { format!("{a}{b}") } else { format!("{a} {b}") };
+    if full.chars().count() > MAX_VALUE_CHARS {
+        return None;
+    }
+    let digit = |s: &str| s.chars().any(|c| c.is_ascii_digit());
+    let year = b.len() == 4
+        && b.chars().all(|c| c.is_ascii_digit())
+        && (b.starts_with("19") || b.starts_with("20"));
+    if year && is_month(last) {
+        return Some((full, "the year stands alone on the next line"));
+    }
+    if joined && digit(last) && (starts_with_number(b) || is_unit(b)) {
+        return Some((full, "the range is split at its dash"));
+    }
+    let number = last.trim_end_matches(['–', '-', '−']);
+    if number.chars().last().is_some_and(|c| c.is_ascii_digit()) && is_unit(b) {
+        return Some((full, "the unit stands alone on the next line"));
+    }
+    if a.ends_with('/')
+        && digit(a)
+        && (1..=3).contains(&b.chars().count())
+        && b.chars().all(|c| c.is_ascii_alphabetic())
+    {
+        return Some((full, "the unit stands alone on the next line"));
+    }
+    None
+}
+
+/// A short value (a date, a time or money range, a quantity with its unit)
+/// that wraps so that a piece of it stands alone on the next line. Measured in
+/// batch 20 on 925 stored documents: 21 documents, every one a value that reads
+/// broken (Sunday 14 March / 2027, 5–15 / min, 520 m³/ / h, 10:00– / 10:05);
+/// ordinary wrapping inside phrases is left alone.
+fn split_values(world: &LabWorld, geometry: &Geometry, rows: &[Row]) -> Vec<Diagnostic> {
+    let lines = &geometry.lines;
+    let mut groups: BTreeMap<(usize, Option<usize>, Option<usize>), Vec<&Row>> =
+        BTreeMap::new();
+    for row in rows {
+        let line = &lines[row.line];
+        groups.entry((row.page, line.container, line.elem)).or_default().push(row);
+    }
+    let mut out = Vec::new();
+    for group in groups.values_mut() {
+        group.sort_by(|a, b| a.ink.y0.total_cmp(&b.ink.y0));
+        for pair in group.windows(2) {
+            let (a, b) = (pair[0], pair[1]);
+            let same_size = |r: &Row| (r.size - a.size).abs() <= 0.3;
+            if !same_size(b) || b.ink.y0 - a.ink.y0 > 1.8 * a.size {
+                continue;
+            }
+            let aligned = (a.ink.x0 - b.ink.x0).abs() <= 2.0
+                || (a.ink.x1 - b.ink.x1).abs() <= 2.0
+                || ((a.ink.x0 + a.ink.x1) - (b.ink.x0 + b.ink.x1)).abs() <= 4.0;
+            if !aligned {
+                continue;
+            }
+            // The value stands alone: no line of its size just above or below.
+            let neighbour = group.iter().any(|r| {
+                same_size(r)
+                    && ((!std::ptr::eq(*r, a)
+                        && r.ink.y0 < a.ink.y0
+                        && a.ink.y0 - r.ink.y0 <= 1.8 * a.size)
+                        || (!std::ptr::eq(*r, b)
+                            && r.ink.y0 > b.ink.y0
+                            && r.ink.y0 - b.ink.y0 <= 1.8 * a.size))
+            });
+            if neighbour {
+                continue;
+            }
+            // A wrap: the start of the second line did not fit on the first.
+            let (la, lb) = (&lines[a.line], &lines[b.line]);
+            let tail = b.text.trim();
+            let word = if ends_with_joiner(&a.text) {
+                tail
+            } else {
+                tail.split_whitespace().next().unwrap_or("")
+            };
+            let share = word.chars().count() as f64 / tail.chars().count().max(1) as f64;
+            if la.natural + share * lb.natural + 0.2 * a.size <= la.available {
+                continue;
+            }
+            let Some((full, split)) = split_value(&a.text, &b.text) else { continue };
+            let mut diagnostic = Diagnostic::new(
+                SPLIT_VALUE,
+                Severity::Warning,
+                format!(
+                    "the value \"{full}\" on page {} breaks across two lines: {split}",
+                    a.page + 1
+                ),
+            );
+            diagnostic.hints.push(
+                "keep a value on one line: give its column or box room for it (an auto \
+                 column or a wider width), or wrap the value in box(..)"
+                    .into(),
+            );
+            out.push(located(
+                world,
+                diagnostic,
+                line_span(geometry, la),
+                a.page,
+                a.ink.union(&b.ink),
             ));
         }
     }

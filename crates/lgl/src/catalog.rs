@@ -581,7 +581,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L064.detached-subtitle",
         "warning",
-        "A subtitle, standfirst or tagline in the title area starts more than 0.9 title          sizes below its title and no closer to the title than to what follows, so it          drifts away from the title.",
+        "A subtitle, standfirst or tagline in the title area starts more than 0.9 title sizes below its title and no closer to the title than to what follows, so it drifts away from the title.",
         "0.9 title size",
         "Keep the subtitle close to the title; put the larger space after the title block.",
         false,
@@ -589,7 +589,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L065.detached-underline",
         "warning",
-        "A line under display text (a name, a headline), no wider than the text, sits more          than half the text size below it and closer to the text that follows.",
+        "A line under display text (a name, a headline), no wider than the text, sits more than half the text size below it and closer to the text that follows.",
         "0.5 text size",
         "Move the line up to its text, or space it evenly as a separator.",
         false,
@@ -597,7 +597,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L066.floating-arrow",
         "warning",
-        "An arrow between two boxes spans less than 35% of the gap between them, so it          floats instead of connecting them.",
+        "An arrow between two boxes spans less than 35% of the gap between them, so it floats instead of connecting them.",
         "35% of the gap",
         "Move the boxes closer, or draw the arrow across the gap.",
         false,
@@ -605,7 +605,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L067.print-edge",
         "warning",
-        "Content comes closer than 5 mm to the page edge without running off it, so          printers may cut it off.",
+        "Content comes closer than 5 mm to the page edge without running off it, so printers may cut it off.",
         "5 mm (14pt)",
         "Keep content 5 mm inside the edge; let backgrounds run off the page.",
         false,
@@ -621,7 +621,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L069.uneven-boxes",
         "warning",
-        "Boxes side by side in a row, tops level, differ in height by more than 10%, so          the row looks ragged.",
+        "Boxes side by side in a row, tops level, differ in height by more than 10%, so the row looks ragged.",
         "0.9 height ratio",
         "Give the boxes one row height, or stack them.",
         false,
@@ -629,7 +629,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L070.pair-spacing",
         "warning",
-        "Three or more repeated pairs (label and value, command and description) are spaced          wider inside each pair than between pairs, so each second part reads as belonging          to the next pair.",
+        "Three or more repeated pairs (label and value, command and description) are spaced wider inside each pair than between pairs, so each second part reads as belonging to the next pair.",
         "space between pairs",
         "Less space inside a pair, more space between pairs.",
         false,
@@ -647,7 +647,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L072.text-on-rule",
         "warning",
-        "A text line sits on a horizontal line that runs on both sides of it, level with          its bottom: the block below has run into the text.",
+        "A text line sits on a horizontal line that runs on both sides of it, level with its bottom: the block below has run into the text.",
         "any",
         "Leave a fixed gap between the text and the block below, or shorten the text.",
         false,
@@ -720,7 +720,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L081.split-box",
         "error",
-        "A filled or framed box breaks across pages leaving fewer than three lines in one          of its pieces.",
+        "A filled or framed box breaks across pages leaving fewer than three lines in one of its pieces.",
         "3 lines",
         "Keep a short box in one piece with block(breakable: false), or make room for it.",
         false,
@@ -792,9 +792,9 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L092.broken-connector",
         "warning",
-        "A connector line of a diagram (an organisation chart, a tree, a flow) ends in          the air a short way from a box it does not touch, so the diagram falls apart          there. Judged where at least two lines of the same thickness join boxes.",
+        "A connector line of a diagram (an organisation chart, a tree, a flow) ends in the air a short way from a box it does not touch, so the diagram falls apart there. Judged where at least two lines of the same thickness join boxes.",
         "2 body text sizes between the loose end and the box",
-        "Make both ends of every connector touch what they join: a drop in the same grid          column as its box, a bar from the first drop to the last.",
+        "Make both ends of every connector touch what they join: a drop in the same grid column as its box, a bar from the first drop to the last.",
         false,
     ),
     rule(
@@ -822,7 +822,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L095.wrong-weekday",
         "warning",
-        "A printed weekday does not match its date (Tuesday, 14 May 2025 when 14 May 2025          is a Wednesday). A date without a year takes the document's year when all dated          weekdays name the same one.",
+        "A printed weekday does not match its date (Tuesday, 14 May 2025 when 14 May 2025 is a Wednesday). A date without a year takes the document's year when all dated weekdays name the same one.",
         "any",
         "Correct the weekday or the date so that they agree.",
         false,
@@ -830,7 +830,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L096.split-fill-in",
         "warning",
-        "A short label ending in a colon (Answer:, Name:) ends a running line while its          line to write on starts the next line, so the label and its line are split.",
+        "A short label ending in a colon (Answer:, Name:) ends a running line while its line to write on starts the next line, so the label and its line are split.",
         "a line under 1.5pt thick, 0.5 to 2.5 label sizes below, at the start of the line",
         "Keep the label and its line in one box, or give both a line of their own.",
         false,
@@ -838,23 +838,23 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L097.broken-inline-equation",
         "warning",
-        "A short inline equation breaks across two lines (36 / 6 = at the end of one          line, 6 at the start of the next).",
+        "A short inline equation breaks across two lines (36 / 6 = at the end of one line, 6 at the start of the next).",
         "6 body text sizes wide",
-        "Wrap the equation in box() so that it stays on one line; set each step of a          worked example on a line of its own.",
+        "Wrap the equation in box() so that it stays on one line; set each step of a worked example on a line of its own.",
         false,
     ),
     rule(
         "L098.hole-beside-section",
         "warning",
-        "Sections paired by grid rows: a section ends far above the taller section          beside it, while the next section of its own column waits under the row, so a          hole opens in the column.",
+        "Sections paired by grid rows: a section ends far above the taller section beside it, while the next section of its own column waits under the row, so a hole opens in the column.",
         "5 body text sizes and a quarter of the row",
-        "Stack each column on its own (grid(columns: 2, stack(..), stack(..))) instead of          pairing sections by rows.",
+        "Stack each column on its own (grid(columns: 2, stack(..), stack(..))) instead of pairing sections by rows.",
         false,
     ),
     rule(
         "L099.floating-footer",
         "warning",
-        "A footer line (small text under a full-width rule) is the last block of the          flow on a page without a page footer, with an empty band under it.",
+        "A footer line (small text under a full-width rule) is the last block of the flow on a page without a page footer, with an empty band under it.",
         "15% of the page height empty under it",
         "Set footer lines in page(footer: ..) so they sit at the bottom of the page.",
         false,
@@ -862,9 +862,17 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "L100.broken-row-line",
         "warning",
-        "A table or grid draws its row lines as cell borders while its columns have a          gutter, so the row lines stop at every gap and print in pieces.",
+        "A table or grid draws its row lines as cell borders while its columns have a gutter, so the row lines stop at every gap and print in pieces.",
         "3 rows broken at the same gap of at most 15pt",
-        "Draw row lines with table.hline() or grid.hline(), or drop column-gutter and          space the columns with inset.",
+        "Draw row lines with table.hline() or grid.hline(), or drop column-gutter and space the columns with inset.",
+        false,
+    ),
+    rule(
+        "L101.split-value",
+        "warning",
+        "A short value breaks across two lines so that a piece of it stands alone: a year after its month, a time or money range split at its dash, a unit after its number.",
+        "a value of at most 32 characters with one word on the second line",
+        "Give the value's column or box room for it, or wrap the value in box(..).",
         false,
     ),
     rule(
@@ -903,7 +911,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "S005.math-letter-call",
         "error",
-        "Source lint: a one-letter function the document defines, written as f(..) inside          math, where it prints the letter and brackets instead of calling the function.",
+        "Source lint: a one-letter function the document defines, written as f(..) inside math, where it prints the letter and brackets instead of calling the function.",
         "any",
         "Call it with #f(..), or give the function a longer name.",
         false,
@@ -920,7 +928,7 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "S007.stray-delimiter",
         "warning",
-        "Source lint: markup text that is only a closing bracket on a line of its own, left          over from an edit that closed a call or block; Typst prints it.",
+        "Source lint: markup text that is only a closing bracket on a line of its own, left over from an edit that closed a call or block; Typst prints it.",
         "any, unless the paragraph leaves a bracket open",
         "Delete the line.",
         true,
@@ -928,9 +936,9 @@ pub const CATALOG: &[RuleInfo] = &[
     rule(
         "S008.scaled-spacing",
         "info",
-        "Source lint: a plain v(x) between two paragraphs of text, whose gap is x plus          the paragraph spacing of its neighbours, which grows with their text size.",
+        "Source lint: a plain v(x) between two paragraphs of text, whose gap is x plus the paragraph spacing of its neighbours, which grows with their text size.",
         "any positive length literal between paragraph text on both sides",
-        "Applied as v(x + par.spacing, weak: true), so the gap is x plus the body's          paragraph spacing.",
+        "Applied as v(x + par.spacing, weak: true), so the gap is x plus the body's paragraph spacing.",
         true,
     ),
 ];
@@ -1047,6 +1055,7 @@ mod tests {
             sections::HOLE_BESIDE_SECTION,
             sections::FLOATING_FOOTER,
             gutters::BROKEN_ROW_LINE,
+            proximity::SPLIT_VALUE,
             lint::NEGATIVE_SPACING,
             lint::ABSOLUTE_PLACEMENT,
             lint::NO_REFLOW,
