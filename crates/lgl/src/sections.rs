@@ -315,7 +315,10 @@ fn touching_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let texts: Vec<&Item> = items.iter().filter(|i| nonblank(i)).collect();
     let excluded = ["table", "figure", "raw"];
     let mut out = Vec::new();
-    for bar in items.iter().filter(|i| matches!(i.kind, ItemKind::Shape | ItemKind::Image)) {
+    for bar in items
+        .iter()
+        .filter(|i| matches!(i.kind, ItemKind::Shape | ItemKind::Image))
+    {
         if inside(geometry, bar.elem, &excluded) {
             continue;
         }
@@ -344,7 +347,8 @@ fn touching_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         {
             continue;
         }
-        let across = |o: &Item| o.page == bar.page && o.bbox.x1 > b.x0 && o.bbox.x0 < b.x1;
+        let across =
+            |o: &Item| o.page == bar.page && o.bbox.x1 > b.x0 && o.bbox.x0 < b.x1;
         let above = items
             .iter()
             .filter(|o| {
@@ -385,7 +389,8 @@ fn touching_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
                 bar.page + 1
             ),
         );
-        diagnostic.loc = diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+        diagnostic.loc =
+            diag::resolve_span(world, geometry.span_for(first.span, first.elem));
         diagnostic.page = Some(bar.page + 1);
         diagnostic.bbox = Some(b.rounded());
         diagnostic.measured = Some(round1(gap_above));

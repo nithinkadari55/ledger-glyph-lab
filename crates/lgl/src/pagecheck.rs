@@ -106,9 +106,9 @@ fn lone_columns(
         .collect();
     let mut out = Vec::new();
     for &(index, column) in &narrow {
-        let partner = narrow
-            .iter()
-            .any(|&(other, o)| other != index && (o.bbox.y0 - column.bbox.y0).abs() <= 2.0);
+        let partner = narrow.iter().any(|&(other, o)| {
+            other != index && (o.bbox.y0 - column.bbox.y0).abs() <= 2.0
+        });
         let lines = geometry
             .items
             .iter()

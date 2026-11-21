@@ -274,7 +274,9 @@ fn long_stems(
         let beside: Vec<&&Item> = texts
             .iter()
             .filter(|t| {
-                (0.0..=40.0).contains(&(t.bbox.x0 - x)) && t.bbox.y1 > b.y0 && t.bbox.y0 < b.y1
+                (0.0..=40.0).contains(&(t.bbox.x0 - x))
+                    && t.bbox.y1 > b.y0
+                    && t.bbox.y0 < b.y1
             })
             .collect();
         if beside.is_empty() {
