@@ -51,6 +51,7 @@ fn empty_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         lefts.sort_unstable();
         lefts.dedup_by(|a, b| (*a - *b).abs() <= 2);
         if lefts.len() >= expected {
+            out.extend(lone_columns(world, geometry, body, width));
             continue;
         }
         let empty = expected - lefts.len();
@@ -85,6 +86,71 @@ fn empty_columns(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     }
     out
 }
+
+/// A block set in columns whose text all stayed in its first column: no
+/// other column of the page starts level with it (an unbalanced columns(..)
+/// block whose text ran out before the column did). Measured in batch 22: the
+/// three stored cases are newsletter stories with the right half empty
+/// beside them.
+fn lone_columns(
+    world: &LabWorld,
+    geometry: &Geometry,
+    body: &crate::geom::Region,
+    width: f64,
+) -> Vec<Diagnostic> {
+    let narrow: Vec<(usize, &crate::geom::Region)> = geometry
+        .columns
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.page == body.page && c.bbox.width() < 0.75 * width)
+        .collect();
+    let mut out = Vec::new();
+    for &(index, column) in &narrow {
+        let partner = narrow
+            .iter()
+            .any(|&(other, o)| other != index && (o.bbox.y0 - column.bbox.y0).abs() <= 2.0);
+        let lines = geometry
+            .items
+            .iter()
+            .filter(|i| i.column == Some(index) && i.kind == ItemKind::Text)
+            .count();
+        if partner || lines < MIN_LONE_COLUMN_ITEMS {
+            continue;
+        }
+        let Some(item) = geometry
+            .items
+            .iter()
+            .find(|i| i.column == Some(index) && !i.span.is_detached())
+        else {
+            continue;
+        };
+        let mut diagnostic = Diagnostic::new(
+            EMPTY_COLUMN,
+            Severity::Warning,
+            format!(
+                "a block of columns on page {} keeps all its text in the first column                  and leaves the column beside it empty",
+                body.page + 1
+            ),
+        );
+        diagnostic.anchor = Some(item.span);
+        diagnostic.loc = diag::resolve_span(world, item.span);
+        diagnostic.page = Some(body.page + 1);
+        diagnostic.bbox = Some(column.bbox.rounded());
+        diagnostic.measured = Some(1.0);
+        diagnostic.limit = Some(2.0);
+        diagnostic.unit = Some("columns");
+        diagnostic.hints.push(
+            "balance the block (columns(.., balanced: true)) or set short text in a \
+             single column"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// Text items a lone column needs before it counts as a block of text.
+const MIN_LONE_COLUMN_ITEMS: usize = 3;
 
 fn empty_pages(geometry: &Geometry) -> Vec<Diagnostic> {
     if geometry.pages.len() < 2 {

@@ -194,7 +194,14 @@ fn row_baselines(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
         {
             continue;
         }
-        if area(&item.bbox) < 0.8 * area(&geometry.containers[cell].bbox) {
+        let bounds = geometry.containers[cell].bbox;
+        // A shape starting below the cell's top is a bar of a chart drawn as a
+        // grid, however much of the cell it covers: its value sits on it.
+        // Measured in batch 22: the 4 stored findings it drops are all value
+        // labels on bars of different heights.
+        if area(&item.bbox) < 0.8 * area(&bounds)
+            || (item.bbox.y0 > bounds.y0 + 2.0 && item.bbox.height() >= 10.0)
+        {
             graphic_cells.insert(cell);
         }
     }

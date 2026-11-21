@@ -45,6 +45,7 @@ fn height(item: &Item) -> f64 {
 }
 
 pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let body = crate::titles::body_size(geometry).unwrap_or(10.0);
     let mut pages: BTreeMap<usize, Vec<&Item>> = BTreeMap::new();
     for item in &geometry.items {
         if item.kind == ItemKind::Shape {
@@ -55,6 +56,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     for (page, shapes) in pages {
         out.extend(stepped_axis(world, geometry, page, &shapes));
         out.extend(short_stems(world, geometry, page, &shapes));
+        out.extend(long_stems(world, geometry, page, &shapes, body));
     }
     out
 }
@@ -218,6 +220,100 @@ fn short_stems(
         "let every event line run to the centre of its dot: start lines above the axis \
          at the dot and lines below the axis at the dot too, with the same offset on \
          both sides"
+            .into(),
+    );
+    Some(diagnostic)
+}
+
+/// An event line runs this many body sizes past the text beside it before it
+/// counts. Measured in batch 22: the three stored timelines whose lines are
+/// borders of fixed-height cells run them 47 to 96pt past their text; the
+/// approved timelines end their lines at the text.
+const STEM_OVERRUN_EM: f64 = 2.5;
+
+/// Event lines that start at a dot and run far past the text they mark (the
+/// border of a fixed-height cell instead of a line of its own).
+fn long_stems(
+    world: &LabWorld,
+    geometry: &Geometry,
+    page: usize,
+    shapes: &[&Item],
+    body: f64,
+) -> Option<Diagnostic> {
+    let dots: Vec<&Item> = shapes
+        .iter()
+        .copied()
+        .filter(|s| DOT_PT.contains(&width(s)) && (width(s) - height(s)).abs() <= 1.0)
+        .collect();
+    if dots.len() < 3 {
+        return None;
+    }
+    let texts: Vec<&Item> = geometry
+        .items
+        .iter()
+        .filter(|i| {
+            i.page == page
+                && i.kind == ItemKind::Text
+                && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
+        })
+        .collect();
+    let mut long: Vec<(&Item, f64)> = Vec::new();
+    for stem in shapes.iter().filter(|s| width(s) < 3.0 && height(s) >= 30.0) {
+        let b = stem.bbox;
+        let x = (b.x0 + b.x1) / 2.0;
+        let Some(dot) = dots.iter().find(|d| {
+            d.bbox.x0 - 2.0 <= x
+                && x <= d.bbox.x1 + 2.0
+                && ((d.bbox.y1 - b.y0).abs() <= 8.0
+                    || (d.bbox.y0 - b.y1).abs() <= 8.0
+                    || (d.bbox.y0..=d.bbox.y1).contains(&b.y0)
+                    || (d.bbox.y0..=d.bbox.y1).contains(&b.y1))
+        }) else {
+            continue;
+        };
+        let beside: Vec<&&Item> = texts
+            .iter()
+            .filter(|t| {
+                (0.0..=40.0).contains(&(t.bbox.x0 - x)) && t.bbox.y1 > b.y0 && t.bbox.y0 < b.y1
+            })
+            .collect();
+        if beside.is_empty() {
+            continue;
+        }
+        let below = b.y0 >= dot.bbox.y0 - 8.0;
+        let overrun = if below {
+            b.y1 - beside.iter().map(|t| t.bbox.y1).fold(f64::NEG_INFINITY, f64::max)
+        } else {
+            beside.iter().map(|t| t.bbox.y0).fold(f64::INFINITY, f64::min) - b.y0
+        };
+        if overrun > STEM_OVERRUN_EM * body {
+            long.push((stem, overrun));
+        }
+    }
+    if long.len() < MIN_SHORT_STEMS {
+        return None;
+    }
+    let (first, overrun) = long[0];
+    let mut diagnostic = Diagnostic::new(
+        BROKEN_AXIS,
+        Severity::Warning,
+        format!(
+            "{} event lines on page {} run {}pt past the text they mark, so they reach \
+             into empty space",
+            long.len(),
+            page + 1,
+            round1(overrun)
+        ),
+    );
+    diagnostic.loc = diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+    diagnostic.page = Some(page + 1);
+    diagnostic.bbox = Some(first.bbox.rounded());
+    diagnostic.measured = Some(round1(overrun));
+    diagnostic.limit = Some(round1(STEM_OVERRUN_EM * body));
+    diagnostic.unit = Some("pt");
+    diagnostic.hints.push(
+        "draw each event line from its text to its dot, as a line of its own, not as the \
+         border of a fixed-height cell; let the rows take their content's height"
             .into(),
     );
     Some(diagnostic)

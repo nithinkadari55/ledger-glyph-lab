@@ -34,6 +34,7 @@ pub fn run(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let body = crate::titles::body_size(geometry).unwrap_or(10.0);
     let mut out = hole_beside_section(world, geometry, body);
     out.extend(floating_footer(world, geometry, body));
+    out.extend(touching_bars(world, geometry));
     out
 }
 
@@ -294,6 +295,106 @@ fn floating_footer(world: &LabWorld, geometry: &Geometry, body: f64) -> Vec<Diag
             "set footer lines (company, address, product codes) in the page footer, \
              page(footer: ..), so they sit at the bottom of the page; the content above \
              stays where it is"
+                .into(),
+        );
+        out.push(diagnostic);
+    }
+    out
+}
+
+/// A section bar closer than this to the content above it touches it.
+const TOUCHING_BAR_PT: f64 = 1.0;
+
+/// A section bar (a filled strip holding one short label) that touches the
+/// content above it: the space before the section collapsed, usually because
+/// block(above/below) is ignored inside a stack or grid. Measured in batch 22:
+/// only round 43's checklist had bars this close (-0.4pt, 6 bars); code
+/// boxes, date strips and total bars all kept 1pt or more and stay silent.
+fn touching_bars(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
+    let items = &geometry.items;
+    let texts: Vec<&Item> = items.iter().filter(|i| nonblank(i)).collect();
+    let excluded = ["table", "figure", "raw"];
+    let mut out = Vec::new();
+    for bar in items.iter().filter(|i| matches!(i.kind, ItemKind::Shape | ItemKind::Image)) {
+        if inside(geometry, bar.elem, &excluded) {
+            continue;
+        }
+        let b = bar.bbox;
+        let held: Vec<&Item> = texts
+            .iter()
+            .copied()
+            .filter(|t| {
+                t.page == bar.page
+                    && t.bbox.x0 >= b.x0 - 0.5
+                    && t.bbox.x1 <= b.x1 + 0.5
+                    && t.bbox.y0 >= b.y0 - 0.5
+                    && t.bbox.y1 <= b.y1 + 0.5
+            })
+            .collect();
+        if held.is_empty() || held.iter().any(|t| inside(geometry, t.elem, &excluded)) {
+            continue;
+        }
+        let size = held.iter().filter_map(|t| t.font_size).fold(0.0, f64::max);
+        let label: String = held.iter().filter_map(|t| t.text.as_deref()).collect();
+        let one_row = held.iter().all(|t| (t.bbox.y0 - held[0].bbox.y0).abs() <= 1.0);
+        if !(1.2 * size..=3.2 * size).contains(&b.height())
+            || b.width() < 120.0
+            || label.chars().count() > 40
+            || !one_row
+        {
+            continue;
+        }
+        let across = |o: &Item| o.page == bar.page && o.bbox.x1 > b.x0 && o.bbox.x0 < b.x1;
+        let above = items
+            .iter()
+            .filter(|o| {
+                !std::ptr::eq(*o, bar)
+                    && across(o)
+                    && match o.kind {
+                        ItemKind::Text => nonblank(o),
+                        ItemKind::Shape | ItemKind::Image => {
+                            !(o.bbox.y0 <= b.y0 && o.bbox.y1 >= b.y1)
+                        }
+                        ItemKind::Link => false,
+                    }
+                    && o.bbox.y1 <= b.y0 + 0.5
+                    && !held.iter().any(|h| std::ptr::eq(*h, *o))
+            })
+            .map(|o| o.bbox.y1)
+            .fold(f64::NEG_INFINITY, f64::max);
+        let below = texts
+            .iter()
+            .filter(|t| across(t) && t.bbox.y0 >= b.y1 - 0.5)
+            .map(|t| t.bbox.y0)
+            .fold(f64::INFINITY, f64::min);
+        if !above.is_finite() || !below.is_finite() {
+            continue;
+        }
+        let (gap_above, gap_below) = (b.y0 - above, below - b.y1);
+        if !(-1.5..TOUCHING_BAR_PT).contains(&gap_above) || gap_below <= 2.0 {
+            continue;
+        }
+        let first = held[0];
+        let mut diagnostic = Diagnostic::new(
+            crate::proximity::CROWDED_HEADING,
+            Severity::Warning,
+            format!(
+                "the section bar \"{}\" on page {} touches the content above it, so the \
+                 sections run together",
+                label.trim(),
+                bar.page + 1
+            ),
+        );
+        diagnostic.loc = diag::resolve_span(world, geometry.span_for(first.span, first.elem));
+        diagnostic.page = Some(bar.page + 1);
+        diagnostic.bbox = Some(b.rounded());
+        diagnostic.measured = Some(round1(gap_above));
+        diagnostic.limit = Some(TOUCHING_BAR_PT);
+        diagnostic.unit = Some("pt");
+        diagnostic.hints.push(
+            "leave space before each section: inside stack(..) or grid(..), \
+             block(above/below) is ignored, so set stack(spacing: ..) or the grid's \
+             row-gutter"
                 .into(),
         );
         out.push(diagnostic);

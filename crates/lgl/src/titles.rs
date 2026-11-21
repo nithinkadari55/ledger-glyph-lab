@@ -187,11 +187,19 @@ fn detached_subtitle(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnostic> {
     let mut out = Vec::new();
     for &k in &order {
         let title = &lines[k];
+        // A smaller word set beside larger ones on the same row ("Eleanor
+        // and James", the "and" smaller) is part of their line, not a title.
+        let inside_larger = lines.iter().any(|l| {
+            l.size > title.size + 0.5
+                && l.bbox.y0 < title.bbox.y1
+                && title.bbox.y0 < l.bbox.y1
+        });
         if used[k]
             || title.size < display
             || title.bbox.y0 >= TITLE_ZONE * page.height
             || running <= title.bbox.y0
             || letters(geometry, title) < 3
+            || inside_larger
         {
             continue;
         }
@@ -1157,6 +1165,17 @@ fn ink_lines(geometry: &Geometry) -> Vec<InkLine> {
     out
 }
 
+/// A label names what follows: written in capitals ("COCKTAILS", "OPENING
+/// HOURS"), or one or two words without a comma ("Salary range"). Measured in
+/// batch 22: every stored finding on other text was the description line of a
+/// menu dish or a venue ("Egg, spring onion, shoyu butter") read as the label
+/// of the next section's heading.
+fn label_like(text: &str) -> bool {
+    let text = text.trim();
+    let capitals = text.chars().filter(|c| c.is_alphabetic()).all(char::is_uppercase);
+    capitals || (text.split_whitespace().count() <= 2 && !text.contains(','))
+}
+
 /// A short label above a larger value that floats closer to whatever comes
 /// before it than to the value it names. Labels above the largest text on a
 /// page (kickers above a title) are left to the kicker check.
@@ -1176,6 +1195,7 @@ fn detached_group_labels(world: &LabWorld, geometry: &Geometry) -> Vec<Diagnosti
     for (index, a) in lines.iter().enumerate() {
         if a.text.chars().count() > MAX_GROUP_LABEL_CHARS
             || a.text.chars().filter(|c| c.is_alphabetic()).count() < 2
+            || !label_like(&a.text)
         {
             continue;
         }
