@@ -25,8 +25,13 @@ const MIN_PIECES: usize = 4;
 /// A piece this far off the level of the others is stepped, in points.
 const STEP_PT: std::ops::RangeInclusive<f64> = 1.0..=8.0;
 
-/// Dots: round marks of this size, in points.
-const DOT_PT: std::ops::RangeInclusive<f64> = 4.0..=16.0;
+/// Dots: round marks of this size, in points. Measured in batch 27: round
+/// 48's timeline drew its dots 16.5pt across (radius plus stroke); no other
+/// stored document has a square shape of 16 to 20pt beside an event line.
+const DOT_PT: std::ops::RangeInclusive<f64> = 4.0..=20.0;
+
+/// Pieces of one event line meet within this distance, in points.
+const STEM_JOIN_PT: f64 = 1.5;
 
 /// Event lines: thinner than 3pt and at least 20pt long. One stops short of
 /// its dot when the gap is in this range; a gap of 2pt (a deliberate hair
@@ -231,6 +236,29 @@ fn short_stems(
 /// approved timelines end their lines at the text.
 const STEM_OVERRUN_EM: f64 = 2.5;
 
+/// Thin vertical shapes joined end to end when they share an x: an event line
+/// drawn as a cell border plus a short line that reaches the dot is one line.
+/// Each joined line keeps its first piece for the source location.
+fn joined_stems<'a>(shapes: &[&'a Item]) -> Vec<(&'a Item, crate::geom::BBox)> {
+    let mut pieces: Vec<&Item> = shapes.iter().copied().filter(|s| width(s) < 3.0).collect();
+    pieces.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
+    let centre = |b: &crate::geom::BBox| (b.x0 + b.x1) / 2.0;
+    let mut out: Vec<(&Item, crate::geom::BBox)> = Vec::new();
+    for piece in pieces {
+        // Pieces of one line can differ in x by rounding, so they are matched
+        // within 1pt rather than sorted by x.
+        let line = out.iter_mut().find(|(_, joined)| {
+            (centre(joined) - centre(&piece.bbox)).abs() <= 1.0
+                && (-1.0..=STEM_JOIN_PT).contains(&(piece.bbox.y0 - joined.y1))
+        });
+        match line {
+            Some((_, joined)) => joined.y1 = joined.y1.max(piece.bbox.y1),
+            None => out.push((piece, piece.bbox)),
+        }
+    }
+    out
+}
+
 /// Event lines that start at a dot and run far past the text they mark (the
 /// border of a fixed-height cell instead of a line of its own).
 fn long_stems(
@@ -257,9 +285,8 @@ fn long_stems(
                 && i.text.as_deref().is_some_and(|t| !t.trim().is_empty())
         })
         .collect();
-    let mut long: Vec<(&Item, f64)> = Vec::new();
-    for stem in shapes.iter().filter(|s| width(s) < 3.0 && height(s) >= 30.0) {
-        let b = stem.bbox;
+    let mut long: Vec<(&Item, crate::geom::BBox, f64)> = Vec::new();
+    for (stem, b) in joined_stems(shapes).into_iter().filter(|(_, b)| b.height() >= 30.0) {
         let x = (b.x0 + b.x1) / 2.0;
         let Some(dot) = dots.iter().find(|d| {
             d.bbox.x0 - 2.0 <= x
@@ -289,13 +316,13 @@ fn long_stems(
             beside.iter().map(|t| t.bbox.y0).fold(f64::INFINITY, f64::min) - b.y0
         };
         if overrun > STEM_OVERRUN_EM * body {
-            long.push((stem, overrun));
+            long.push((stem, b, overrun));
         }
     }
     if long.len() < MIN_SHORT_STEMS {
         return None;
     }
-    let (first, overrun) = long[0];
+    let (first, line, overrun) = long[0];
     let mut diagnostic = Diagnostic::new(
         BROKEN_AXIS,
         Severity::Warning,
@@ -309,7 +336,7 @@ fn long_stems(
     );
     diagnostic.loc = diag::resolve_span(world, geometry.span_for(first.span, first.elem));
     diagnostic.page = Some(page + 1);
-    diagnostic.bbox = Some(first.bbox.rounded());
+    diagnostic.bbox = Some(line.rounded());
     diagnostic.measured = Some(round1(overrun));
     diagnostic.limit = Some(round1(STEM_OVERRUN_EM * body));
     diagnostic.unit = Some("pt");
