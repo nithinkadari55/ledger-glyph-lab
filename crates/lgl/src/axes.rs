@@ -240,7 +240,8 @@ const STEM_OVERRUN_EM: f64 = 2.5;
 /// drawn as a cell border plus a short line that reaches the dot is one line.
 /// Each joined line keeps its first piece for the source location.
 fn joined_stems<'a>(shapes: &[&'a Item]) -> Vec<(&'a Item, crate::geom::BBox)> {
-    let mut pieces: Vec<&Item> = shapes.iter().copied().filter(|s| width(s) < 3.0).collect();
+    let mut pieces: Vec<&Item> =
+        shapes.iter().copied().filter(|s| width(s) < 3.0).collect();
     pieces.sort_by(|a, b| a.bbox.y0.total_cmp(&b.bbox.y0));
     let centre = |b: &crate::geom::BBox| (b.x0 + b.x1) / 2.0;
     let mut out: Vec<(&Item, crate::geom::BBox)> = Vec::new();
@@ -286,7 +287,8 @@ fn long_stems(
         })
         .collect();
     let mut long: Vec<(&Item, crate::geom::BBox, f64)> = Vec::new();
-    for (stem, b) in joined_stems(shapes).into_iter().filter(|(_, b)| b.height() >= 30.0) {
+    for (stem, b) in joined_stems(shapes).into_iter().filter(|(_, b)| b.height() >= 30.0)
+    {
         let x = (b.x0 + b.x1) / 2.0;
         let Some(dot) = dots.iter().find(|d| {
             d.bbox.x0 - 2.0 <= x
